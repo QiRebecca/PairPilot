@@ -124,41 +124,55 @@ async def request_peer_agent(
         proposal=proposal,
     )
     bearer_token = await _identity_token(peer_base_url)
-    async with httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {bearer_token}"}, timeout=60
-    ) as http_client:
-        card = await A2ACardResolver(http_client, peer_base_url).get_agent_card(
-            relative_card_path=card_path
+    request = SendMessageRequest(
+        message=Message(
+            message_id=str(envelope.message_id),
+            role=Role.ROLE_USER,
+            parts=[Part(text=envelope.model_dump_json())],
         )
-        client = ClientFactory(
-            ClientConfig(
-                streaming=False,
-                httpx_client=http_client,
-                supported_protocol_bindings=["JSONRPC"],
-            )
-        ).create(card)
-        request = SendMessageRequest(
-            message=Message(
-                message_id=str(envelope.message_id),
-                role=Role.ROLE_USER,
-                parts=[Part(text=envelope.model_dump_json())],
-            )
-        )
-        retry_count = 0
+    )
+    retry_count = 0
+    transient_markers = (
+        "429",
+        "Timeout",
+        "timed out",
+        "Network communication error",
+        "ConnectError",
+        "502",
+        "503",
+    )
+    while True:
         try:
-            while True:
+            timeout = httpx.Timeout(60, connect=10)
+            async with httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {bearer_token}"},
+                timeout=timeout,
+            ) as http_client:
+                card = await A2ACardResolver(http_client, peer_base_url).get_agent_card(
+                    relative_card_path=card_path
+                )
+                client = ClientFactory(
+                    ClientConfig(
+                        streaming=False,
+                        httpx_client=http_client,
+                        supported_protocol_bindings=["JSONRPC"],
+                    )
+                ).create(card)
                 try:
                     responses = [
                         response async for response in client.send_message(request)
                     ]
-                    break
-                except Exception as exc:
-                    if retry_count >= 2 or "429" not in str(exc):
-                        raise
-                    retry_count += 1
-                    await asyncio.sleep(2**retry_count)
-        finally:
-            await client.close()
+                finally:
+                    await client.close()
+            break
+        except Exception as exc:
+            if retry_count >= 2 or not any(
+                marker in str(exc) or marker in type(exc).__name__
+                for marker in transient_markers
+            ):
+                raise
+            retry_count += 1
+            await asyncio.sleep(2**retry_count)
 
     if len(responses) != 1 or not responses[0].HasField("message"):
         raise RuntimeError("peer A2A endpoint returned an invalid response stream")
