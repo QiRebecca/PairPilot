@@ -128,8 +128,7 @@ class GoldenPathRuntime:
             self.create_proposal,
             self.accept_proposal,
             self.send_proposal,
-            self.place_soft_hold,
-            self.request_user_approval,
+            self.place_soft_hold_and_request_user_approval,
             self.finish_no_match,
         ]
 
@@ -563,6 +562,7 @@ class GoldenPathRuntime:
                 "version": proposal.version,
             },
             f"{self.run_id}:proposal:{proposal.proposal_id}:v{proposal.version}",
+            publish_immediately=False,
         )
         output = {
             "proposal_id": str(proposal.proposal_id),
@@ -695,8 +695,13 @@ class GoldenPathRuntime:
             ),
         )
 
-    async def place_soft_hold(self, proposal_id: str) -> dict[str, Any]:
-        """Place one expiring hold only after both personal agents accept."""
+    async def place_soft_hold_and_request_user_approval(
+        self,
+        proposal_id: str,
+        recommendation: str,
+        remaining_uncertainty: str,
+    ) -> dict[str, Any]:
+        """Place a hold and pause at the effect contract after both agents accept."""
 
         started = self._before_tool()
         proposal = self.proposals[UUID(proposal_id)]
@@ -721,28 +726,34 @@ class GoldenPathRuntime:
                 "proposalVersion": proposal.version,
             },
             f"{self.run_id}:hold:{proposal_id}:v{proposal.version}",
+            publish_immediately=False,
         )
-        output = {
+        hold_output = {
             "hold_id": str(hold.hold_id),
             "proposal_id": proposal_id,
             "proposal_version": proposal.version,
             "expires_at": hold.expires_at.isoformat(),
             "active": hold.active,
         }
-        return await self._observe(
-            tool="place_soft_hold",
+        return await self._request_user_approval(
+            proposal_id=proposal_id,
+            recommendation=recommendation,
+            remaining_uncertainty=remaining_uncertainty,
             started=started,
-            arguments={"proposal_id": proposal_id},
-            result=output,
-            transition="transactional_hold_created",
+            hold_output=hold_output,
         )
 
-    async def request_user_approval(
-        self, proposal_id: str, recommendation: str, remaining_uncertainty: str
+    async def _request_user_approval(
+        self,
+        *,
+        proposal_id: str,
+        recommendation: str,
+        remaining_uncertainty: str,
+        started: float,
+        hold_output: dict[str, Any],
     ) -> dict[str, Any]:
         """Pause at a complete effect contract; never approve on the user's behalf."""
 
-        started = self._before_tool()
         proposal = self.proposals[UUID(proposal_id)]
         hold = next(
             (
@@ -828,10 +839,15 @@ class GoldenPathRuntime:
             "approval.requested",
             {"proposalId": proposal_id, "proposalVersion": proposal.version},
             f"{self.run_id}:approval.requested:{proposal_id}:v{proposal.version}",
+            publish_immediately=False,
         )
-        output = {"status": self.status, "effect_contract": contract}
+        output = {
+            "status": self.status,
+            "hold": hold_output,
+            "effect_contract": contract,
+        }
         return await self._observe(
-            tool="request_user_approval",
+            tool="place_soft_hold_and_request_user_approval",
             started=started,
             arguments={
                 "proposal_id": proposal_id,
