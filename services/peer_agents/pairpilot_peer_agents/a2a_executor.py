@@ -16,6 +16,7 @@ from pairpilot_schemas import (
     ClaimSource,
     PeerDecision,
 )
+from pydantic import ValidationError
 
 from pairpilot_peer_agents.provenance import ProvenanceStore
 
@@ -24,6 +25,8 @@ AgentBuilder = Callable[..., Agent]
 
 class PeerAgentExecutor(AgentExecutor):
     """Run one named peer using an isolated runner, context, and session store."""
+
+    MAX_MODEL_ATTEMPTS = 3
 
     def __init__(
         self,
@@ -78,6 +81,48 @@ class PeerAgentExecutor(AgentExecutor):
         }:
             raise ValueError("roommate candidate returned introduction authority")
 
+    async def _generate_decision(
+        self, *, session_id: str, user_message: genai.types.Content
+    ) -> PeerDecision:
+        """Retry an empty/schema-invalid live turn without inventing a fallback."""
+
+        next_message = user_message
+        last_error: ValidationError | None = None
+        for attempt in range(self.MAX_MODEL_ATTEMPTS):
+            response_fragments: list[str] = []
+            async for event in self._runner.run_async(
+                user_id=self.owner_id,
+                session_id=session_id,
+                new_message=next_message,
+            ):
+                if event.content:
+                    response_fragments.extend(
+                        part.text for part in event.content.parts or [] if part.text
+                    )
+            try:
+                return PeerDecision.model_validate_json(
+                    "".join(response_fragments).strip()
+                )
+            except ValidationError as exc:
+                last_error = exc
+                if attempt + 1 == self.MAX_MODEL_ATTEMPTS:
+                    raise
+                next_message = genai.types.Content(
+                    role="user",
+                    parts=[
+                        genai.types.Part(
+                            text=(
+                                "Your prior turn was empty or did not satisfy the "
+                                "required PeerDecision schema. Re-evaluate the same "
+                                "request and return only a complete structured "
+                                "PeerDecision. Do not change authority or invent facts."
+                            )
+                        )
+                    ],
+                )
+        assert last_error is not None
+        raise last_error
+
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         inbound = context.message
         if inbound is None:
@@ -95,18 +140,9 @@ class PeerAgentExecutor(AgentExecutor):
             parts=[genai.types.Part(text=envelope.model_dump_json())],
         )
 
-        response_fragments: list[str] = []
-        async for event in self._runner.run_async(
-            user_id=self.owner_id,
-            session_id=session_id,
-            new_message=user_message,
-        ):
-            if event.content:
-                response_fragments.extend(
-                    part.text for part in event.content.parts or [] if part.text
-                )
-
-        decision = PeerDecision.model_validate_json("".join(response_fragments).strip())
+        decision = await self._generate_decision(
+            session_id=session_id, user_message=user_message
+        )
         self._validate_decision(decision)
         claims = [
             Claim(
