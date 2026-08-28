@@ -53,39 +53,67 @@ async def run() -> dict[str, Any]:
     tool_results: list[dict[str, Any]] = []
     observable_texts: list[str] = []
     token_usage: list[dict[str, Any]] = []
+    model_retry_count = 0
     started = perf_counter()
     error: str | None = None
     try:
         async with asyncio.timeout(90):
-            async for event in runner.run_async(
-                user_id="qi-owner",
-                session_id=str(runtime.session_id),
-                new_message=user_message,
-            ):
-                if event.usage_metadata:
-                    token_usage.append(event.usage_metadata.model_dump(mode="json"))
-                    if len(token_usage) > runtime.MAX_AGENT_TURNS:
-                        raise RuntimeError("maximum global agent turns reached")
-                if event.content:
-                    for part in event.content.parts or []:
-                        if part.function_call:
-                            tool_calls.append(
-                                {
-                                    "name": part.function_call.name,
-                                    "args": dict(part.function_call.args or {}),
-                                }
+            next_message = user_message
+            while True:
+                try:
+                    async for event in runner.run_async(
+                        user_id="qi-owner",
+                        session_id=str(runtime.session_id),
+                        new_message=next_message,
+                    ):
+                        if event.usage_metadata:
+                            token_usage.append(
+                                event.usage_metadata.model_dump(mode="json")
                             )
-                        if part.function_response:
-                            tool_results.append(
-                                {
-                                    "name": part.function_response.name,
-                                    "response": dict(
-                                        part.function_response.response or {}
-                                    ),
-                                }
-                            )
-                        if part.text:
-                            observable_texts.append(part.text)
+                            if len(token_usage) > runtime.MAX_AGENT_TURNS:
+                                raise RuntimeError("maximum global agent turns reached")
+                        if event.content:
+                            for part in event.content.parts or []:
+                                if part.function_call:
+                                    tool_calls.append(
+                                        {
+                                            "name": part.function_call.name,
+                                            "args": dict(part.function_call.args or {}),
+                                        }
+                                    )
+                                if part.function_response:
+                                    tool_results.append(
+                                        {
+                                            "name": part.function_response.name,
+                                            "response": dict(
+                                                part.function_response.response or {}
+                                            ),
+                                        }
+                                    )
+                                if part.text:
+                                    observable_texts.append(part.text)
+                    break
+                except Exception as exc:
+                    if model_retry_count >= 2 or "429" not in str(exc):
+                        raise
+                    model_retry_count += 1
+                    await asyncio.sleep(4 * model_retry_count)
+                    next_message = (
+                        user_message
+                        if runtime.tool_count == 0
+                        else genai.types.Content(
+                            role="user",
+                            parts=[
+                                genai.types.Part(
+                                    text=(
+                                        "Continue the same active goal from the "
+                                        "current session and persisted tool results. "
+                                        "Do not repeat successful actions."
+                                    )
+                                )
+                            ],
+                        )
+                    )
     except TimeoutError:
         if runtime.status != "WAITING_FOR_HUMAN_APPROVAL":
             runtime.status = "TIMEOUT"
@@ -129,6 +157,7 @@ async def run() -> dict[str, Any]:
         "execution_mode": settings.execution_mode,
         "exact_model_id": settings.model_id,
         "tool_count": runtime.tool_count,
+        "model_retry_count": model_retry_count,
         "tool_calls": tool_calls,
         "tool_results": tool_results,
         "observable_texts": observable_texts,
