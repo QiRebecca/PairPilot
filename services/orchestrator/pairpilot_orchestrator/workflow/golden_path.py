@@ -893,4 +893,5 @@ class GoldenPathRuntime:
                 "speechAct": envelope.speech_act.value,
             },
             f"{self.run_id}:message.received:{envelope.message_id}",
+            publish_immediately=False,
         )
