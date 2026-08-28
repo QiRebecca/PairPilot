@@ -107,6 +107,14 @@ class GoogleCloudStore:
     def _document_url(self, collection: str, document_id: str) -> str:
         return f"{self._documents}/{quote(collection)}/{quote(document_id)}"
 
+    def document_name(self, collection: str, document_id: str) -> str:
+        """Return the canonical resource name used in commit writes."""
+
+        return (
+            f"projects/{self.project_id}/databases/(default)/documents/"
+            f"{collection}/{document_id}"
+        )
+
     async def get(self, collection: str, document_id: str) -> dict[str, Any] | None:
         """Read one authoritative document, returning None for a miss."""
 
@@ -178,6 +186,20 @@ class GoogleCloudStore:
             return True
 
         return await asyncio.to_thread(write)
+
+    async def commit_writes(self, writes: list[dict[str, Any]]) -> dict[str, Any]:
+        """Atomically commit preconditioned Firestore writes."""
+
+        def commit() -> dict[str, Any]:
+            response = self._session.post(
+                f"{self._documents}:commit",
+                json={"writes": writes},
+                timeout=20,
+            )
+            response.raise_for_status()
+            return dict(response.json())
+
+        return await asyncio.to_thread(commit)
 
     async def write_event(
         self,
