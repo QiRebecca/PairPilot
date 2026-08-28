@@ -154,7 +154,12 @@ class PeerAgentExecutor(AgentExecutor):
             for item in decision.claims
             if not (
                 self.agent_id == "alice-agent"
-                and item.field in {"introduction_decision", "introduced_agent_id"}
+                and item.field
+                in {
+                    "introduction_decision",
+                    "introduced_agent_id",
+                    "introduced_intent_id",
+                }
             )
         ]
         if self.agent_id == "alice-agent":

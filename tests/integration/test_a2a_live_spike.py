@@ -73,6 +73,13 @@ async def test_qi_reads_card_and_sends_live_a2a_message() -> None:
     assert outbound.from_agent_id == "alice-agent"
     assert outbound.to_agent_id == "qi-agent"
     assert outbound.speech_act == SpeechAct.INTRODUCTION_RESPONSE
+    introduced_agents = [
+        claim for claim in outbound.claims if claim.field == "introduced_agent_id"
+    ]
+    introduced_intents = [
+        claim for claim in outbound.claims if claim.field == "introduced_intent_id"
+    ]
+    assert len(introduced_agents) == len(introduced_intents)
     assert app.state.agent_card.supported_interfaces[0].protocol_version == "1.0"
     assert len(app.state.provenance_store.records) == 1
     provenance = app.state.provenance_store.records[0]
