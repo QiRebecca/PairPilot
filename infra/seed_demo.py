@@ -221,7 +221,7 @@ def seed(project_id: str, *, dry_run: bool) -> dict[str, int]:
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
-    session = AuthorizedSession(credentials)
+    session = AuthorizedSession(credentials)  # type: ignore[no-untyped-call]
     base = (
         "https://firestore.googleapis.com/v1/projects/"
         f"{project_id}/databases/(default)/documents"
@@ -248,7 +248,7 @@ def reset_workflow(project_id: str) -> dict[str, int]:
     credentials, _ = google.auth.default(
         scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
-    session = AuthorizedSession(credentials)
+    session = AuthorizedSession(credentials)  # type: ignore[no-untyped-call]
     base = (
         "https://firestore.googleapis.com/v1/projects/"
         f"{project_id}/databases/(default)/documents"

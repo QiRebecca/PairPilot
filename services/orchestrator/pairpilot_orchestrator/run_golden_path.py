@@ -8,6 +8,7 @@ import os
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
+from uuid import UUID
 
 from google import genai
 from google.adk.runners import Runner
@@ -23,7 +24,7 @@ A quiet overnight environment matters more than getting the lowest price.
 I can accept partial date overlap if the additional cost stays below $70."""
 
 
-async def run() -> dict[str, Any]:
+async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
     """Execute bounded live ADK coordination and return observable evidence."""
 
     settings = Settings.from_environment()
@@ -33,6 +34,7 @@ async def run() -> dict[str, Any]:
         store=store,
         peer_base_url=peer_base_url,
         model_id=settings.model_id,
+        run_id=run_id,
     )
     await runtime.initialize(GOAL_TEXT)
     session_service = InMemorySessionService()
