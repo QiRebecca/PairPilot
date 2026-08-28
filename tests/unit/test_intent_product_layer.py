@@ -134,7 +134,10 @@ async def test_search_open_intents_returns_only_public_open_posts() -> None:
     )
     runtime.goal_start = date(2026, 7, 6)
     runtime.goal_end = date(2026, 7, 10)
-    result = await runtime.search_open_intents("conference_room_share", "Seoul")
+    result = await runtime.search_open_intents(
+        "roommate",  # type: ignore[arg-type]  # common live-model synonym
+        "Seoul",
+    )
     assert [item["intent_id"] for item in result["open_intents"]] == ["intent_maya"]
     assert "agent_only_constraints" not in str(result)
     assert runtime.discovered_intents == {"intent_maya": "maya-agent"}

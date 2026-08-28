@@ -173,6 +173,7 @@ link, budget, or Firestore location without an owner decision.
 | `GOOGLE_CLOUD_LOCATION` | Vertex location; `global` in live deployment |
 | `PAIRPILOT_MODEL_ID` | Pinned live model; `gemini-3.7-flash` |
 | `PAIRPILOT_PEER_BASE_URL` | Authenticated private peer Cloud Run URL |
+| `PAIRPILOT_PEER_AUDIENCE` | Canonical private Cloud Run token audience when `PAIRPILOT_PEER_BASE_URL` is a tagged revision URL |
 | `PAIRPILOT_PUBLIC_BASE_URL` | Canonical public HTTPS URL for metadata |
 | `PAIRPILOT_PERSIST_PROVENANCE` | Enables peer Firestore provenance |
 

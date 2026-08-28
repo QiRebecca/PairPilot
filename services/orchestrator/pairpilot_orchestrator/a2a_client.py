@@ -134,7 +134,11 @@ async def request_peer_agent(
         natural_language=natural_language,
         proposal=proposal,
     )
-    bearer_token = await _identity_token(peer_base_url)
+    # Cloud Run tag URLs route to a revision, but the ID-token audience remains
+    # the canonical service URL unless the service explicitly enables another
+    # custom audience.
+    token_audience = os.environ.get("PAIRPILOT_PEER_AUDIENCE", peer_base_url)
+    bearer_token = await _identity_token(token_audience)
     request = SendMessageRequest(
         message=Message(
             message_id=str(envelope.message_id),

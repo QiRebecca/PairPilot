@@ -250,6 +250,11 @@ class GoldenPathRuntime:
 
         started = self._before_tool()
         now = datetime.now(UTC)
+        normalized_intent_type = {
+            "roommate": "conference_room_share",
+            "hotel_roommate": "conference_room_share",
+            "room_share": "conference_room_share",
+        }.get(str(intent_type).casefold(), str(intent_type))
         matches: list[dict[str, Any]] = []
         for intent in await self.store.list_documents("intents"):
             intent_id = str(intent.get("intent_id") or intent.get("_id"))
@@ -272,7 +277,7 @@ class GoldenPathRuntime:
             )
             if not (
                 intent.get("status") == IntentStatus.OPEN.value
-                and intent.get("intent_type") == intent_type
+                and intent.get("intent_type") == normalized_intent_type
                 and str(constraints.get("location", "")).casefold()
                 == location.casefold()
                 and overlaps

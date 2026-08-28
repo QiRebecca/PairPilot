@@ -27,6 +27,7 @@ tagged_url() {
 
 PAIRPILOT_PEER_TAGGED_URL="$(tagged_url pairpilot-peer-agents)"
 PAIRPILOT_PUBLIC_TAGGED_URL="$(tagged_url pairpilot-orchestrator)"
+PAIRPILOT_PEER_AUDIENCE="$(service_url pairpilot-peer-agents)"
 
 "${GCLOUD}" builds submit \
   --project "${GOOGLE_CLOUD_PROJECT}" \
@@ -69,7 +70,7 @@ PAIRPILOT_PUBLIC_TAGGED_URL="$(tagged_url pairpilot-orchestrator)"
   --min 0 --max 1 --concurrency 4 --cpu 1 --memory 1Gi --timeout 120 \
   --startup-probe "httpGet.path=/api/health,httpGet.port=8080,timeoutSeconds=3,periodSeconds=5,failureThreshold=12" \
   --liveness-probe "httpGet.path=/api/health,httpGet.port=8080,initialDelaySeconds=5,timeoutSeconds=3,periodSeconds=30,failureThreshold=3" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT},GOOGLE_CLOUD_LOCATION=global,PAIRPILOT_MODEL_ID=${PAIRPILOT_MODEL_ID},PAIRPILOT_PEER_BASE_URL=${PAIRPILOT_PEER_TAGGED_URL},PAIRPILOT_PUBLIC_BASE_URL=${PAIRPILOT_PUBLIC_TAGGED_URL}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT},GOOGLE_CLOUD_LOCATION=global,PAIRPILOT_MODEL_ID=${PAIRPILOT_MODEL_ID},PAIRPILOT_PEER_BASE_URL=${PAIRPILOT_PEER_TAGGED_URL},PAIRPILOT_PEER_AUDIENCE=${PAIRPILOT_PEER_AUDIENCE},PAIRPILOT_PUBLIC_BASE_URL=${PAIRPILOT_PUBLIC_TAGGED_URL}" \
   --quiet
 
 printf 'Candidate orchestrator: %s\n' "${PAIRPILOT_PUBLIC_TAGGED_URL}"
