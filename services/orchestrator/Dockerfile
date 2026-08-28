@@ -13,9 +13,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PAIRPILOT_WEB_DIST=/app/web/dist
 
 WORKDIR /app
-COPY packages/schemas /app/packages/schemas
-COPY services/orchestrator /app/services/orchestrator
-RUN pip install --no-cache-dir /app/packages/schemas /app/services/orchestrator
+COPY packages/schemas/pairpilot_schemas /app/pairpilot_schemas
+COPY services/orchestrator/pyproject.toml /app/pyproject.toml
+COPY services/orchestrator/pairpilot_orchestrator /app/pairpilot_orchestrator
+RUN pip install --no-cache-dir .
 
 COPY infra /app/infra
 COPY --from=web-build /build/web/dist /app/web/dist
