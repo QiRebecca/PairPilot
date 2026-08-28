@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+application_default_credentials.json
+
+# Google Cloud local state and generated evidence
+.gcloud/
+.firebase/
+evidence/private/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
