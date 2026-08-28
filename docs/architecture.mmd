@@ -1,0 +1,34 @@
+flowchart LR
+    B["Judge browser\nReact relationship network"]
+    O["Public Cloud Run\npairpilot-orchestrator"]
+    Q["Qi personal agent\nGoogle ADK 2.8.0"]
+    V["Vertex AI global\ngemini-3.7-flash"]
+    P["Private Cloud Run\npairpilot-peer-agents"]
+    A["Alice ADK agent"]
+    M["Maya ADK agent"]
+    L["Lena ADK agent"]
+    F[("Firestore Native\ntruth + relationships + outbox")]
+    S["Pub/Sub\npairpilot-events"]
+    G["Cloud Logging"]
+    H["Hold + approval +\natomic commit boundary"]
+    R["Relationship-memory\nprovenance pipeline"]
+
+    B <-->|"HTTPS + SSE"| O
+    O --> Q
+    Q <-->|"live model turns"| V
+    Q -->|"Google-signed ID token\nA2A JSON-RPC 1.0"| P
+    P --> A
+    P --> M
+    P --> L
+    A <-->|"live model turns"| V
+    M <-->|"live model turns"| V
+    L <-->|"live model turns"| V
+    O <-->|"current state + provenance"| F
+    P -->|"A2A provenance"| F
+    F -->|"durable outbox"| S
+    O --> G
+    P --> G
+    Q --> H
+    H -->|"human approves exact effect"| F
+    F -->|"committed event only"| R
+    R --> F

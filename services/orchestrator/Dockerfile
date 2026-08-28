@@ -16,7 +16,8 @@ WORKDIR /app
 COPY packages/schemas/pairpilot_schemas /app/pairpilot_schemas
 COPY services/orchestrator/pyproject.toml /app/pyproject.toml
 COPY services/orchestrator/pairpilot_orchestrator /app/pairpilot_orchestrator
-RUN pip install --no-cache-dir .
+RUN python -m pip install --no-cache-dir --upgrade pip==26.2.1 \
+    && python -m pip install --no-cache-dir .
 
 COPY infra /app/infra
 COPY --from=web-build /build/web/dist /app/web/dist

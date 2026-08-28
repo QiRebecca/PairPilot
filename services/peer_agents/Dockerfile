@@ -10,7 +10,9 @@ COPY packages/schemas/pairpilot_schemas ./pairpilot_schemas
 COPY services/peer_agents/pyproject.toml ./
 COPY services/peer_agents/pairpilot_peer_agents ./pairpilot_peer_agents
 
-RUN pip install --no-cache-dir --index-url https://pypi.org/simple .
+RUN python -m pip install --no-cache-dir --index-url https://pypi.org/simple \
+      --upgrade pip==26.2.1 \
+    && python -m pip install --no-cache-dir --index-url https://pypi.org/simple .
 
 USER 65532:65532
 

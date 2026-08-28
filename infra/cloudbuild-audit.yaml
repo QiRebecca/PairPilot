@@ -1,0 +1,29 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: audit-orchestrator
+    args:
+      - run
+      - --rm
+      - --user
+      - "0"
+      - europe-west2-docker.pkg.dev/pairpilot-agentic-ecb84a/pairpilot/orchestrator@sha256:83126090503f41cb9e4e7ee2a7cc939be849e4b351a89b9e31ba96f996aa74d0
+      - sh
+      - -ceu
+      - >-
+        python -m pip install --no-cache-dir pip-audit==2.10.1 &&
+        python -m pip_audit --local
+  - name: gcr.io/cloud-builders/docker
+    id: audit-peer-agents
+    args:
+      - run
+      - --rm
+      - --user
+      - "0"
+      - europe-west2-docker.pkg.dev/pairpilot-agentic-ecb84a/pairpilot/peer-agents@sha256:a8427f1fd37da1640457016d8c94e040ef5aa856e82a07bad80b7ee8af1ef593
+      - sh
+      - -ceu
+      - >-
+        python -m pip install --no-cache-dir pip-audit==2.10.1 &&
+        python -m pip_audit --local
+options:
+  logging: CLOUD_LOGGING_ONLY

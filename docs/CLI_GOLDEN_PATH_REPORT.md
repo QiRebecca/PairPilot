@@ -1,74 +1,75 @@
 # CLI golden-path report
 
-Status on 2026-08-28: the live workflow has reached and persisted the human
-approval boundary. Atomic commit is implemented and proven to reject a cloud
-commit without approval. A fresh post-retry run is still required before Gate 4
-is marked fully complete.
+Status on 2026-08-28: **verified to the human approval boundary within the
+required 90-second decision bound**. Atomic commit is implemented and proven
+to reject a commit without approval. A positive live commit remains deliberately
+unexecuted until the user approves the displayed effect contract.
 
-## Strongest live run
+## Verified live run
 
-Run ID: `3244ae4c-8d9d-4ea8-80f3-c98899dc48d5`
+Run ID: `2598aaed-1b7b-4dee-97bd-7b2d150d9dde`
 
-The single high-level goal was supplied once to a live `gemini-3.7-flash` Qi
-Agent. The model selected this observable tool order:
+The single high-level goal was supplied once to a live
+`gemini-3.7-flash` Qi Agent running through Google ADK. Gemini selected this
+observable tool path:
 
 1. inspect the contextual relationship network;
 2. discover open ICML agents;
-3. ask Alice for a warm introduction;
-4. contact Lena and Maya through their independent A2A endpoints;
-5. withdraw from Lena based on her reported overnight routine;
-6. continue with Maya based on her reported quiet routine;
-7. calculate Maya's partial-overlap cost;
-8. create proposal version 1;
-9. record Qi Agent's acceptance;
-10. send the proposal for Maya Agent's independent decision;
-11. place a soft hold after Maya accepted version 1;
-12. request the user's approval with a complete effect contract.
+3. ask Alice Agent for a warm introduction;
+4. contact Lena and Maya concurrently through their A2A endpoints;
+5. withdraw from Lena based on her reported late-call routine;
+6. calculate Maya's partial-overlap cost;
+7. create proposal version 1;
+8. record Qi Agent's acceptance;
+9. send the proposal to Maya Agent;
+10. place a soft hold and request human approval after Maya accepted.
 
-The run used 13 tool calls across 7 live Qi model turns. The two candidate
-inquiries were model-selected in the same turn and executed through a bounded
-peer semaphore. No source file encodes this sequence.
+The run selected 10 tools across 8 live Qi model turns. It reached
+`WAITING_FOR_HUMAN_APPROVAL` in **81,398 ms** and completed outbox cleanup in
+**84,267 ms**, with zero model retry and no error.
 
-## Verified state and evidence
+## Verified state
 
 - Alice returned an `INTRODUCTION_RESPONSE` identifying Maya through a typed
-  claim.
-- Lena returned an `INFORMATION_RESPONSE`; the late-call routine remained a
-  `REPORTED_CLAIM`, never a verified fact.
-- Maya returned an `INFORMATION_RESPONSE` with reported dates and routine.
-- Deterministic cost output was 4 total nights, 3 shared nights, `$62`
-  additional cost, and a `$70` delegated maximum.
-- Maya returned `ACCEPTANCE` with proposal version 1 echoed in the A2A envelope.
-- The hold bound the same proposal ID and version and was active when the
-  effect contract was built.
-- The effect contract listed identity summary, shared dates, solo date, cost,
-  terms, uncertainty, recommendation, disclosure scope, protected scope,
-  version, hold expiry, and current availability.
-- No approval or match was created by the agent.
+  peer claim.
+- Lena and Maya returned independent `INFORMATION_RESPONSE` messages.
+- Peer claims remained `REPORTED_CLAIM`; they were never promoted to current
+  authoritative facts.
+- Deterministic output was 4 total nights, 3 shared nights, `$62` additional
+  cost, and a `$70` delegated maximum.
+- Maya returned `ACCEPTANCE` for the exact proposal version.
+- The hold and effect contract referenced the same proposal ID and version.
+- The contract showed identity, dates, cost, terms, uncertainty,
+  recommendation, disclosure scope, protected scope, hold expiry, and current
+  availability.
+- Firestore contained no human approval and no match after the run.
 
-The runner originally reported `TIMEOUT` during post-boundary telemetry cleanup
-at approximately 91 seconds even though the approval request and effect
-contract had been persisted. This status race is fixed: cleanup no longer
-overwrites an already reached approval boundary, and time-to-boundary is now
-reported separately.
+## Performance correction
 
-## Failure evidence retained during development
+An earlier valid run reached both agent acceptances but timed out before the
+hold because three peer inquiries were serial. The orchestrator now exposes a
+single `contact_candidates` tool: Gemini still chooses the candidate IDs and
+question, while infrastructure validates the list and runs at most two A2A
+requests concurrently. This removed one model round and the serial peer delay
+without encoding candidate outcomes.
 
-- Two early runs failed closed because a relationship tool treated a natural
-  query as an internal enum. The API was generalized to enumerate visible
-  contextual relationships.
-- One run made five strategic tool calls and then failed on a peer Vertex 429.
-- One fresh post-reset run received a Vertex 429 before its first tool call and
-  failed safe with zero business action.
-- Peer and Qi model boundaries now use bounded retries only; no scripted result
-  or silent fallback is returned.
+## Failure evidence retained
+
+- Early runs failed closed when a relationship tool rejected a natural query;
+  the tool now enumerates only Qi-visible relationships.
+- Vertex produced genuine 429 and empty-output failures during development.
+  Bounded retry applies at model boundaries; no scripted fallback exists.
+- `MINIMAL` thinking produced a Vertex 400 for the verified model. All agents
+  now use the supported `LOW` level, covered by a regression test.
+- One pre-batching run selected 11 tools and both agent acceptances but reached
+  the 90-second wall before the hold. Its timeout was preserved honestly.
 
 ## Commit boundary
 
-`approve_golden_path.py` reloads the current effect contract and requires the
-user to type `APPROVE VERSION N`. The Firestore commit then revalidates proposal
-version and expiry, active hold, current availability, both agent acceptances,
-human approval version, disclosure hash, and match idempotency. Thirteen
-preconditioned writes atomically create the match and grow relationship/memory
-state. A live negative check without a human approval returned a blocked
-authority result; no match was written.
+The CLI requires the exact phrase `APPROVE VERSION N`. The web control sends
+the same current-version approval only after displaying the complete contract.
+Commit then revalidates proposal version and expiry, active hold, availability,
+both agent acceptances, human approval version, disclosure hash, and match
+idempotency. Thirteen preconditioned Firestore writes atomically create the
+match and relationship/memory updates. A live negative check without approval
+was blocked and wrote no match.
