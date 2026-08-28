@@ -107,3 +107,13 @@ The application-level consumer uses an explicit idempotency key; a unit test
 proves the same delivery key cannot invoke its handler twice. Production push
 authentication and Firestore-backed processed-event transactions remain part of
 the full orchestrator deployment gate.
+
+## Firestore world-fact seed verification
+
+`infra/seed_demo.py` idempotently upserts only pre-existing demo-world facts into
+the `(default)` Native-mode database. It intentionally does not seed messages,
+beliefs, decisions, proposals, holds, approvals, matches, runs, or any other
+workflow trajectory. On 2026-08-28 the live seed wrote 17 documents across eight
+allowlisted collections. A safe read-back confirmed the seed metadata, Maya's
+public agent-card fields, and the Qi–Alice relationship provenance fields; no
+private profile value was printed during verification.

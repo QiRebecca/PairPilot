@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""Idempotently seed world facts only; never seed a workflow trajectory."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from datetime import date, datetime, timezone
+from typing import Any
+from urllib.parse import quote
+
+import google.auth
+from google.auth.transport.requests import AuthorizedSession
+
+
+def firestore_value(value: Any) -> dict[str, Any]:
+    """Encode a bounded Python value as a Firestore REST value."""
+
+    if value is None:
+        return {"nullValue": None}
+    if isinstance(value, bool):
+        return {"booleanValue": value}
+    if isinstance(value, int):
+        return {"integerValue": str(value)}
+    if isinstance(value, float):
+        return {"doubleValue": value}
+    if isinstance(value, datetime):
+        timestamp = value.astimezone(timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+        return {"timestampValue": timestamp}
+    if isinstance(value, date):
+        return {"stringValue": value.isoformat()}
+    if isinstance(value, str):
+        return {"stringValue": value}
+    if isinstance(value, list):
+        return {"arrayValue": {"values": [firestore_value(item) for item in value]}}
+    if isinstance(value, dict):
+        return {
+            "mapValue": {
+                "fields": {
+                    str(key): firestore_value(item) for key, item in value.items()
+                }
+            }
+        }
+    raise TypeError(f"Unsupported Firestore seed value: {type(value)!r}")
+
+
+def documents() -> dict[str, dict[str, dict[str, Any]]]:
+    """Return deterministic facts and separate private contexts."""
+
+    seeded_at = datetime.now(timezone.utc)
+    return {
+        "users": {
+            "qi-owner": {
+                "displayName": "Qi",
+                "activeAgentId": "qi-agent",
+                "demoOnly": True,
+            }
+        },
+        "agents": {
+            "qi-agent": {
+                "ownerId": "qi-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "memoryNamespace": "agent/qi-agent",
+            },
+            "alice-agent": {
+                "ownerId": "alice-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "memoryNamespace": "agent/alice-agent",
+            },
+            "maya-agent": {
+                "ownerId": "maya-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "memoryNamespace": "agent/maya-agent",
+            },
+            "lena-agent": {
+                "ownerId": "lena-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "memoryNamespace": "agent/lena-agent",
+            },
+        },
+        "agent_public_cards": {
+            "alice-agent": {
+                "agentId": "alice-agent",
+                "openToColdContact": False,
+                "skills": ["trusted_introduction"],
+            },
+            "maya-agent": {
+                "agentId": "maya-agent",
+                "verifiedConferenceAttendee": True,
+                "conference": "ICML",
+                "gender": "female",
+                "availability": {"start": "2026-07-07", "end": "2026-07-10"},
+                "overnightRoutineClaim": "quiet",
+                "earlyRiser": True,
+                "budgetCompatibility": "compatible",
+                "openToColdContact": True,
+            },
+            "lena-agent": {
+                "agentId": "lena-agent",
+                "verifiedConferenceAttendee": True,
+                "conference": "ICML",
+                "gender": "female",
+                "availability": {"start": "2026-07-06", "end": "2026-07-10"},
+                "pricePreference": "lower_cost",
+                "overnightRoutineClaim": "regular work calls until about 1:00 AM",
+                "openToColdContact": True,
+            },
+        },
+        "agent_private_profiles": {
+            "qi-agent": {
+                "ownerAgentId": "qi-agent",
+                "confirmedPreferences": [
+                    "Quiet overnight compatibility matters more than price."
+                ],
+                "privateFacts": ["The user is a light sleeper."],
+                "delegatedAuthority": {"maximumAdditionalCostUsd": 70},
+                "commitmentBoundary": "current_proposal_human_approval_required",
+                "disclosureBoundary": "minimum_necessary_no_raw_private_fact",
+                "readableBy": ["qi-agent"],
+            },
+            "alice-agent": {
+                "ownerAgentId": "alice-agent",
+                "knownContacts": ["maya-agent"],
+                "introductionAuthority": "alice-decides",
+                "readableBy": ["alice-agent"],
+            },
+            "maya-agent": {
+                "ownerAgentId": "maya-agent",
+                "decisionAuthority": "maya-decides",
+                "readableBy": ["maya-agent"],
+            },
+            "lena-agent": {
+                "ownerAgentId": "lena-agent",
+                "decisionAuthority": "lena-decides",
+                "readableBy": ["lena-agent"],
+            },
+        },
+        "relationships": {
+            "qi-agent__alice-agent__conference-coordination": {
+                "sourceAgentId": "qi-agent",
+                "targetAgentId": "alice-agent",
+                "context": "conference_coordination",
+                "relationType": "trusted_prior_connection",
+                "coordinationReliability": 0.92,
+                "responseReliability": 0.88,
+                "privacyRespect": 1.0,
+                "successfulPlans": 1,
+                "successfulIntroductions": 0,
+                "provenanceEventIds": ["seed-prior-dinner-001"],
+            }
+        },
+        "relationship_events": {
+            "seed-prior-dinner-001": {
+                "eventType": "successful_coordination",
+                "context": "conference_dinner",
+                "participants": ["qi-agent", "alice-agent"],
+                "source": "seeded_world_fact",
+                "occurredBeforeDemo": True,
+            }
+        },
+        "availability": {
+            "maya-agent": {
+                "candidateAgentId": "maya-agent",
+                "start": "2026-07-07",
+                "end": "2026-07-10",
+                "active": True,
+                "version": 1,
+            },
+            "lena-agent": {
+                "candidateAgentId": "lena-agent",
+                "start": "2026-07-06",
+                "end": "2026-07-10",
+                "active": True,
+                "version": 1,
+            },
+        },
+        "seed_metadata": {
+            "pairpilot-demo-v1": {
+                "schemaVersion": 1,
+                "seededAt": seeded_at,
+                "containsWorkflowTrajectory": False,
+                "source": "new_hackathon_implementation",
+            }
+        },
+    }
+
+
+def seed(project_id: str, *, dry_run: bool) -> dict[str, int]:
+    """Upsert every deterministic seed document through ADC."""
+
+    data = documents()
+    counts = {collection: len(items) for collection, items in data.items()}
+    if dry_run:
+        return counts
+
+    credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    session = AuthorizedSession(credentials)
+    base = (
+        "https://firestore.googleapis.com/v1/projects/"
+        f"{project_id}/databases/(default)/documents"
+    )
+    for collection, items in data.items():
+        for document_id, fields in items.items():
+            url = f"{base}/{quote(collection)}/{quote(document_id)}"
+            response = session.patch(
+                url,
+                json={
+                    "fields": {
+                        key: firestore_value(value) for key, value in fields.items()
+                    }
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+    return counts
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--project",
+        default=os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
+        help="Dedicated Google Cloud project ID",
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    if not args.project:
+        parser.error("--project or GOOGLE_CLOUD_PROJECT is required")
+    result = seed(args.project, dry_run=args.dry_run)
+    print(json.dumps({"project": args.project, "documents": result}, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
