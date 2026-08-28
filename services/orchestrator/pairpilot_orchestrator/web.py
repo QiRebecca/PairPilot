@@ -359,7 +359,9 @@ if WEB_DIST.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     async def frontend(request: Request, path: str) -> HTMLResponse:
-        origin = str(request.base_url).rstrip("/")
+        origin = os.environ.get("PAIRPILOT_PUBLIC_BASE_URL", "").rstrip("/")
+        if not origin:
+            origin = str(request.base_url).rstrip("/")
         html = (WEB_DIST / "index.html").read_text().replace(
             "__PAIRPILOT_ORIGIN__", origin
         )
