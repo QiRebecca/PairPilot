@@ -138,6 +138,7 @@ async def request_peer_agent(
         "timed out",
         "Network communication error",
         "ConnectError",
+        "EOF while parsing",
         "502",
         "503",
     )
