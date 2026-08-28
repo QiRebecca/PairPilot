@@ -54,7 +54,7 @@ def build_qi_coordinator_agent(
         generate_content_config=genai.types.GenerateContentConfig(
             max_output_tokens=512,
             thinking_config=genai.types.ThinkingConfig(
-                thinking_level=genai.types.ThinkingLevel.MINIMAL
+                thinking_level=genai.types.ThinkingLevel.LOW
             ),
         ),
     )

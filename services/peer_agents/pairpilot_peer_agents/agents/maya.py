@@ -55,7 +55,7 @@ def build_maya_agent(*, project_id: str, model_id: str, location: str) -> Agent:
         generate_content_config=genai.types.GenerateContentConfig(
             max_output_tokens=256,
             thinking_config=genai.types.ThinkingConfig(
-                thinking_level=genai.types.ThinkingLevel.MINIMAL
+                thinking_level=genai.types.ThinkingLevel.LOW
             ),
         ),
     )
