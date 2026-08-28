@@ -33,3 +33,19 @@ def test_private_profiles_are_agent_scoped() -> None:
     profiles = seed_demo.documents()["agent_private_profiles"]
     for agent_id, profile in profiles.items():
         assert profile["readableBy"] == [agent_id]
+
+
+def test_reset_allowlist_cannot_delete_identity_or_private_profile_facts() -> None:
+    seed_demo = load_seed_module()
+    protected = {
+        "users",
+        "agents",
+        "agent_public_cards",
+        "agent_private_profiles",
+        "availability",
+        "seed_metadata",
+    }
+    assert protected.isdisjoint(seed_demo.WORKFLOW_COLLECTIONS)
+    assert {"relationships", "relationship_events"}.issubset(
+        seed_demo.WORKFLOW_COLLECTIONS
+    )

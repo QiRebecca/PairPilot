@@ -13,6 +13,26 @@ from urllib.parse import quote
 import google.auth
 from google.auth.transport.requests import AuthorizedSession
 
+WORKFLOW_COLLECTIONS = (
+    "agent_turns",
+    "intents",
+    "agent_messages",
+    "beliefs",
+    "proposals",
+    "proposal_versions",
+    "proposal_acceptances",
+    "holds",
+    "approval_requests",
+    "approvals",
+    "matches",
+    "runs",
+    "run_outputs",
+    "events",
+    "memories",
+    "relationships",
+    "relationship_events",
+)
+
 
 def firestore_value(value: Any) -> dict[str, Any]:
     """Encode a bounded Python value as a Firestore REST value."""
@@ -222,6 +242,41 @@ def seed(project_id: str, *, dry_run: bool) -> dict[str, int]:
     return counts
 
 
+def reset_workflow(project_id: str) -> dict[str, int]:
+    """Delete only explicitly allowlisted mutable demo collections."""
+
+    credentials, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    session = AuthorizedSession(credentials)
+    base = (
+        "https://firestore.googleapis.com/v1/projects/"
+        f"{project_id}/databases/(default)/documents"
+    )
+    deleted: dict[str, int] = {}
+    for collection in WORKFLOW_COLLECTIONS:
+        count = 0
+        while True:
+            response = session.get(
+                f"{base}/{quote(collection)}",
+                params={"pageSize": 100},
+                timeout=15,
+            )
+            response.raise_for_status()
+            documents = response.json().get("documents", [])
+            if not documents:
+                break
+            for document in documents:
+                delete_response = session.delete(
+                    f"https://firestore.googleapis.com/v1/{document['name']}",
+                    timeout=15,
+                )
+                delete_response.raise_for_status()
+                count += 1
+        deleted[collection] = count
+    return deleted
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -230,11 +285,33 @@ def main() -> None:
         help="Dedicated Google Cloud project ID",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--reset-workflow", action="store_true")
+    parser.add_argument(
+        "--confirm-project",
+        default="",
+        help="Required exact project ID when --reset-workflow is used",
+    )
     args = parser.parse_args()
     if not args.project:
         parser.error("--project or GOOGLE_CLOUD_PROJECT is required")
+    reset_result = None
+    if args.reset_workflow:
+        if args.dry_run:
+            parser.error("--reset-workflow cannot be combined with --dry-run")
+        if args.confirm_project != args.project:
+            parser.error("--confirm-project must exactly match --project")
+        reset_result = reset_workflow(args.project)
     result = seed(args.project, dry_run=args.dry_run)
-    print(json.dumps({"project": args.project, "documents": result}, indent=2))
+    print(
+        json.dumps(
+            {
+                "project": args.project,
+                "reset": reset_result,
+                "documents": result,
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
