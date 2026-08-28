@@ -13,4 +13,3 @@ __all__ = [
     "calculate_additional_cost",
     "disclosure_hash",
 ]
-

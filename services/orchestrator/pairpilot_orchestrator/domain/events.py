@@ -24,4 +24,3 @@ class IdempotentEventConsumer:
         handler(event)
         self.processed_keys.add(event.idempotency_key)
         return True
-

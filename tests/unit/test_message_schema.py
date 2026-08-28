@@ -1,9 +1,8 @@
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
-
 from pairpilot_schemas import A2AMessageEnvelope, SpeechAct
+from pydantic import ValidationError
 
 
 def test_a2a_envelope_rejects_unknown_fields() -> None:
@@ -17,4 +16,3 @@ def test_a2a_envelope_rejects_unknown_fields() -> None:
             natural_language="Could you consider a relevant introduction?",
             hidden_private_context="must never cross the boundary",
         )
-

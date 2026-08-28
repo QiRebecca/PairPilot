@@ -32,9 +32,7 @@ async def run() -> dict[str, object]:
     usage: list[dict[str, object]] = []
     message = genai.types.Content(
         role="user",
-        parts=[
-            genai.types.Part(text="Verify the PairPilot Qi agent runtime now.")
-        ],
+        parts=[genai.types.Part(text="Verify the PairPilot Qi agent runtime now.")],
     )
     async for event in runner.run_async(
         user_id="verification-user",
@@ -75,4 +73,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

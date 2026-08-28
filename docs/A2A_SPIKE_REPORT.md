@@ -1,10 +1,11 @@
-# A2A spike report
+# A2A implementation report
 
 Status: **verified locally and on private Cloud Run** on 2026-08-28.
 
-This spike proves a live Qi Google ADK agent can choose a legitimate tool that
-resolves a remote Agent Card, sends an official A2A v1 message, receives an
-independently generated Alice ADK response, and persists its provenance.
+The initial Alice spike is now a three-peer implementation. A live Qi Google
+ADK client resolves independent Agent Cards, sends official A2A v1 messages,
+receives independently generated Alice, Maya, and Lena ADK responses, and
+persists per-agent provenance.
 
 ## Versions
 
@@ -23,40 +24,42 @@ copied from an older tutorial.
 ## Architecture proved
 
 ```text
-Local Qi Agent (Google ADK + live Gemini 3.7 Flash)
-    -> model selects request_warm_introduction
-    -> authenticated GET /.well-known/agent-card.json
-    -> official A2A JSON-RPC 1.0 POST /a2a/alice
+Qi Agent (Google ADK + live Gemini 3.7 Flash)
+    -> resolves /.well-known/agents/{agent-id}.json
+    -> authenticated A2A JSON-RPC 1.0 POST /a2a/{alice|maya|lena}
 Private pairpilot-peer-agents Cloud Run revision
-    -> Alice Agent (separate Google ADK agent/session/context/tool)
-    -> live Gemini 3.7 Flash structured decision
-    -> A2A Message response
-    -> immutable provenance document in Firestore
+    -> separate Alice, Maya, and Lena ADK definitions
+    -> separate scoped context tools, sessions, owners, and stores
+    -> live Gemini 3.7 Flash PeerDecision
+    -> validated A2AMessageEnvelope response
+    -> immutable per-agent provenance document in Firestore
 ```
 
 ## Remote Agent Card
 
-Endpoint:
+Card endpoints:
 
 ```text
-https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/.well-known/agent-card.json
+https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/.well-known/agents/alice-agent.json
+https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/.well-known/agents/maya-agent.json
+https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/.well-known/agents/lena-agent.json
 ```
 
 Verified fields:
 
 ```json
 {
-  "name": "Alice Personal Agent",
-  "version": "0.1.0",
+  "name": "Maya Personal Agent",
+  "version": "0.2.0",
   "supportedInterfaces": [
     {
-      "url": "https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/a2a/alice",
+      "url": "https://pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app/a2a/maya",
       "protocolBinding": "JSONRPC",
       "protocolVersion": "1.0"
     }
   ],
   "capabilities": {"streaming": false},
-  "skills": [{"id": "trusted-introduction"}]
+  "skills": [{"id": "roommate-coordination"}]
 }
 ```
 
@@ -81,59 +84,50 @@ The private sleep fact was neither in Qi's outbound argument nor in Alice's
 message. The tool, not the model, enforced the typed A2A envelope and authenticated
 transport.
 
-## Cloud request and response
+## Cloud peer matrix
 
-Sanitized request evidence:
+On revision `pairpilot-peer-agents-00004-nz2`, four authenticated exchanges ran
+against the deployed service. The output below records protocol fields only;
+natural-language content was model-generated and is not seeded in source.
 
-```json
-{
-  "message_id": "d1885ada-19ec-42d0-8365-5bc0c6107333",
-  "from_agent_id": "qi-agent",
-  "to_agent_id": "alice-agent",
-  "speech_act": "INTRODUCTION_REQUEST"
-}
-```
+| Peer | Request | Response | Validated claim fields | Proposal binding |
+|---|---|---|---|---|
+| Alice | `INTRODUCTION_REQUEST` | `INTRODUCTION_RESPONSE` | `introduction_decision` | none |
+| Maya | `INFORMATION_REQUEST` | `INFORMATION_RESPONSE` | overnight routine and availability | none |
+| Lena | `INFORMATION_REQUEST` | `INFORMATION_RESPONSE` | overnight routine and availability | none |
+| Maya | version-1 `PROPOSAL` | `ACCEPTANCE` | proposal version and availability | version 1 echoed |
 
-Alice's live response:
-
-```json
-{
-  "message_id": "32457d1e-285b-4411-81d8-bd45a7be71ea",
-  "decision": "OFFER_INTRODUCTION",
-  "natural_language": "I would be glad to connect you with Maya, who is attending ICML and also looking for a quiet overnight environment.",
-  "reason": "Maya matches the requested criteria for ICML attendance and quiet preferences, and the requesting agent has a reliable coordination history.",
-  "confidence": 0.95
-}
-```
-
-The exact wording is model-generated; it is not present in source or seed data.
-Alice called her own scoped relationship-context tool before producing the
-structured response.
+The executor validates the inbound envelope and destination, rejects expired
+messages, runs the addressed agent's isolated ADK session, validates its
+`PeerDecision`, assigns peer-report provenance to claims, and creates a new
+validated outbound envelope. The canonical claim value is derived from the
+model's enumerated action; it does not choose the outcome for the model.
 
 ## Persistence and Cloud evidence
 
 | Evidence | Verified value |
 |---|---|
 | Cloud Run service | `pairpilot-peer-agents` |
-| Ready revision | `pairpilot-peer-agents-00003-dt2` |
+| Ready revision | `pairpilot-peer-agents-00004-nz2` |
 | Region | `europe-west2` |
-| Cloud Build ID | `57402e36-8d1c-4bc4-b8aa-c1a6c5ac6624` |
-| Image digest | `sha256:af799e14476164aa02b59a2cf5c75b9f7b69359caddeaeb3a50c145f8b99dabb` |
+| Cloud Build ID | `5b42382f-7dc3-4d72-a098-364a9b4f0c1a` |
+| Image digest | `sha256:477f1d1f2459b352bfc917c2c5e894801adf09c0b72752b966b0d84444a6cf30` |
 | Firestore collection | `a2a_spike_provenance` |
-| Provenance document | `32457d1e-285b-4411-81d8-bd45a7be71ea` |
-| Response SHA-256 | `26bc90f7d77a4947aef981b3ae7fe1381f74c8473e8483d5844e3d590dd32c47` |
+| Provenance documents | Four outbound-message-ID documents from the peer matrix |
+| Response SHA-256 | A 64-character digest persisted for every response |
 | Exact persisted model | `gemini-3.7-flash` |
 
-Cloud Logging recorded an authenticated `GET /.well-known/agent-card.json` and
-`POST /a2a/alice` with HTTP 200 on the same revision. The Firestore document
-records matching inbound/outbound message IDs, protocol, agent identities,
-model ID, timestamp, and response hash.
+Cloud Logging recorded authenticated HTTP 200 POSTs to `/a2a/alice`,
+`/a2a/maya`, `/a2a/lena`, and `/a2a/maya` on the same revision. Safe Firestore
+read-back confirmed that each document records the correct peer identity,
+`qi-agent` destination, A2A/JSON-RPC/1.0, exact model, and a 64-character hash.
 
 ## Local verification
 
 The integration test uses the real A2A route, resolver, client factory,
 protobuf messages, Alice ADK runner, and live Gemini model through an ASGI
-transport. It passed in 9.52 seconds:
+transport. The complete suite currently reports 23 passing tests; Ruff and
+strict mypy also pass.
 
 ```text
 tests/integration/test_a2a_live_spike.py::
@@ -145,9 +139,7 @@ Run runtime uses the Firestore adapter and fails closed if persistence fails.
 
 ## Known limitations
 
-- This bounded spike exposes only Alice's card; Maya and Lena cards are part of
-  the full peer-agent implementation gate.
-- The A2A task store is in-memory because the spike uses the immediate-message
+- The A2A task stores are in-memory because this implementation uses immediate-message
   workflow; business provenance is persisted in Firestore.
 - A2A SDK 1.1.2 currently emits protobuf field-label deprecation warnings during
   validation. They do not change the v1 exchange result.
@@ -163,4 +155,5 @@ Run runtime uses the Firestore adapter and fails closed if persistence fails.
 - Live eligible Gemini response: **verified**.
 - Authenticated private Cloud Run endpoint: **verified**.
 - Firestore provenance: **verified**.
-- Full three-peer production workflow: **pending**.
+- Three independent peer cards and endpoints: **verified**.
+- Full orchestrator golden path: **pending**.

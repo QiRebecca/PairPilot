@@ -9,4 +9,3 @@ def verify_runtime_identity(component: str) -> dict[str, str]:
         "status": "verified",
         "runtime": "google-adk-2.8.0",
     }
-

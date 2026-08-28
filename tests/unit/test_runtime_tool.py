@@ -7,4 +7,3 @@ def test_runtime_marker_is_deterministic() -> None:
         "status": "verified",
         "runtime": "google-adk-2.8.0",
     }
-

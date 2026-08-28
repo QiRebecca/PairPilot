@@ -11,9 +11,7 @@ from pairpilot_orchestrator.a2a_client import request_alice_introduction
 from pairpilot_orchestrator.config import Settings
 
 
-def build_qi_a2a_spike_agent(
-    settings: Settings, *, peer_base_url: str
-) -> Agent:
+def build_qi_a2a_spike_agent(settings: Settings, *, peer_base_url: str) -> Agent:
     """Build Qi with a legitimate remote A2A tool and no route hardcoding."""
 
     async def request_warm_introduction(
@@ -52,7 +50,8 @@ def build_qi_a2a_spike_agent(
         tools=[typed_tool],
         generate_content_config=genai.types.GenerateContentConfig(
             max_output_tokens=256,
-            thinking_config=genai.types.ThinkingConfig(thinking_level="LOW"),
+            thinking_config=genai.types.ThinkingConfig(
+                thinking_level=genai.types.ThinkingLevel.LOW
+            ),
         ),
     )
-

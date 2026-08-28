@@ -25,9 +25,7 @@ async def run() -> dict[str, object]:
     )
     runner = Runner(
         app_name="pairpilot_qi_a2a_spike",
-        agent=build_qi_a2a_spike_agent(
-            settings, peer_base_url=peer_base_url
-        ),
+        agent=build_qi_a2a_spike_agent(settings, peer_base_url=peer_base_url),
         session_service=session_service,
     )
     tool_calls: list[dict[str, object]] = []
@@ -86,4 +84,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

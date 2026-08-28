@@ -1,6 +1,6 @@
 """Deterministic proposal, hold, approval, and commitment authority."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from uuid import UUID, uuid4
 
@@ -78,7 +78,7 @@ class CoordinationAuthority:
 
     def place_hold(self, proposal_id: UUID, *, expires_at: datetime) -> Hold:
         proposal = self.proposals[proposal_id]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if expires_at <= now:
             raise AuthorityError("hold must expire in the future")
         for hold in self.holds.values():
@@ -112,7 +112,8 @@ class CoordinationAuthority:
         proposal_version: int,
         current_disclosure_hash: str,
     ) -> Approval:
-        proposal = self.proposals[proposal_id]
+        if proposal_id not in self.proposals:
+            raise AuthorityError("proposal does not exist")
         approval = Approval(
             proposal_id=proposal_id,
             proposal_version=proposal_version,
@@ -149,9 +150,7 @@ class CoordinationAuthority:
         ):
             raise AuthorityError("candidate is no longer available")
 
-        accepted = self.acceptances.get(
-            (proposal.proposal_id, proposal.version), set()
-        )
+        accepted = self.acceptances.get((proposal.proposal_id, proposal.version), set())
         if accepted != {"qi-agent", proposal.candidate_agent_id}:
             raise AuthorityError("both personal agents must accept")
 
@@ -200,4 +199,3 @@ class CoordinationAuthority:
             )
         )
         return match
-

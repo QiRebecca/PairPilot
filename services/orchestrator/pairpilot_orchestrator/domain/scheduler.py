@@ -31,4 +31,3 @@ class BoundedScheduler:
             else:
                 retries = 0
         return SchedulerResult(turns, retries, "bounded_no_match")
-

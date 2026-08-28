@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -26,9 +26,7 @@ def firestore_value(value: Any) -> dict[str, Any]:
     if isinstance(value, float):
         return {"doubleValue": value}
     if isinstance(value, datetime):
-        timestamp = value.astimezone(timezone.utc).isoformat().replace(
-            "+00:00", "Z"
-        )
+        timestamp = value.astimezone(UTC).isoformat().replace("+00:00", "Z")
         return {"timestampValue": timestamp}
     if isinstance(value, date):
         return {"stringValue": value.isoformat()}
@@ -50,7 +48,7 @@ def firestore_value(value: Any) -> dict[str, Any]:
 def documents() -> dict[str, dict[str, dict[str, Any]]]:
     """Return deterministic facts and separate private contexts."""
 
-    seeded_at = datetime.now(timezone.utc)
+    seeded_at = datetime.now(UTC)
     return {
         "users": {
             "qi-owner": {
@@ -241,4 +239,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

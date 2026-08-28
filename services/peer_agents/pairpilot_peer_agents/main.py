@@ -19,9 +19,6 @@ app = create_app(
     project_id=required_environment("GOOGLE_CLOUD_PROJECT"),
     model_id=os.environ.get("PAIRPILOT_MODEL_ID", "gemini-3.7-flash"),
     location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
-    persist_to_firestore=os.environ.get(
-        "PAIRPILOT_PERSIST_PROVENANCE", "true"
-    ).lower()
+    persist_to_firestore=os.environ.get("PAIRPILOT_PERSIST_PROVENANCE", "true").lower()
     == "true",
 )
-

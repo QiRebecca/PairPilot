@@ -7,9 +7,7 @@ import pytest
 from a2a.client import ClientConfig, create_client
 from a2a.helpers.proto_helpers import get_message_text
 from a2a.types import Message, Part, Role, SendMessageRequest
-
 from pairpilot_peer_agents.a2a_server import create_app
-from pairpilot_peer_agents.agents import IntroductionDecision
 from pairpilot_schemas import A2AMessageEnvelope, SpeechAct
 
 
@@ -58,17 +56,23 @@ async def test_qi_reads_card_and_sends_live_a2a_message() -> None:
 
     assert len(responses) == 1
     assert responses[0].HasField("message")
-    decision = IntroductionDecision.model_validate_json(
+    outbound = A2AMessageEnvelope.model_validate_json(
         get_message_text(responses[0].message)
     )
-    assert decision.decision in {
+    decision_claim = next(
+        claim for claim in outbound.claims if claim.field == "introduction_decision"
+    )
+    assert decision_claim.value in {
         "OFFER_INTRODUCTION",
         "DECLINE_INTRODUCTION",
     }
+    assert outbound.from_agent_id == "alice-agent"
+    assert outbound.to_agent_id == "qi-agent"
+    assert outbound.speech_act == SpeechAct.INTRODUCTION_RESPONSE
     assert app.state.agent_card.supported_interfaces[0].protocol_version == "1.0"
     assert len(app.state.provenance_store.records) == 1
     provenance = app.state.provenance_store.records[0]
     assert provenance.inbound_message_id == str(envelope.message_id)
     assert provenance.exact_model_id == "gemini-3.7-flash"
-    await app.state.a2a_handler.aclose()
-
+    for handler in app.state.a2a_handlers.values():
+        await handler.aclose()

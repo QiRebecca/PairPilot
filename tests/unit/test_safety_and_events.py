@@ -1,5 +1,4 @@
 import pytest
-
 from pairpilot_orchestrator.domain.events import (
     DomainEvent,
     IdempotentEventConsumer,
@@ -29,13 +28,17 @@ def test_private_memory_isolated_and_raw_phrase_blocked() -> None:
 
 
 def test_minimum_necessary_reformulation_is_allowed_without_private_reference() -> None:
-    assert OutboundPrivacyGuard().validate(
-        natural_language=(
-            "Quiet overnight compatibility is important. Are there regular "
-            "overnight habits that could affect a shared room?"
-        ),
-        references=[],
-    ).startswith("Quiet overnight")
+    assert (
+        OutboundPrivacyGuard()
+        .validate(
+            natural_language=(
+                "Quiet overnight compatibility is important. Are there regular "
+                "overnight habits that could affect a shared room?"
+            ),
+            references=[],
+        )
+        .startswith("Quiet overnight")
+    )
 
 
 def test_peer_claim_is_not_a_verified_fact() -> None:
@@ -84,4 +87,3 @@ def test_nonresponsive_agent_stops_after_bounded_retries() -> None:
     result = BoundedScheduler(max_retries=2).run(lambda: None)
     assert result.retries == 3
     assert result.termination_reason == "agent_nonresponsive"
-

@@ -25,9 +25,7 @@ def test_seed_contains_no_workflow_trajectory() -> None:
         "runs",
     }
     assert forbidden.isdisjoint(data)
-    assert not data["seed_metadata"]["pairpilot-demo-v1"][
-        "containsWorkflowTrajectory"
-    ]
+    assert not data["seed_metadata"]["pairpilot-demo-v1"]["containsWorkflowTrajectory"]
 
 
 def test_private_profiles_are_agent_scoped() -> None:
@@ -35,4 +33,3 @@ def test_private_profiles_are_agent_scoped() -> None:
     profiles = seed_demo.documents()["agent_private_profiles"]
     for agent_id, profile in profiles.items():
         assert profile["readableBy"] == [agent_id]
-

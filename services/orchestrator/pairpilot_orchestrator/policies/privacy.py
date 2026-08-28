@@ -40,4 +40,3 @@ class OutboundPrivacyGuard:
         if any(fragment in lowered for fragment in prohibited_fragments):
             raise DisclosureViolation("prohibited private phrase detected")
         return natural_language
-

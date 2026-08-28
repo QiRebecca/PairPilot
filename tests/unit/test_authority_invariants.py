@@ -1,9 +1,8 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from uuid import uuid4
 
 import pytest
-
 from pairpilot_orchestrator.domain.authority import (
     AuthorityError,
     CoordinationAuthority,
@@ -11,8 +10,7 @@ from pairpilot_orchestrator.domain.authority import (
 )
 from pairpilot_schemas import Availability, Proposal
 
-
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 
 
 def proposal(*, goal_id=None, version=1, expires_at=None) -> Proposal:
@@ -54,9 +52,12 @@ def ready_authority(item: Proposal) -> CoordinationAuthority:
 
 
 def test_partial_plan_cost_is_exactly_sixty_two_dollars() -> None:
-    assert calculate_additional_cost(
-        total_nights=4, shared_nights=3, nightly_room_cost_usd=124
-    ) == 62
+    assert (
+        calculate_additional_cost(
+            total_nights=4, shared_nights=3, nightly_room_cost_usd=124
+        )
+        == 62
+    )
 
 
 def test_no_commit_without_human_approval() -> None:
@@ -77,9 +78,9 @@ def test_old_approval_cannot_authorize_new_version() -> None:
     authority.place_hold(second.proposal_id, expires_at=NOW + timedelta(minutes=20))
     authority.accept(second.proposal_id, agent_id="qi-agent")
     authority.accept(second.proposal_id, agent_id=second.candidate_agent_id)
-    authority.approvals[second.proposal_id] = authority.approvals[first.proposal_id].model_copy(
-        update={"proposal_id": second.proposal_id}
-    )
+    authority.approvals[second.proposal_id] = authority.approvals[
+        first.proposal_id
+    ].model_copy(update={"proposal_id": second.proposal_id})
     with pytest.raises(AuthorityError, match="old proposal version"):
         authority.commit(second.proposal_id, now=NOW)
 

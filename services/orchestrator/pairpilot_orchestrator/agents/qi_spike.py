@@ -33,7 +33,8 @@ def build_qi_spike_agent(settings: Settings) -> Agent:
         tools=[verify_runtime_identity],
         generate_content_config=genai.types.GenerateContentConfig(
             max_output_tokens=128,
-            thinking_config=genai.types.ThinkingConfig(thinking_level="LOW"),
+            thinking_config=genai.types.ThinkingConfig(
+                thinking_level=genai.types.ThinkingLevel.LOW
+            ),
         ),
     )
-

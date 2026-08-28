@@ -2,11 +2,13 @@
 
 from pairpilot_schemas.agent_messages import (
     A2AMessageEnvelope,
+    A2AProposal,
     Claim,
     ClaimSource,
+    PeerClaimDraft,
+    PeerDecision,
     SpeechAct,
 )
-from pairpilot_schemas.introduction import IntroductionDecision
 from pairpilot_schemas.domain import (
     Approval,
     Availability,
@@ -18,9 +20,11 @@ from pairpilot_schemas.domain import (
     Proposal,
     RelationshipUpdate,
 )
+from pairpilot_schemas.introduction import IntroductionDecision
 
 __all__ = [
     "A2AMessageEnvelope",
+    "A2AProposal",
     "Approval",
     "Availability",
     "Claim",
@@ -31,6 +35,8 @@ __all__ = [
     "IntroductionDecision",
     "Match",
     "MemoryRecord",
+    "PeerClaimDraft",
+    "PeerDecision",
     "Proposal",
     "RelationshipUpdate",
     "SpeechAct",

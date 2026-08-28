@@ -1,7 +1,7 @@
 """Provenance records for remote peer-agent exchanges."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Protocol
 
@@ -22,9 +22,7 @@ class A2AProvenanceRecord(BaseModel):
     protocol: str = "A2A/JSON-RPC/1.0"
     exact_model_id: str
     response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ProvenanceStore(Protocol):
@@ -45,6 +43,8 @@ def build_record(
     *,
     inbound_message_id: str,
     outbound_message_id: str,
+    from_agent_id: str,
+    to_agent_id: str,
     response_text: str,
     model_id: str,
 ) -> A2AProvenanceRecord:
@@ -53,8 +53,8 @@ def build_record(
     return A2AProvenanceRecord(
         inbound_message_id=inbound_message_id,
         outbound_message_id=outbound_message_id,
-        from_agent_id="alice-agent",
-        to_agent_id="qi-agent",
+        from_agent_id=from_agent_id,
+        to_agent_id=to_agent_id,
         exact_model_id=model_id,
         response_sha256=sha256(response_text.encode()).hexdigest(),
     )
@@ -63,8 +63,10 @@ def build_record(
 class InMemoryProvenanceStore:
     """Bounded spike store; production replaces this with Firestore."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, from_agent_id: str, to_agent_id: str = "qi-agent") -> None:
         self.records: list[A2AProvenanceRecord] = []
+        self._from_agent_id = from_agent_id
+        self._to_agent_id = to_agent_id
 
     async def persist(
         self,
@@ -79,6 +81,8 @@ class InMemoryProvenanceStore:
         record = build_record(
             inbound_message_id=inbound_message_id,
             outbound_message_id=outbound_message_id,
+            from_agent_id=self._from_agent_id,
+            to_agent_id=self._to_agent_id,
             response_text=response_text,
             model_id=model_id,
         )
@@ -89,11 +93,20 @@ class InMemoryProvenanceStore:
 class FirestoreProvenanceStore:
     """Persist immutable A2A evidence through the official Firestore REST API."""
 
-    def __init__(self, *, project_id: str, database_id: str = "(default)") -> None:
+    def __init__(
+        self,
+        *,
+        project_id: str,
+        from_agent_id: str,
+        to_agent_id: str = "qi-agent",
+        database_id: str = "(default)",
+    ) -> None:
         credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
-        self._session = AuthorizedSession(credentials)
+        self._session = AuthorizedSession(credentials)  # type: ignore[no-untyped-call]
+        self._from_agent_id = from_agent_id
+        self._to_agent_id = to_agent_id
         self._collection_url = (
             "https://firestore.googleapis.com/v1/projects/"
             f"{project_id}/databases/{database_id}/documents/"
@@ -113,6 +126,8 @@ class FirestoreProvenanceStore:
         record = build_record(
             inbound_message_id=inbound_message_id,
             outbound_message_id=outbound_message_id,
+            from_agent_id=self._from_agent_id,
+            to_agent_id=self._to_agent_id,
             response_text=response_text,
             model_id=model_id,
         )

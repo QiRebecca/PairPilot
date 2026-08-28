@@ -1,6 +1,6 @@
 """Authoritative coordination contracts kept separate from model beliefs."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -74,9 +74,7 @@ class Approval(BaseModel):
     proposal_id: UUID
     proposal_version: int
     disclosure_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    approved_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    approved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Match(BaseModel):
@@ -114,9 +112,6 @@ class MemoryRecord(BaseModel):
     sensitivity: str
     confirmation_status: str
     provenance_event_ids: list[UUID] = Field(min_length=1)
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_confirmed_at: datetime | None = None
     decay_policy: str
-

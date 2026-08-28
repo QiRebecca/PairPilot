@@ -3,7 +3,6 @@
 import os
 from dataclasses import dataclass
 
-
 LIVE_MODE = "LIVE GEMINI + GOOGLE ADK + A2A"
 DEVELOPMENT_MODE = "DETERMINISTIC DEVELOPMENT FALLBACK"
 
@@ -27,9 +26,7 @@ class Settings:
         if mode not in {LIVE_MODE, DEVELOPMENT_MODE}:
             raise RuntimeError(f"Unsupported execution mode: {mode}")
 
-        model_id = os.environ.get(
-            "PAIRPILOT_MODEL_ID", "gemini-3.7-flash"
-        )
+        model_id = os.environ.get("PAIRPILOT_MODEL_ID", "gemini-3.7-flash")
         if mode == LIVE_MODE and model_id != "gemini-3.7-flash":
             raise RuntimeError(
                 "Live judging mode is pinned to verified gemini-3.7-flash"
@@ -41,4 +38,3 @@ class Settings:
             model_location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
             execution_mode=mode,
         )
-
