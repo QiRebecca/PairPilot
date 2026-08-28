@@ -72,7 +72,7 @@ class GoldenPathRuntime:
         self.effect_contract: dict[str, Any] | None = None
         self.started_at = perf_counter()
         self.boundary_elapsed_ms: int | None = None
-        self._peer_semaphore = asyncio.Semaphore(1)
+        self._peer_semaphore = asyncio.Semaphore(self.MAX_ACTIVE_CANDIDATES)
 
     async def initialize(self, goal_text: str) -> None:
         """Create the run and intent before any agent turn."""
@@ -122,7 +122,7 @@ class GoldenPathRuntime:
             self.inspect_relationship_network,
             self.search_open_agents,
             self.request_warm_introduction,
-            self.contact_candidate,
+            self.contact_candidates,
             self.record_candidate_disposition,
             self.calculate_candidate_plan_cost,
             self.create_proposal,
@@ -313,12 +313,51 @@ class GoldenPathRuntime:
             transition="introduction_response_received",
         )
 
-    async def contact_candidate(
-        self, candidate_agent_id: str, question: str
+    async def contact_candidates(
+        self, candidate_agent_ids: list[str], question: str
     ) -> dict[str, Any]:
-        """Ask a discovered or introduced candidate a minimum-necessary question."""
+        """Ask one or two model-selected candidates the same scoped question."""
 
         started = self._before_tool()
+        if not 1 <= len(candidate_agent_ids) <= self.MAX_ACTIVE_CANDIDATES:
+            raise ValueError("contact one or two candidates per bounded batch")
+        if len(set(candidate_agent_ids)) != len(candidate_agent_ids):
+            raise ValueError("candidate batch contains a duplicate agent")
+        eligible = self.discovered_agents | self.warm_introduced_agents
+        if any(candidate not in eligible for candidate in candidate_agent_ids):
+            raise ValueError("candidate is neither publicly discovered nor introduced")
+        new_candidates = set(candidate_agent_ids) - self.contacted_agents
+        if len(self.contacted_agents | new_candidates) > self.MAX_ACTIVE_CANDIDATES:
+            raise ValueError("maximum active candidate negotiations reached")
+        if any(
+            self.message_counts.get(candidate, 0) >= self.MAX_MESSAGES_PER_PAIR
+            for candidate in candidate_agent_ids
+        ):
+            raise ValueError("maximum messages for an agent pair reached")
+        safe_question = self.privacy.validate(natural_language=question, references=[])
+        results = await asyncio.gather(
+            *(
+                self._contact_candidate(candidate_agent_id, safe_question)
+                for candidate_agent_id in candidate_agent_ids
+            )
+        )
+        output = {"candidate_responses": list(results)}
+        return await self._observe(
+            tool="contact_candidates",
+            started=started,
+            arguments={
+                "candidate_agent_ids": candidate_agent_ids,
+                "question": safe_question,
+            },
+            result=output,
+            transition="candidate_claims_recorded_as_beliefs",
+        )
+
+    async def _contact_candidate(
+        self, candidate_agent_id: str, safe_question: str
+    ) -> dict[str, Any]:
+        """Run one member of a prevalidated, bounded candidate contact batch."""
+
         if candidate_agent_id not in (
             self.discovered_agents | self.warm_introduced_agents
         ):
@@ -331,7 +370,6 @@ class GoldenPathRuntime:
         count = self.message_counts.get(candidate_agent_id, 0)
         if count >= self.MAX_MESSAGES_PER_PAIR:
             raise ValueError("maximum messages for this agent pair reached")
-        safe_question = self.privacy.validate(natural_language=question, references=[])
         async with self._peer_semaphore:
             result = await request_peer_agent(
                 peer_base_url=self.peer_base_url,
@@ -383,16 +421,7 @@ class GoldenPathRuntime:
             "message_id": str(result.response.message_id),
             "retry_count": result.retry_count,
         }
-        return await self._observe(
-            tool="contact_candidate",
-            started=started,
-            arguments={
-                "candidate_agent_id": candidate_agent_id,
-                "question": safe_question,
-            },
-            result=output,
-            transition="candidate_claims_recorded_as_beliefs",
-        )
+        return output
 
     async def record_candidate_disposition(
         self,

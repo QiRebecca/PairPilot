@@ -20,3 +20,13 @@ def test_qi_coordinator_is_live_and_has_no_output_schema_story() -> None:
         agent.generate_content_config.thinking_config.thinking_level
         == ThinkingLevel.LOW
     )
+
+
+def test_tool_surface_exposes_bounded_batch_contact_only() -> None:
+    runtime = FakeRuntime()
+    runtime.tools = lambda: []
+    agent = build_qi_coordinator_agent(
+        Settings(project_id="test-project"),
+        runtime=runtime,  # type: ignore[arg-type]
+    )
+    assert "contact_candidates" in agent.instruction
