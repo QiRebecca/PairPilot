@@ -5,6 +5,7 @@ import pytest
 from pairpilot_schemas import (
     A2AMessageEnvelope,
     A2AProposal,
+    PeerDecision,
     SpeechAct,
     canonical_intent_pair,
 )
@@ -46,4 +47,16 @@ def test_invalid_proposal_date_order_is_rejected() -> None:
             shared_end=date(2026, 7, 7),
             additional_cost_usd=62,
             cost_rule="equal_split_shared_nights",
+        )
+
+
+def test_declined_introduction_cannot_leak_a_stale_target() -> None:
+    with pytest.raises(ValidationError, match="declined introduction"):
+        PeerDecision(
+            action="DECLINE_INTRODUCTION",
+            speech_act=SpeechAct.INTRODUCTION_RESPONSE,
+            natural_language="I will not make this introduction.",
+            reason="The current request does not fit.",
+            confidence=0.8,
+            introduced_agent_id="maya-agent",
         )

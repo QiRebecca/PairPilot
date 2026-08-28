@@ -147,4 +147,9 @@ class PeerDecision(BaseModel):
             raise ValueError("an offered introduction must name the introduced agent")
         if self.action == "OFFER_INTRODUCTION" and self.introduced_intent_id is None:
             raise ValueError("an offered introduction must name the active intent")
+        if self.action == "DECLINE_INTRODUCTION" and (
+            self.introduced_agent_id is not None
+            or self.introduced_intent_id is not None
+        ):
+            raise ValueError("a declined introduction cannot name a contact or intent")
         return self

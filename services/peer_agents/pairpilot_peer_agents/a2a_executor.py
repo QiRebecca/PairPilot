@@ -166,7 +166,10 @@ class PeerAgentExecutor(AgentExecutor):
                     confidence=decision.confidence,
                 )
             )
-            if decision.introduced_agent_id is not None:
+            if (
+                decision.action == "OFFER_INTRODUCTION"
+                and decision.introduced_agent_id is not None
+            ):
                 claims.append(
                     Claim(
                         field="introduced_agent_id",
@@ -175,7 +178,10 @@ class PeerAgentExecutor(AgentExecutor):
                         confidence=decision.confidence,
                     )
                 )
-            if decision.introduced_intent_id is not None:
+            if (
+                decision.action == "OFFER_INTRODUCTION"
+                and decision.introduced_intent_id is not None
+            ):
                 claims.append(
                     Claim(
                         field="introduced_intent_id",
@@ -203,6 +209,7 @@ class PeerAgentExecutor(AgentExecutor):
             from_intent_id=(
                 decision.introduced_intent_id
                 if self.agent_id == "alice-agent"
+                and decision.action == "OFFER_INTRODUCTION"
                 and decision.introduced_intent_id is not None
                 else envelope.to_intent_id
             ),
