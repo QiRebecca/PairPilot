@@ -53,9 +53,9 @@ def build_maya_agent(*, project_id: str, model_id: str, location: str) -> Agent:
         tools=[inspect_maya_roommate_context],
         output_schema=PeerDecision,
         generate_content_config=genai.types.GenerateContentConfig(
-            max_output_tokens=512,
+            max_output_tokens=256,
             thinking_config=genai.types.ThinkingConfig(
-                thinking_level=genai.types.ThinkingLevel.LOW
+                thinking_level=genai.types.ThinkingLevel.MINIMAL
             ),
         ),
     )
