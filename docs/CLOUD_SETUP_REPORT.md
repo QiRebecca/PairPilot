@@ -108,6 +108,13 @@ proves the same delivery key cannot invoke its handler twice. Production push
 authentication and Firestore-backed processed-event transactions remain part of
 the full orchestrator deployment gate.
 
+The Gate 4 store now uses a Firestore outbox document whose deterministic ID is
+the SHA-256 of the application idempotency key. A live verification called the
+same event write twice: the first call created and published it, the second
+returned the existing event and message ID without republishing. This proves
+application-level idempotency across process memory. Authenticated push delivery
+to the orchestrator worker remains a production-deployment item.
+
 ## Firestore world-fact seed verification
 
 `infra/seed_demo.py` idempotently upserts only pre-existing demo-world facts into
