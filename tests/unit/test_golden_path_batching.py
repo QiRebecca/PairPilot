@@ -35,3 +35,38 @@ async def test_candidate_contact_batch_rejects_duplicates() -> None:
             ["maya-agent", "maya-agent"],
             "What overnight routine could affect a shared room?",
         )
+
+
+@pytest.mark.asyncio
+async def test_candidate_contact_batch_preserves_partial_success() -> None:
+    item = runtime()
+    item.discovered_intents = {
+        "intent_maya": "maya-agent",
+        "intent_lena": "lena-agent",
+    }
+
+    async def fake_contact(intent_id: str, question: str) -> dict[str, str]:
+        assert question
+        if intent_id == "intent_maya":
+            return {"target_intent_id": intent_id, "status": "received"}
+        raise RuntimeError("transient peer output failure")
+
+    async def fake_observe(**kwargs: object) -> dict[str, object]:
+        return kwargs["result"]  # type: ignore[return-value]
+
+    item._contact_candidate = fake_contact  # type: ignore[method-assign]
+    item._observe = fake_observe  # type: ignore[method-assign]
+    result = await item.contact_candidates(
+        ["intent_maya", "intent_lena"],
+        "What overnight routine could affect a shared room?",
+    )
+    assert result["candidate_responses"] == [
+        {"target_intent_id": "intent_maya", "status": "received"}
+    ]
+    assert result["contact_errors"] == [
+        {
+            "target_intent_id": "intent_lena",
+            "error_type": "RuntimeError",
+            "recovery": "retry_this_intent_or_terminate_safely",
+        }
+    ]

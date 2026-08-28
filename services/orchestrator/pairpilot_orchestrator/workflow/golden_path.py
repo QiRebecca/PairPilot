@@ -414,9 +414,28 @@ class GoldenPathRuntime:
             *(
                 self._contact_candidate(target_intent_id, safe_question)
                 for target_intent_id in target_intent_ids
-            )
+            ),
+            return_exceptions=True,
         )
-        output = {"candidate_responses": list(results)}
+        candidate_responses: list[dict[str, Any]] = []
+        contact_errors: list[dict[str, str]] = []
+        for target_intent_id, result in zip(
+            target_intent_ids, results, strict=True
+        ):
+            if isinstance(result, BaseException):
+                contact_errors.append(
+                    {
+                        "target_intent_id": target_intent_id,
+                        "error_type": type(result).__name__,
+                        "recovery": "retry_this_intent_or_terminate_safely",
+                    }
+                )
+            else:
+                candidate_responses.append(result)
+        output = {
+            "candidate_responses": candidate_responses,
+            "contact_errors": contact_errors,
+        }
         return await self._observe(
             tool="contact_candidates",
             started=started,
@@ -425,7 +444,11 @@ class GoldenPathRuntime:
                 "question": safe_question,
             },
             result=output,
-            transition="candidate_claims_recorded_as_beliefs",
+            transition=(
+                "candidate_contacts_partially_completed"
+                if contact_errors
+                else "candidate_claims_recorded_as_beliefs"
+            ),
         )
 
     async def _contact_candidate(
