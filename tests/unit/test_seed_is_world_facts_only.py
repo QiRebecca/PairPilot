@@ -44,6 +44,7 @@ def test_reset_allowlist_cannot_delete_identity_or_private_profile_facts() -> No
         "agent_private_profiles",
         "availability",
         "seed_metadata",
+        "demo_quota",
     }
     assert protected.isdisjoint(seed_demo.WORKFLOW_COLLECTIONS)
     assert {"relationships", "relationship_events"}.issubset(

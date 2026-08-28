@@ -193,10 +193,21 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
 
 async def _check_run_quota() -> None:
     today = datetime.now(UTC).date().isoformat()
-    runs = await _store().list_documents("runs")
-    today_count = sum(str(item.get("startedAt", "")).startswith(today) for item in runs)
-    if today_count >= MAX_PUBLIC_RUNS_PER_UTC_DAY:
+    store = _store()
+    quota = await store.get("demo_quota", today)
+    count = int(quota.get("count", 0)) if quota else 0
+    if count >= MAX_PUBLIC_RUNS_PER_UTC_DAY:
         raise HTTPException(429, "The safe public demo quota is exhausted for today.")
+    await store.upsert(
+        "demo_quota",
+        today,
+        {
+            "date": today,
+            "count": count + 1,
+            "maximum": MAX_PUBLIC_RUNS_PER_UTC_DAY,
+            "updatedAt": datetime.now(UTC),
+        },
+    )
 
 
 def _sse(event: str, payload: dict[str, Any]) -> str:
@@ -266,8 +277,12 @@ async def state(run_id: str | None = None) -> dict[str, Any]:
 async def start_run() -> StreamingResponse:
     if _run_lock.locked():
         raise HTTPException(409, "A live public demo run is already active.")
-    await _check_run_quota()
     await _run_lock.acquire()
+    try:
+        await _check_run_quota()
+    except Exception:
+        _run_lock.release()
+        raise
     run_id = uuid4()
     return StreamingResponse(
         _run_stream(run_id),
