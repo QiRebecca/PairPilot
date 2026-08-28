@@ -209,6 +209,7 @@ class GoogleCloudStore:
         producer: str,
         payload: Mapping[str, Any],
         idempotency_key: str,
+        publish_immediately: bool = True,
     ) -> dict[str, Any]:
         """Persist an immutable event and deliver it through the Pub/Sub outbox."""
 
@@ -228,7 +229,7 @@ class GoogleCloudStore:
         existing = event if created else await self.get("events", event_id)
         if existing is None:
             raise RuntimeError("event outbox document disappeared")
-        if not existing.get("published", False):
+        if not existing.get("published", False) and publish_immediately:
             message_id = await self._publish(event_id=event_id, event=event)
             event["published"] = True
             event["pubsubMessageId"] = message_id
@@ -238,9 +239,27 @@ class GoogleCloudStore:
         return {
             "event_id": event_id,
             "created": created,
-            "published": True,
+            "published": bool(existing.get("published", False)) or publish_immediately,
             "pubsub_message_id": message_id,
         }
+
+    async def flush_pending_events(self, *, run_id: str) -> int:
+        """Publish all durable outbox events for one run after the decision path."""
+
+        flushed = 0
+        for event in await self.list_documents("events"):
+            if event.get("runId") != run_id or event.get("published") is True:
+                continue
+            event_id = str(event["eventId"])
+            clean_event = {
+                key: value for key, value in event.items() if not key.startswith("_")
+            }
+            message_id = await self._publish(event_id=event_id, event=clean_event)
+            clean_event["published"] = True
+            clean_event["pubsubMessageId"] = message_id
+            await self.upsert("events", event_id, clean_event)
+            flushed += 1
+        return flushed
 
     async def _publish(self, *, event_id: str, event: Mapping[str, Any]) -> str:
         safe_event = dict(event)

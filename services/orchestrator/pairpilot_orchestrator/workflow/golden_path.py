@@ -173,12 +173,18 @@ class GoldenPathRuntime:
                 "agent.tool.completed",
                 {"tool": tool, "transition": transition},
                 f"{self.run_id}:tool:{tool}:{argument_digest}",
+                publish_immediately=False,
             ),
         )
         return result
 
     async def _event(
-        self, event_type: str, payload: dict[str, Any], idempotency_key: str
+        self,
+        event_type: str,
+        payload: dict[str, Any],
+        idempotency_key: str,
+        *,
+        publish_immediately: bool = True,
     ) -> dict[str, Any]:
         return await self.store.write_event(
             event_type=event_type,
@@ -186,6 +192,7 @@ class GoldenPathRuntime:
             producer="qi-agent",
             payload=payload,
             idempotency_key=idempotency_key,
+            publish_immediately=publish_immediately,
         )
 
     async def inspect_relationship_network(

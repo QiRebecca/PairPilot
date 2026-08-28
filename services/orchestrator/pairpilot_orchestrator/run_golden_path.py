@@ -149,6 +149,7 @@ async def run() -> dict[str, Any]:
         )
 
     elapsed_ms = int((perf_counter() - started) * 1000)
+    flushed_outbox_events = await store.flush_pending_events(run_id=str(runtime.run_id))
     result = {
         "run_id": str(runtime.run_id),
         "goal_id": str(runtime.goal_id),
@@ -165,6 +166,7 @@ async def run() -> dict[str, Any]:
         "token_usage_events": token_usage,
         "latency_ms": elapsed_ms,
         "latency_to_boundary_ms": runtime.boundary_elapsed_ms,
+        "flushed_outbox_events": flushed_outbox_events,
         "error": error,
     }
     await store.upsert("run_outputs", str(runtime.run_id), result)
