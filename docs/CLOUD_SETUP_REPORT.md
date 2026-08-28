@@ -95,3 +95,15 @@ gcloud projects get-iam-policy "$PROJECT_ID"
 The installed CLI was Google Cloud SDK 582.0.0. Authentication tokens and ADC
 files are local-only and excluded from Git.
 
+## Pub/Sub smoke verification
+
+The project now contains topic `pairpilot-events` and bounded audit subscription
+`pairpilot-events-audit`. A real `intent.created` JSON event was published with
+schema-version and producer attributes, received through the subscription, and
+acknowledged. Google Pub/Sub assigned message ID `21380949333179798` at
+`2026-08-28T16:54:26.611Z`.
+
+The application-level consumer uses an explicit idempotency key; a unit test
+proves the same delivery key cannot invoke its handler twice. Production push
+authentication and Firestore-backed processed-event transactions remain part of
+the full orchestrator deployment gate.
