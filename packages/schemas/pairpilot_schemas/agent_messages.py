@@ -93,6 +93,7 @@ class PeerClaimDraft(BaseModel):
 
     field: Literal[
         "introduction_decision",
+        "introduced_agent_id",
         "availability_start",
         "availability_end",
         "overnight_routine",
@@ -131,9 +132,12 @@ class PeerDecision(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     confidence: float = Field(ge=0.0, le=1.0)
     accepted_proposal_version: int | None = Field(default=None, ge=1)
+    introduced_agent_id: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
 
     @model_validator(mode="after")
     def acceptance_requires_version(self) -> "PeerDecision":
         if self.action == "ACCEPT_PROPOSAL" and self.accepted_proposal_version is None:
             raise ValueError("an accepted proposal must reference its version")
+        if self.action == "OFFER_INTRODUCTION" and self.introduced_agent_id is None:
+            raise ValueError("an offered introduction must name the introduced agent")
         return self

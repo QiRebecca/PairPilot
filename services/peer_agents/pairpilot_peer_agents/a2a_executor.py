@@ -117,7 +117,8 @@ class PeerAgentExecutor(AgentExecutor):
             )
             for item in decision.claims
             if not (
-                self.agent_id == "alice-agent" and item.field == "introduction_decision"
+                self.agent_id == "alice-agent"
+                and item.field in {"introduction_decision", "introduced_agent_id"}
             )
         ]
         if self.agent_id == "alice-agent":
@@ -129,6 +130,15 @@ class PeerAgentExecutor(AgentExecutor):
                     confidence=decision.confidence,
                 )
             )
+            if decision.introduced_agent_id is not None:
+                claims.append(
+                    Claim(
+                        field="introduced_agent_id",
+                        value=decision.introduced_agent_id,
+                        source=ClaimSource.PEER_AGENT_REPORT,
+                        confidence=decision.confidence,
+                    )
+                )
         if decision.accepted_proposal_version is not None and not any(
             item.field == "proposal_version" for item in claims
         ):

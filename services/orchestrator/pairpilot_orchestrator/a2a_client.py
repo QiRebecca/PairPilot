@@ -43,6 +43,7 @@ class PeerA2AExchangeResult(BaseModel):
     inbound_message_id: UUID
     outbound_message_id: UUID
     response: A2AMessageEnvelope
+    retry_count: int = 0
 
 
 PEER_CARD_PATHS = {
@@ -143,8 +144,21 @@ async def request_peer_agent(
                 parts=[Part(text=envelope.model_dump_json())],
             )
         )
-        responses = [response async for response in client.send_message(request)]
-        await client.close()
+        retry_count = 0
+        try:
+            while True:
+                try:
+                    responses = [
+                        response async for response in client.send_message(request)
+                    ]
+                    break
+                except Exception as exc:
+                    if retry_count >= 2 or "429" not in str(exc):
+                        raise
+                    retry_count += 1
+                    await asyncio.sleep(2**retry_count)
+        finally:
+            await client.close()
 
     if len(responses) != 1 or not responses[0].HasField("message"):
         raise RuntimeError("peer A2A endpoint returned an invalid response stream")
@@ -159,4 +173,5 @@ async def request_peer_agent(
         inbound_message_id=envelope.message_id,
         outbound_message_id=UUID(response.message_id),
         response=outbound,
+        retry_count=retry_count,
     )
