@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PYTHON := .venv/bin/python
 PROJECT_ID ?= pairpilot-agentic-ecb84a
 
-.PHONY: bootstrap dev lint typecheck test test-live seed reset deploy verify submission-check
+.PHONY: bootstrap dev lint typecheck test test-live seed reset deploy deploy-candidate verify submission-check
 
 bootstrap:
 	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/bootstrap_gcp.sh
@@ -42,6 +42,9 @@ reset:
 
 deploy:
 	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/deploy.sh
+
+deploy-candidate:
+	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/deploy_intent_v2.sh
 
 verify:
 	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/verify_deployment.sh

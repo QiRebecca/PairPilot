@@ -139,6 +139,15 @@ class PeerAgentExecutor(AgentExecutor):
                         confidence=decision.confidence,
                     )
                 )
+            if decision.introduced_intent_id is not None:
+                claims.append(
+                    Claim(
+                        field="introduced_intent_id",
+                        value=decision.introduced_intent_id,
+                        source=ClaimSource.PEER_AGENT_REPORT,
+                        confidence=decision.confidence,
+                    )
+                )
         if decision.accepted_proposal_version is not None and not any(
             item.field == "proposal_version" for item in claims
         ):
@@ -155,6 +164,14 @@ class PeerAgentExecutor(AgentExecutor):
             session_id=envelope.session_id,
             from_agent_id=self.agent_id,
             to_agent_id=envelope.from_agent_id,
+            from_intent_id=(
+                decision.introduced_intent_id
+                if self.agent_id == "alice-agent"
+                and decision.introduced_intent_id is not None
+                else envelope.to_intent_id
+            ),
+            to_intent_id=envelope.from_intent_id,
+            pair_session_id=envelope.pair_session_id,
             speech_act=decision.speech_act,
             natural_language=decision.natural_language,
             claims=claims,

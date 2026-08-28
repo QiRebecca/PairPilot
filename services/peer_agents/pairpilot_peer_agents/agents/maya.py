@@ -16,6 +16,7 @@ def inspect_maya_roommate_context(request_summary: str) -> dict[str, object]:
             "gender": "female",
         },
         "availability": {"start": "2026-07-07", "end": "2026-07-10"},
+        "active_intent_id": "intent_maya_icml_roommate",
         "roommate_context": {
             "overnight_routine": "quiet",
             "early_riser": True,

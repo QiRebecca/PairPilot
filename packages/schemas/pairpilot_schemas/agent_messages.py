@@ -71,6 +71,9 @@ class A2AMessageEnvelope(BaseModel):
     session_id: UUID
     from_agent_id: str = Field(pattern=r"^[a-z0-9-]+$")
     to_agent_id: str = Field(pattern=r"^[a-z0-9-]+$")
+    from_intent_id: str = Field(pattern=r"^[a-z0-9_-]+$")
+    to_intent_id: str = Field(pattern=r"^[a-z0-9_-]+$")
+    pair_session_id: str = Field(pattern=r"^intent-pair-[0-9a-f]{20}$")
     speech_act: SpeechAct
     natural_language: str = Field(min_length=1, max_length=2_000)
     claims: list[Claim] = Field(default_factory=list, max_length=12)
@@ -94,6 +97,7 @@ class PeerClaimDraft(BaseModel):
     field: Literal[
         "introduction_decision",
         "introduced_agent_id",
+        "introduced_intent_id",
         "availability_start",
         "availability_end",
         "overnight_routine",
@@ -133,6 +137,7 @@ class PeerDecision(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     accepted_proposal_version: int | None = Field(default=None, ge=1)
     introduced_agent_id: str | None = Field(default=None, pattern=r"^[a-z0-9-]+$")
+    introduced_intent_id: str | None = Field(default=None, pattern=r"^[a-z0-9_-]+$")
 
     @model_validator(mode="after")
     def acceptance_requires_version(self) -> "PeerDecision":
@@ -140,4 +145,6 @@ class PeerDecision(BaseModel):
             raise ValueError("an accepted proposal must reference its version")
         if self.action == "OFFER_INTRODUCTION" and self.introduced_agent_id is None:
             raise ValueError("an offered introduction must name the introduced agent")
+        if self.action == "OFFER_INTRODUCTION" and self.introduced_intent_id is None:
+            raise ValueError("an offered introduction must name the active intent")
         return self

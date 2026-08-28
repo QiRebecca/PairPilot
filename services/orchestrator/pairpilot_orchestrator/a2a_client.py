@@ -15,6 +15,7 @@ from pairpilot_schemas import (
     A2AProposal,
     IntroductionDecision,
     SpeechAct,
+    canonical_intent_pair,
 )
 from pydantic import BaseModel, ConfigDict
 
@@ -42,6 +43,7 @@ class PeerA2AExchangeResult(BaseModel):
     protocol: str
     inbound_message_id: UUID
     outbound_message_id: UUID
+    request: A2AMessageEnvelope
     response: A2AMessageEnvelope
     retry_count: int = 0
 
@@ -72,6 +74,8 @@ async def request_alice_introduction(
         to_agent_id="alice-agent",
         speech_act=SpeechAct.INTRODUCTION_REQUEST,
         natural_language=request_summary,
+        from_intent_id="intent_qi_icml_roommate",
+        to_intent_id="intent_qi_icml_roommate",
     )
     outbound = result.response
     decision_claim = next(
@@ -108,6 +112,9 @@ async def request_peer_agent(
     run_id: UUID | None = None,
     session_id: UUID | None = None,
     proposal: A2AProposal | None = None,
+    from_intent_id: str,
+    to_intent_id: str,
+    pair_session_id: str | None = None,
 ) -> PeerA2AExchangeResult:
     """Resolve a named peer card and send one validated A2A v1 envelope."""
 
@@ -119,6 +126,10 @@ async def request_peer_agent(
         session_id=session_id or uuid4(),
         from_agent_id="qi-agent",
         to_agent_id=to_agent_id,
+        from_intent_id=from_intent_id,
+        to_intent_id=to_intent_id,
+        pair_session_id=pair_session_id
+        or canonical_intent_pair(from_intent_id, to_intent_id),
         speech_act=speech_act,
         natural_language=natural_language,
         proposal=proposal,
@@ -187,6 +198,7 @@ async def request_peer_agent(
         protocol="A2A/JSON-RPC/1.0",
         inbound_message_id=envelope.message_id,
         outbound_message_id=UUID(response.message_id),
+        request=envelope,
         response=outbound,
         retry_count=retry_count,
     )

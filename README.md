@@ -1,11 +1,12 @@
 # PairPilot
 
-**The relationship layer for personal agents.**
+**An intent marketplace operated by personal agents.**
 
-PairPilot gives every person a persistent personal agent that autonomously
-communicates and negotiates with other personal agents to form real-world
-plans, using past relationships as social memory and escalating only the final
-irreversible commitment to the human.
+The user tells their personal agent what they need. The agent drafts and
+publishes a privacy-aware intent post, discovers other current posts,
+communicates with their owners' agents, negotiates a real plan, and closes both
+requests only after exact human-approved commitment. Relationships provide
+durable social context; active intent posts describe what people need now.
 
 [Open the public live demo](https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app)
 
@@ -19,37 +20,48 @@ discover people, decide whom to trust, ask sensitive compatibility questions,
 negotiate dates and cost, track changing state, and know when to ask the human.
 Today's assistants leave the user doing that coordination across messages.
 
-## Why this is not a chatbot
+## Five product layers
 
-The interface is a live relationship network, not a chat box. The human enters
-one goal. A Google ADK personal agent then chooses tools, uses a prior
-relationship, discovers open agents, sends authenticated A2A messages, records
-beliefs with provenance, calculates a deterministic compromise, negotiates a
-versioned proposal, places a hold, and stops at an effect-level approval
-boundary. Infrastructure—not peer text or the model—controls authority.
+- **Intent Marketplace:** public `OPEN` posts with owner, lifecycle, capacity,
+  expiry, and public constraints—not candidate profiles.
+- **Personal Agents:** Google ADK agents draft, monitor, search, communicate,
+  and negotiate with model-selected typed tools.
+- **Agent-to-Agent Communication:** authenticated A2A envelopes are bound to
+  source/target intent posts and one canonical pair session.
+- **Relationship Memory:** provenance-backed social context informs whom an
+  agent may trust or ask for an introduction.
+- **Human-Governed Commitment:** infrastructure owns holds and exact approval;
+  peer language and models cannot commit.
 
 ## Taskmaster alignment
 
-PairPilot completes an autonomous, multi-step real-world workflow. Three fresh
-deployed evaluations finished in 73.422, 42.351, and 47.250 seconds, with zero
-private-memory leakage and zero unauthorized commitment. The third run selected
-a different valid action trajectory. See [the evaluation](docs/EVAL_REPORT.md).
+The original coordination engine completed three deployed approval-boundary
+evaluations in 73.422, 42.351, and 47.250 seconds, with zero private-memory
+leakage and zero unauthorized commitment; that evidence remains historical and
+is not relabeled as a test of the new composer/publish lifecycle. Corrected
+intent-layer evidence is tracked separately during tagged deployment. See
+[the baseline evaluation](docs/EVAL_REPORT.md) and
+[the correction report](docs/PRODUCT_CORRECTION_REPORT.md).
 
 ## Product workflow
 
-1. Qi expresses one natural-language ICML roommate goal.
-2. Qi Agent inspects a trusted prior relationship with Alice Agent.
-3. It discovers open-network candidates and asks Alice for an introduction.
-4. It contacts model-selected candidates concurrently over A2A.
-5. It treats peer claims as reports, not truth, and records dispositions.
-6. A deterministic tool computes that three shared nights add `$62`, below the
+1. The user tells Qi Agent what they need in natural language.
+2. A live Qi Agent drafts public, agent-only, protected, and provenance fields.
+3. The user reviews/edits the draft and publishes a real `OPEN` intent post.
+4. Qi Agent searches other current `OPEN` posts and inspects Alice relationship
+   memory for a possible warm introduction.
+5. It contacts model-selected post owners over intent-scoped A2A.
+6. It treats peer claims as reports, not truth, and records dispositions.
+7. A deterministic tool computes that three shared nights add `$62`, below the
    delegated `$70` ceiling.
-7. Qi and Maya agents accept the exact proposal version.
-8. Infrastructure places a temporary hold and displays the full effect
+8. Qi and Maya agents accept the exact proposal version.
+9. Infrastructure places a 15-minute post-capacity hold and displays the full effect
    contract.
-9. Only the human can approve. Commit revalidates every current authority fact.
-10. After approval, one atomic Firestore commit creates the match,
-    relationship provenance, Alice introduction credit, and scoped memory.
+10. Only the human can approve. An expired hold requires explicit revalidation;
+    an expired proposal is never revived.
+11. After approval, one atomic Firestore commit creates the match, closes both
+    posts, releases other negotiations, and writes provenance-backed
+    relationship/memory updates.
 
 ## Agent architecture
 
@@ -74,13 +86,15 @@ Run service account. Typed envelopes bind run, session, sender, recipient,
 speech act, claims, proposal version, and expiry. See
 [the A2A report](docs/A2A_SPIKE_REPORT.md).
 
-## Relational memory network
+## Intent Registry and relational memory
 
-Firestore stores relationships separately from messages, beliefs, proposals,
-holds, approvals, matches, and memories. Every relationship update includes
-provenance event IDs. Reset restores only seeded world facts; it never seeds a
-successful trajectory. Current availability and commitment state always come
-from authoritative documents, never semantic memory.
+Firestore stores public intent posts separately from owner-only intent context,
+relationships, messages, beliefs, proposals, holds, approvals, matches, and
+memories. Every relationship update includes match/event provenance. Reset
+leaves Qi with no goal/post and reseeds only Maya/Lena `OPEN` posts plus base
+identities, availability, and Alice relationships; it never seeds success.
+Current post state, capacity, availability, and commitment always come from
+authoritative documents, never semantic memory.
 
 ## Google technology usage
 
@@ -108,12 +122,13 @@ authority, or create approval.
 
 ## Approval and commitment model
 
-The approval card shows identity, shared/solo dates, cost, terms, uncertainty,
-recommendation, disclosure scope, proposal version, hold expiry, and current
-availability. The endpoint requires `APPROVE VERSION N` for that exact version.
-Immediately before commit it revalidates proposal/hold expiry, availability,
-both agent acceptances, disclosure hash, human approval version, and
-idempotency. No valid current approval means no match.
+The approval card shows identity, source/target posts, shared/solo dates, cost,
+terms, uncertainty, recommendation, disclosure scope, proposal version, hold
+expiry, and current availability. The endpoint requires `APPROVE VERSION N` for
+that exact version. Immediately before commit it revalidates both posts and
+capacity, pair session, proposal/hold expiry, availability, both acceptances,
+disclosure hash, human approval version, and idempotency. No current approval
+means no match.
 
 ## Local setup
 
@@ -171,10 +186,11 @@ make deploy PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 make verify PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 ```
 
-The script builds immutable images in Cloud Build, deploys scale-to-zero
-services, keeps peers authenticated, grants only the runtime identity peer
-invocation, and prints the public URL. Current verified resources are documented
-in [deployment verification](docs/DEPLOYMENT_VERIFICATION.md).
+The standard script builds immutable images and routes the deployed revision.
+For this migration, `make deploy-candidate` instead deploys the existing
+services with `--no-traffic --tag intent-v2`, preserving production traffic
+until every P0 gate passes. Evidence and rollback are recorded in
+[the intent-layer deployment report](docs/INTENT_LAYER_DEPLOYMENT_REPORT.md).
 
 ## Seed and reset
 
@@ -183,10 +199,11 @@ make seed PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 make reset PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 ```
 
-Reset requires an exact project confirmation and deletes only 17 explicit
-mutable collections. Identities, private profiles, availability, metadata, and
-the public quota ledger are protected. The seed contains facts only—no messages,
-beliefs, proposals, holds, approvals, matches, runs, or success events.
+Reset requires an exact project confirmation and deletes only explicit mutable
+collections. It reseeds peer intent posts and base relationship facts while
+preserving the public quota ledger and infrastructure metadata. The seed
+contains no Qi goal/post, messages, beliefs, proposals, holds, approvals,
+matches, runs, or success events.
 
 ## Tests
 
@@ -198,23 +215,24 @@ make test-live PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 make submission-check
 ```
 
-The suite covers privacy isolation, prompt injection, peer claim provenance,
-approval/version/hold/availability rules, atomic commit and idempotency,
-bounded termination, A2A routes, public API redaction, reset protection, and
-the live A2A exchange.
+The suite covers structured draft provenance, privacy isolation, dynamic cost
+boundaries, intent-only public search, canonical pair sessions, prompt
+injection, peer claim provenance, hold/revalidation rules, safe release,
+atomic commit, A2A routes, public API redaction, reset protection, and the live
+A2A exchange.
 
 ## Evaluation
 
-Three fresh public Cloud Run runs, each following Reset, reached the current
-human approval boundary inside 90 seconds. No run leaked the protected phrase,
-wrote an approval, or committed a match. Run IDs, model turns, tool calls,
-messages, latency, and captured token metadata are in
-[docs/EVAL_REPORT.md](docs/EVAL_REPORT.md).
+Three earlier public Cloud Run runs reached the approval boundary inside 90
+seconds and remain evidence for the preserved coordination engine. New
+composer-to-approval runs must be recorded against the tagged corrected
+revision; they will not overwrite [docs/EVAL_REPORT.md](docs/EVAL_REPORT.md).
 
 ## Known limitations
 
-- A positive deployed commit requires a real person to approve the visible
-  unexpired contract. We do not impersonate that action in automation.
+- Corrected tagged-deployment and positive-commit evidence remains pending until
+  a real person approves the visible current contract. Automation never
+  impersonates that action.
 - Immediate A2A task state is in memory; durable business provenance is in
   Firestore.
 - The public safe demo allows one live run at a time and 12 run starts per UTC
@@ -235,7 +253,7 @@ code was reused. The complete disclosure is in [PRIOR_WORK.md](PRIOR_WORK.md).
 packages/schemas/       typed domain and A2A contracts
 services/orchestrator/  Qi ADK agent, workflow, authority, public API
 services/peer_agents/   independent Alice, Maya, Lena ADK/A2A service
-web/                    React/TypeScript relationship-network UI
+web/                    React/TypeScript intent marketplace UI
 infra/                  bootstrap, seed/reset, build, deploy, verify
 tests/                  unit and live integration evidence
 docs/                   model, cloud, A2A, evaluation, compliance reports

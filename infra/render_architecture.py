@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the submission architecture PNG from the documented system map."""
+"""Render the intent-marketplace architecture PNG used in the submission."""
 
 from __future__ import annotations
 
@@ -7,15 +7,16 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-WIDTH, HEIGHT = 1800, 1050
+WIDTH, HEIGHT = 1900, 1200
 BACKGROUND = "#090b0a"
 PANEL = "#131714"
 LINE = "#343a35"
 INK = "#f2f4ee"
 MUTED = "#9aa29b"
-LIME = "#c8ff70"
+LIME = "#caff6a"
 TEAL = "#79e8ca"
 VIOLET = "#b9a7ff"
+ORANGE = "#efb680"
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "architecture.png"
@@ -35,14 +36,12 @@ def box(
 ) -> None:
     draw.rounded_rectangle(xy, radius=20, fill=PANEL, outline=LINE, width=2)
     x1, y1, x2, _ = xy
-    draw.rounded_rectangle((x1 + 14, y1 + 14, x1 + 22, y1 + 48), radius=4, fill=accent)
-    draw.text((x1 + 38, y1 + 13), title, font=font(24), fill=INK)
+    draw.rounded_rectangle(
+        (x1 + 14, y1 + 14, x1 + 22, y1 + 48), radius=4, fill=accent
+    )
+    draw.text((x1 + 38, y1 + 13), title, font=font(23), fill=INK)
     draw.multiline_text(
-        (x1 + 38, y1 + 52),
-        body,
-        font=font(16),
-        fill=MUTED,
-        spacing=6,
+        (x1 + 38, y1 + 52), body, font=font(15), fill=MUTED, spacing=7
     )
     draw.ellipse((x2 - 34, y1 + 20, x2 - 22, y1 + 32), fill=accent)
 
@@ -59,147 +58,147 @@ def arrow(
     sx, sy = start
     if abs(ex - sx) >= abs(ey - sy):
         direction = 1 if ex > sx else -1
-        head = [(ex, ey), (ex - direction * 14, ey - 8), (ex - direction * 14, ey + 8)]
+        head = [
+            (ex, ey),
+            (ex - direction * 14, ey - 8),
+            (ex - direction * 14, ey + 8),
+        ]
     else:
         direction = 1 if ey > sy else -1
-        head = [(ex, ey), (ex - 8, ey - direction * 14), (ex + 8, ey - direction * 14)]
+        head = [
+            (ex, ey),
+            (ex - 8, ey - direction * 14),
+            (ex + 8, ey - direction * 14),
+        ]
     draw.polygon(head, fill=color)
     if label:
         mx, my = (sx + ex) // 2, (sy + ey) // 2
-        bbox = draw.textbbox((0, 0), label, font=font(13))
-        width = bbox[2] - bbox[0]
+        bbox = draw.textbbox((0, 0), label, font=font(12))
+        text_width = bbox[2] - bbox[0]
         draw.rounded_rectangle(
-            (mx - width // 2 - 8, my - 13, mx + width // 2 + 8, my + 10),
+            (mx - text_width // 2 - 8, my - 12, mx + text_width // 2 + 8, my + 10),
             radius=6,
             fill=BACKGROUND,
         )
-        draw.text((mx - width // 2, my - 9), label, font=font(13), fill=MUTED)
+        draw.text(
+            (mx - text_width // 2, my - 8), label, font=font(12), fill=MUTED
+        )
 
 
 def main() -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
-
-    draw.text((70, 55), "PairPilot", font=font(44), fill=INK)
+    draw.text((65, 45), "PairPilot intent marketplace", font=font(42), fill=INK)
     draw.text(
-        (70, 110),
-        "Personal agents choose the social path. "
-        "Infrastructure controls truth and authority.",
-        font=font(22),
+        (65, 96),
+        "Personal agents operate active posts; infrastructure governs commitment.",
+        font=font(21),
         fill=MUTED,
     )
-    draw.text((1550, 70), "LIVE SYSTEM", font=font(15), fill=LIME)
-    draw.ellipse((1523, 74, 1535, 86), fill=LIME)
+    draw.ellipse((1690, 65, 1702, 77), fill=LIME)
+    draw.text((1714, 58), "LIVE GOOGLE CLOUD", font=font(14), fill=LIME)
 
     box(
         draw,
-        (70, 205, 365, 340),
-        "Judge browser",
-        "React network UI\nHTTPS + live SSE",
+        (65, 180, 430, 455),
+        "PairPilot User App",
+        "Intent Composer\nMy Active Requests\nApproval\n"
+        "Live Agent Work\nRelationship Network",
         LIME,
     )
     box(
         draw,
-        (485, 180, 850, 365),
+        (555, 180, 900, 350),
         "Public Cloud Run",
-        "pairpilot-orchestrator\n"
-        "FastAPI · rate limit · quota\n"
-        "Hold + approval boundary",
+        "React + FastAPI orchestrator\nHTTPS · SSE · safe demo quota",
         TEAL,
     )
     box(
         draw,
-        (485, 455, 850, 620),
-        "Qi personal agent",
-        "Google ADK 2.8.0\nmodel-selected typed tools\nminimum-necessary disclosure",
+        (555, 435, 900, 625),
+        "Qi Personal Agent",
+        "Google ADK 2.8.0\ngemini-3.7-flash\nmodel-selected typed tools",
         LIME,
     )
     box(
         draw,
-        (960, 180, 1325, 365),
+        (1025, 165, 1465, 390),
+        "Intent Registry / Post Network",
+        "public intent posts\nstatus · capacity · expiry · owner\n"
+        "post-scoped negotiation state\nowner-private context stored separately",
+        TEAL,
+    )
+    box(
+        draw,
+        (1025, 465, 1465, 655),
         "Private Cloud Run",
-        "pairpilot-peer-agents\nA2A JSON-RPC 1.0\nGoogle-signed identity token",
+        "Alice · Maya · Lena ADK agents\nA2A JSON-RPC 1.0\n"
+        "Google-signed identity token",
         VIOLET,
     )
     box(
         draw,
-        (960, 455, 1215, 590),
-        "Alice Agent",
-        "isolated ADK context\nintroduction authority",
-        VIOLET,
-    )
-    box(
-        draw,
-        (1260, 455, 1515, 590),
-        "Maya Agent",
-        "isolated ADK context\nproposal authority",
-        TEAL,
-    )
-    box(
-        draw,
-        (960, 650, 1215, 785),
-        "Lena Agent",
-        "isolated ADK context\nproposal authority",
-        "#e9b58b",
-    )
-    box(
-        draw,
-        (1385, 180, 1725, 365),
+        (1570, 465, 1835, 655),
         "Vertex AI · global",
-        "gemini-3.7-flash\nlive Qi + peer turns\nno silent fallback",
+        "gemini-3.7-flash\nlive agent turns\nno silent fallback",
         LIME,
     )
     box(
         draw,
-        (290, 760, 650, 940),
-        "Firestore Native",
-        "current truth + provenance\n"
-        "relationships · outbox\n"
-        "atomic commit preconditions",
+        (555, 750, 900, 950),
+        "Proposal / Hold / Approval",
+        "versioned intent pair\n15-minute capacity hold\n"
+        "exact human effect approval\nexplicit expiry revalidation",
+        ORANGE,
+    )
+    box(
+        draw,
+        (1025, 750, 1465, 965),
+        "Firestore authoritative commit",
+        "match + both post closures\nrelease other negotiations\n"
+        "provenance + durable outbox\nupdate-time preconditions",
         TEAL,
     )
     box(
         draw,
-        (735, 760, 1040, 940),
+        (1570, 750, 1835, 925),
         "Pub/Sub",
-        "pairpilot-events\nat-least-once delivery\ndurable Firestore outbox",
+        "match.committed\nintent.matched × 2\nat-least-once delivery",
         VIOLET,
     )
     box(
         draw,
-        (1125, 840, 1435, 975),
+        (1025, 1020, 1465, 1165),
+        "Relationship Memory",
+        "Qi ↔ Maya provenance\nconditional Alice credit · scoped editable inference",
+        LIME,
+    )
+    box(
+        draw,
+        (65, 770, 430, 925),
         "Cloud Logging",
         "revision + request proof\nrun IDs · errors · probes",
         "#ffffff",
     )
-    box(
-        draw,
-        (1475, 650, 1725, 785),
-        "Relationship memory",
-        "committed event only\nprovenance-backed growth",
-        LIME,
+
+    arrow(draw, (430, 265), (555, 265), LIME, "describe + review")
+    arrow(draw, (900, 260), (1025, 260), TEAL, "publish / read OPEN")
+    arrow(draw, (725, 350), (725, 435), LIME, "live ADK")
+    arrow(draw, (900, 525), (1025, 555), VIOLET, "intent-scoped A2A")
+    arrow(draw, (1465, 555), (1570, 555), LIME, "live turns")
+    arrow(draw, (725, 625), (725, 750), ORANGE, "versioned proposal")
+    arrow(draw, (900, 850), (1025, 850), TEAL, "exact approval → commit")
+    arrow(draw, (1245, 750), (1245, 390), TEAL, "both posts MATCHED")
+    arrow(draw, (1465, 850), (1570, 850), VIOLET, "durable events")
+    arrow(draw, (1700, 925), (1465, 1090), LIME, "committed event only")
+    arrow(draw, (555, 830), (430, 830), "#ffffff", "observe")
+
+    draw.text((65, 1060), "PRODUCT FLOW", font=font(13), fill=MUTED)
+    steps = (
+        "1  EXPRESS INTENT   →   2  DRAFT + PUBLISH   →   3  DISCOVER + A2A   "
+        "→   4  HOLD + APPROVE   →   5  COMMIT + CLOSE   →   6  LEARN"
     )
-
-    arrow(draw, (365, 272), (485, 272), LIME, "HTTPS + SSE")
-    arrow(draw, (667, 365), (667, 455), LIME, "Google ADK")
-    arrow(draw, (850, 520), (960, 272), VIOLET, "authenticated A2A")
-    arrow(draw, (1085, 365), (1085, 455), VIOLET)
-    arrow(draw, (1210, 365), (1385, 455), TEAL)
-    arrow(draw, (1015, 365), (1085, 650), "#e9b58b")
-    arrow(draw, (1325, 272), (1385, 272), LIME, "live model")
-    arrow(draw, (1215, 510), (1385, 310), TEAL)
-    arrow(draw, (1515, 510), (1580, 365), TEAL)
-    arrow(draw, (1215, 710), (1475, 710), LIME, "commit → learn")
-    arrow(draw, (600, 620), (470, 760), TEAL, "truth + outbox")
-    arrow(draw, (650, 850), (735, 850), VIOLET, "publish")
-    arrow(draw, (1040, 900), (1125, 900), "#ffffff", "observe")
-
-    draw.text((70, 1000), "AUTHORITY", font=font(13), fill=MUTED)
-    draw.line((170, 1008, 225, 1008), fill=LIME, width=3)
-    draw.text((250, 1000), "AUTHENTICATED A2A", font=font(13), fill=MUTED)
-    draw.line((430, 1008, 485, 1008), fill=VIOLET, width=3)
-    draw.text((510, 1000), "CURRENT TRUTH / EVENTS", font=font(13), fill=MUTED)
-    draw.line((710, 1008, 765, 1008), fill=TEAL, width=3)
+    draw.text((65, 1095), steps, font=font(15), fill=INK)
 
     image.save(OUT, optimize=True)
     print(OUT)

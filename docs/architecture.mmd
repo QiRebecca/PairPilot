@@ -1,34 +1,29 @@
 flowchart LR
-    B["Judge browser\nReact relationship network"]
-    O["Public Cloud Run\npairpilot-orchestrator"]
-    Q["Qi personal agent\nGoogle ADK 2.8.0"]
-    V["Vertex AI global\ngemini-3.7-flash"]
-    P["Private Cloud Run\npairpilot-peer-agents"]
-    A["Alice ADK agent"]
-    M["Maya ADK agent"]
-    L["Lena ADK agent"]
-    F[("Firestore Native\ntruth + relationships + outbox")]
-    S["Pub/Sub\npairpilot-events"]
-    G["Cloud Logging"]
-    H["Hold + approval +\natomic commit boundary"]
-    R["Relationship-memory\nprovenance pipeline"]
+    U["PairPilot User App<br/>Intent Composer<br/>My Active Requests<br/>Approval<br/>Live Agent Work<br/>Relationship Network"]
+    O["Public Cloud Run<br/>FastAPI orchestrator + React UI"]
+    Q["Qi Personal Agent<br/>Google ADK 2.8.0<br/>gemini-3.7-flash"]
+    I[("Intent Registry / Post Network<br/>public intent posts<br/>status · capacity · expiry · owner<br/>post-scoped negotiation state")]
+    P["Private Cloud Run<br/>Alice · Maya · Lena ADK agents<br/>A2A JSON-RPC 1.0"]
+    V["Vertex AI global<br/>live model turns<br/>no silent fallback"]
+    H["Proposal / Hold / Approval<br/>15-minute intent-capacity hold<br/>exact current human effect"]
+    F[("Firestore authoritative commit<br/>match + both post closures<br/>release other negotiations<br/>provenance + durable outbox")]
+    S["Pub/Sub<br/>match.committed<br/>intent.matched × 2"]
+    R["Relationship Memory<br/>Qi ↔ Maya relationship<br/>conditional Alice credit<br/>scoped editable inference"]
+    G["Cloud Logging<br/>revision · requests · run IDs"]
 
-    B <-->|"HTTPS + SSE"| O
+    U -->|"describe need"| O
+    O -->|"agent drafts + user publishes"| I
     O --> Q
-    Q <-->|"live model turns"| V
-    Q -->|"Google-signed ID token\nA2A JSON-RPC 1.0"| P
-    P --> A
-    P --> M
-    P --> L
-    A <-->|"live model turns"| V
-    M <-->|"live model turns"| V
-    L <-->|"live model turns"| V
-    O <-->|"current state + provenance"| F
-    P -->|"A2A provenance"| F
-    F -->|"durable outbox"| S
+    Q -->|"search OPEN posts"| I
+    Q <-->|"Google-signed ID token<br/>intent-scoped A2A"| P
+    Q <-->|"live turns"| V
+    P <-->|"isolated live turns"| V
+    Q -->|"versioned proposal"| H
+    U -->|"approve exact effect"| H
+    H -->|"revalidate + atomic commit"| F
+    F -->|"both posts MATCHED"| I
+    F -->|"durable committed events"| S
+    S -->|"committed event only"| R
     O --> G
     P --> G
-    Q --> H
-    H -->|"human approves exact effect"| F
-    F -->|"committed event only"| R
-    R --> F
+    F --> G

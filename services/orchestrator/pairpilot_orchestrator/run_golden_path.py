@@ -19,12 +19,8 @@ from pairpilot_orchestrator.config import Settings
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.workflow import GoldenPathRuntime
 
-GOAL_TEXT = """Find me a female roommate for ICML in Seoul from July 6 to July 10.
-A quiet overnight environment matters more than getting the lowest price.
-I can accept partial date overlap if the additional cost stays below $70."""
 
-
-async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
+async def run(*, source_intent_id: str, run_id: UUID | None = None) -> dict[str, Any]:
     """Execute bounded live ADK coordination and return observable evidence."""
 
     settings = Settings.from_environment()
@@ -35,8 +31,9 @@ async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
         peer_base_url=peer_base_url,
         model_id=settings.model_id,
         run_id=run_id,
+        source_intent_id=source_intent_id,
     )
-    await runtime.initialize(GOAL_TEXT)
+    goal_text = await runtime.initialize()
     session_service = InMemorySessionService()
     await session_service.create_session(
         app_name="pairpilot_qi_coordinator",
@@ -49,7 +46,7 @@ async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
         session_service=session_service,
     )
     user_message = genai.types.Content(
-        role="user", parts=[genai.types.Part(text=GOAL_TEXT)]
+        role="user", parts=[genai.types.Part(text=goal_text)]
     )
     tool_calls: list[dict[str, Any]] = []
     tool_results: list[dict[str, Any]] = []
@@ -128,6 +125,7 @@ async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
         runtime.status = "NO_PROGRESS"
         error = error or "model turn ended without a terminal action"
     if runtime.status in {"TIMEOUT", "FAILED_SAFE", "NO_PROGRESS"}:
+        await runtime.release_run_negotiations(reason=runtime.status.lower())
         await store.upsert(
             "runs",
             str(runtime.run_id),
@@ -155,6 +153,7 @@ async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
     result = {
         "run_id": str(runtime.run_id),
         "goal_id": str(runtime.goal_id),
+        "source_intent_id": runtime.source_intent_id,
         "session_id": str(runtime.session_id),
         "status": runtime.status,
         "execution_mode": settings.execution_mode,
@@ -176,7 +175,10 @@ async def run(*, run_id: UUID | None = None) -> dict[str, Any]:
 
 
 def main() -> None:
-    print(json.dumps(asyncio.run(run()), indent=2))
+    source_intent_id = os.environ.get("PAIRPILOT_SOURCE_INTENT_ID", "")
+    if not source_intent_id:
+        raise SystemExit("Set PAIRPILOT_SOURCE_INTENT_ID to a published Qi intent")
+    print(json.dumps(asyncio.run(run(source_intent_id=source_intent_id)), indent=2))
 
 
 if __name__ == "__main__":

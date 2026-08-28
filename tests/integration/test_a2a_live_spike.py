@@ -8,7 +8,7 @@ from a2a.client import ClientConfig, create_client
 from a2a.helpers.proto_helpers import get_message_text
 from a2a.types import Message, Part, Role, SendMessageRequest
 from pairpilot_peer_agents.a2a_server import create_app
-from pairpilot_schemas import A2AMessageEnvelope, SpeechAct
+from pairpilot_schemas import A2AMessageEnvelope, SpeechAct, canonical_intent_pair
 
 
 @pytest.mark.asyncio
@@ -31,11 +31,15 @@ async def test_qi_reads_card_and_sends_live_a2a_message() -> None:
                 supported_protocol_bindings=["JSONRPC"],
             ),
         )
+        source_intent_id = "intent_qi_icml_roommate"
         envelope = A2AMessageEnvelope(
             run_id=uuid4(),
             session_id=uuid4(),
             from_agent_id="qi-agent",
             to_agent_id="alice-agent",
+            from_intent_id=source_intent_id,
+            to_intent_id=source_intent_id,
+            pair_session_id=canonical_intent_pair(source_intent_id, source_intent_id),
             speech_act=SpeechAct.INTRODUCTION_REQUEST,
             natural_language=(
                 "My user seeks a verified female ICML roommate in Seoul for "

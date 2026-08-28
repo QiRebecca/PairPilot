@@ -64,8 +64,17 @@ class CoordinationAuthority:
         existing_versions = [
             item.version
             for item in self.proposals.values()
-            if item.goal_id == proposal.goal_id
-            and item.candidate_agent_id == proposal.candidate_agent_id
+            if (
+                (
+                    item.source_intent_id == proposal.source_intent_id
+                    and item.target_intent_id == proposal.target_intent_id
+                )
+                if proposal.source_intent_id
+                else (
+                    item.goal_id == proposal.goal_id
+                    and item.candidate_agent_id == proposal.candidate_agent_id
+                )
+            )
         ]
         expected = max(existing_versions, default=0) + 1
         if proposal.version != expected:
@@ -82,7 +91,22 @@ class CoordinationAuthority:
         if expires_at <= now:
             raise AuthorityError("hold must expire in the future")
         for hold in self.holds.values():
-            if hold.goal_id == proposal.goal_id and hold.active:
+            proposal_intents = {
+                item
+                for item in (proposal.source_intent_id, proposal.target_intent_id)
+                if item is not None
+            }
+            held_intents = {
+                item
+                for item in (hold.source_intent_id, hold.target_intent_id)
+                if item is not None
+            }
+            same_capacity = (
+                bool(proposal_intents & held_intents)
+                if proposal_intents
+                else hold.goal_id == proposal.goal_id
+            )
+            if same_capacity and hold.active:
                 if hold.expires_at > now:
                     raise AuthorityError("a conflicting active hold already exists")
                 hold.active = False
@@ -90,7 +114,15 @@ class CoordinationAuthority:
             proposal_id=proposal.proposal_id,
             proposal_version=proposal.version,
             goal_id=proposal.goal_id,
+            source_intent_id=proposal.source_intent_id,
+            target_intent_id=proposal.target_intent_id,
+            pair_session_id=proposal.pair_session_id,
             candidate_agent_id=proposal.candidate_agent_id,
+            idempotency_key=(
+                f"{proposal.pair_session_id}:v{proposal.version}"
+                if proposal.pair_session_id
+                else None
+            ),
             expires_at=expires_at,
         )
         self.holds[hold.hold_id] = hold

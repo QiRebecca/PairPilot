@@ -5,7 +5,7 @@ import App from "./App";
 describe("PairPilot app", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("shows the live model and human commitment boundary", async () => {
+  it("starts with the intent composer and no installed request", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -14,7 +14,10 @@ describe("PairPilot app", () => {
           product: "PairPilot",
           executionMode: "LIVE GEMINI + GOOGLE ADK + A2A",
           exactModelId: "gemini-3.7-flash",
-          goal: "Find a quiet ICML roommate.",
+          activeIntent: null,
+          intentRegistry: [],
+          peerIntents: [],
+          intentPairSessions: [],
           run: null,
           turns: [],
           messages: [],
@@ -33,7 +36,8 @@ describe("PairPilot app", () => {
     );
     render(<App />);
     expect(await screen.findByText("gemini-3.7-flash")).toBeInTheDocument();
-    expect(screen.getByText("Human approval required")).toBeInTheDocument();
-    expect(screen.getByText("Start live run")).toBeInTheDocument();
+    expect(screen.getByText("What are you looking for?")).toBeInTheDocument();
+    expect(screen.getByText("Draft with my agent")).toBeDisabled();
+    expect(screen.queryByText("Start agent monitoring")).not.toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
@@ -116,6 +117,11 @@ async def commit_approved_match(
         raise AuthorityError("proposal, approval, and run are required")
     version = int(proposal["version"])
     candidate = str(proposal["candidate_agent_id"])
+    source_intent_id = str(proposal.get("source_intent_id", ""))
+    target_intent_id = str(proposal.get("target_intent_id", ""))
+    pair_session_id = str(proposal.get("pair_session_id", ""))
+    if not source_intent_id or not target_intent_id or not pair_session_id:
+        raise AuthorityError("proposal is not scoped to an intent pair")
     if proposal.get("runId") != run_id:
         raise AuthorityError("proposal belongs to another run")
     if _timestamp(proposal["expires_at"]) <= commit_time:
@@ -136,26 +142,61 @@ async def commit_approved_match(
     peer_acceptance_id = f"{proposal_id}-v{version}-{candidate}"
     qi_acceptance = await store.get("proposal_acceptances", qi_acceptance_id)
     peer_acceptance = await store.get("proposal_acceptances", peer_acceptance_id)
+    source_intent = await store.get("intents", source_intent_id)
+    target_intent = await store.get("intents", target_intent_id)
+    pair_session = await store.get("intent_pair_sessions", pair_session_id)
     alice_id = "qi-agent__alice-agent__conference-coordination"
-    alice = await store.get("relationships", alice_id)
+    introduction_used = bool(proposal.get("introductionUsed", False))
+    alice = await store.get("relationships", alice_id) if introduction_used else None
     if any(
         item is None
-        for item in (hold, availability, qi_acceptance, peer_acceptance, alice)
+        for item in (
+            hold,
+            availability,
+            qi_acceptance,
+            peer_acceptance,
+            source_intent,
+            target_intent,
+            pair_session,
+        )
     ):
         raise AuthorityError(
-            "hold, availability, both acceptances, and provenance are required"
+            "hold, intents, pair session, availability, and both "
+            "acceptances are required"
         )
     assert hold is not None
     assert availability is not None
     assert qi_acceptance is not None
     assert peer_acceptance is not None
-    assert alice is not None
+    assert source_intent is not None
+    assert target_intent is not None
+    assert pair_session is not None
+    if introduction_used and alice is None:
+        raise AuthorityError("used introduction provenance is missing")
     if not bool(hold["active"]) or int(hold["proposal_version"]) != version:
         raise AuthorityError("active current hold required")
+    if (
+        hold.get("source_intent_id") != source_intent_id
+        or hold.get("target_intent_id") != target_intent_id
+        or hold.get("pair_session_id") != pair_session_id
+        or int(hold.get("capacity_reserved", 0)) != 1
+    ):
+        raise AuthorityError("hold does not reserve the approved intent pair")
     if _timestamp(hold["expires_at"]) <= commit_time:
         raise AuthorityError("hold expired")
     if not bool(availability["active"]):
         raise AuthorityError("candidate is no longer available")
+    for intent in (source_intent, target_intent):
+        if intent.get("status") != "AWAITING_APPROVAL":
+            raise AuthorityError("both intents must be awaiting this approval")
+        if int(intent.get("capacity_remaining", 0)) < 1:
+            raise AuthorityError("intent capacity is no longer available")
+    if (
+        pair_session.get("source_intent_id") != source_intent_id
+        or pair_session.get("target_intent_id") != target_intent_id
+        or pair_session.get("status") not in {"ACTIVE", "PROPOSED", "HELD"}
+    ):
+        raise AuthorityError("current intent-pair session is invalid")
     shared_start = date.fromisoformat(str(proposal["shared_start"]))
     shared_end = date.fromisoformat(str(proposal["shared_end"]))
     if not (
@@ -176,10 +217,36 @@ async def commit_approved_match(
         "availability": availability.get("_updateTime"),
         "qi": qi_acceptance.get("_updateTime"),
         "peer": peer_acceptance.get("_updateTime"),
-        "alice": alice.get("_updateTime"),
+        "source_intent": source_intent.get("_updateTime"),
+        "target_intent": target_intent.get("_updateTime"),
+        "pair_session": pair_session.get("_updateTime"),
+        "alice": alice.get("_updateTime") if alice else "not-used",
     }
     if not all(update_times.values()):
         raise AuthorityError("commit precondition metadata is missing")
+
+    other_sessions = [
+        item
+        for item in await store.list_documents("intent_pair_sessions")
+        if item.get("pair_session_id") != pair_session_id
+        and item.get("status") in {"ACTIVE", "PROPOSED", "HELD"}
+        and (
+            item.get("source_intent_id") in {source_intent_id, target_intent_id}
+            or item.get("target_intent_id") in {source_intent_id, target_intent_id}
+        )
+    ]
+    other_holds = [
+        item
+        for item in await store.list_documents("holds")
+        if item.get("hold_id") != hold_id
+        and item.get("active") is True
+        and (
+            item.get("source_intent_id") in {source_intent_id, target_intent_id}
+            or item.get("target_intent_id") in {source_intent_id, target_intent_id}
+        )
+    ]
+    if any(not item.get("_updateTime") for item in other_sessions + other_holds):
+        raise AuthorityError("release precondition metadata is missing")
 
     event_id = str(uuid4())
     memory_id = str(uuid4())
@@ -190,12 +257,18 @@ async def commit_approved_match(
         "proposalId": proposal_id,
         "proposalVersion": version,
         "candidateAgentId": candidate,
+        "sourceIntentId": source_intent_id,
+        "targetIntentId": target_intent_id,
+        "pairSessionId": pair_session_id,
         "committedAt": commit_time,
         "provenanceEventIds": [event_id],
     }
     updated_hold = _clean(hold)
     updated_hold.update(
-        active=False, releasedAt=commit_time, releaseReason="match_committed"
+        active=False,
+        status="RELEASED",
+        releasedAt=commit_time,
+        releaseReason="match_committed",
     )
     updated_proposal = _clean(proposal)
     updated_proposal["status"] = "COMMITTED"
@@ -205,14 +278,35 @@ async def commit_approved_match(
     )
     updated_request = _clean(request)
     updated_request.update(status="APPROVED_AND_COMMITTED", committedAt=commit_time)
-    updated_alice = _clean(alice)
-    updated_alice["successfulIntroductions"] = (
-        int(updated_alice.get("successfulIntroductions", 0)) + 1
+    updated_source_intent = _clean(source_intent)
+    updated_source_intent.update(
+        status="MATCHED",
+        capacity_remaining=int(source_intent["capacity_remaining"]) - 1,
+        matched_at=commit_time,
+        matched_with_intent_id=target_intent_id,
+        closed_to_new_contacts=True,
     )
-    updated_alice["provenanceEventIds"] = list(
-        updated_alice.get("provenanceEventIds", [])
-    ) + [event_id]
-    updated_alice["updatedAt"] = commit_time
+    updated_target_intent = _clean(target_intent)
+    updated_target_intent.update(
+        status="MATCHED",
+        capacity_remaining=int(target_intent["capacity_remaining"]) - 1,
+        matched_at=commit_time,
+        matched_with_intent_id=source_intent_id,
+        closed_to_new_contacts=True,
+    )
+    updated_pair_session = _clean(pair_session)
+    updated_pair_session.update(
+        status="COMMITTED", committed_match_id=proposal_id, completed_at=commit_time
+    )
+    updated_alice = _clean(alice) if alice else None
+    if updated_alice is not None:
+        updated_alice["successfulIntroductions"] = (
+            int(updated_alice.get("successfulIntroductions", 0)) + 1
+        )
+        updated_alice["provenanceEventIds"] = list(
+            updated_alice.get("provenanceEventIds", [])
+        ) + [event_id]
+        updated_alice["updatedAt"] = commit_time
     relationship = {
         "sourceAgentId": "qi-agent",
         "targetAgentId": candidate,
@@ -223,11 +317,14 @@ async def commit_approved_match(
         "privacyRespect": 1.0,
         "successfulPlans": 1,
         "successfulIntroductions": 0,
+        "introducedThroughAgentId": ("alice-agent" if introduction_used else None),
+        "matchId": proposal_id,
         "provenanceEventIds": [event_id],
         "updatedAt": commit_time,
     }
     memory = {
         "memoryId": memory_id,
+        "runId": run_id,
         "ownerAgentId": "qi-agent",
         "memoryType": "inferred_preference",
         "content": (
@@ -250,6 +347,9 @@ async def commit_approved_match(
         "runId": run_id,
         "participants": ["qi-agent", candidate],
         "proposalId": proposal_id,
+        "matchId": proposal_id,
+        "sourceIntentId": source_intent_id,
+        "targetIntentId": target_intent_id,
         "occurredAt": commit_time,
     }
     writes = [
@@ -290,10 +390,24 @@ async def commit_approved_match(
         ),
         _update_write(
             store,
-            collection="relationships",
-            document_id=alice_id,
-            data=updated_alice,
-            update_time=str(update_times["alice"]),
+            collection="intents",
+            document_id=source_intent_id,
+            data=updated_source_intent,
+            update_time=str(update_times["source_intent"]),
+        ),
+        _update_write(
+            store,
+            collection="intents",
+            document_id=target_intent_id,
+            data=updated_target_intent,
+            update_time=str(update_times["target_intent"]),
+        ),
+        _update_write(
+            store,
+            collection="intent_pair_sessions",
+            document_id=pair_session_id,
+            data=updated_pair_session,
+            update_time=str(update_times["pair_session"]),
         ),
         _update_write(
             store,
@@ -317,6 +431,51 @@ async def commit_approved_match(
             exists=False,
         ),
     ]
+    if updated_alice is not None:
+        writes.append(
+            _update_write(
+                store,
+                collection="relationships",
+                document_id=alice_id,
+                data=updated_alice,
+                update_time=str(update_times["alice"]),
+            )
+        )
+    for session in other_sessions:
+        session_id = str(session["pair_session_id"])
+        released = _clean(session)
+        released.update(
+            status="RELEASED",
+            released_at=commit_time,
+            release_reason="conflicting_intent_matched",
+        )
+        writes.append(
+            _update_write(
+                store,
+                collection="intent_pair_sessions",
+                document_id=session_id,
+                data=released,
+                update_time=str(session["_updateTime"]),
+            )
+        )
+    for other_hold in other_holds:
+        other_hold_id = str(other_hold["hold_id"])
+        released_hold = _clean(other_hold)
+        released_hold.update(
+            active=False,
+            status="RELEASED",
+            releasedAt=commit_time,
+            releaseReason="conflicting_intent_matched",
+        )
+        writes.append(
+            _update_write(
+                store,
+                collection="holds",
+                document_id=other_hold_id,
+                data=released_hold,
+                update_time=str(other_hold["_updateTime"]),
+            )
+        )
     # No-op writes add atomic update-time preconditions for read-only authority.
     for label, collection, document_id, document in (
         ("availability", "availability", candidate, availability),
@@ -333,16 +492,57 @@ async def commit_approved_match(
                 update_time=str(update_times[label]),
             )
         )
+    event_specs: list[tuple[str, dict[str, Any], str]] = [
+        (
+            "match.committed",
+            {
+                "matchId": proposal_id,
+                "proposalId": proposal_id,
+                "proposalVersion": version,
+                "sourceIntentId": source_intent_id,
+                "targetIntentId": target_intent_id,
+            },
+            f"{run_id}:match.committed:{proposal_id}:v{version}",
+        ),
+        (
+            "intent.matched",
+            {"intentId": source_intent_id, "matchId": proposal_id},
+            f"{run_id}:intent.matched:{source_intent_id}:{proposal_id}",
+        ),
+        (
+            "intent.matched",
+            {"intentId": target_intent_id, "matchId": proposal_id},
+            f"{run_id}:intent.matched:{target_intent_id}:{proposal_id}",
+        ),
+    ]
+    for event_type, payload, idempotency_key in event_specs:
+        outbox_event_id = sha256(idempotency_key.encode()).hexdigest()
+        writes.append(
+            _update_write(
+                store,
+                collection="events",
+                document_id=outbox_event_id,
+                data={
+                    "eventId": outbox_event_id,
+                    "eventType": event_type,
+                    "schemaVersion": 1,
+                    "runId": run_id,
+                    "producer": "commit-authority",
+                    "payload": payload,
+                    "idempotencyKey": idempotency_key,
+                    "createdAt": commit_time,
+                    "published": False,
+                },
+                exists=False,
+            )
+        )
     await store.commit_writes(writes)
-    await store.write_event(
-        event_type="match.committed",
-        run_id=run_id,
-        producer="commit-authority",
-        payload={
-            "matchId": proposal_id,
-            "proposalId": proposal_id,
-            "proposalVersion": version,
-        },
-        idempotency_key=f"{run_id}:match.committed:{proposal_id}:v{version}",
-    )
+    for event_type, payload, idempotency_key in event_specs:
+        await store.write_event(
+            event_type=event_type,
+            run_id=run_id,
+            producer="commit-authority",
+            payload=payload,
+            idempotency_key=idempotency_key,
+        )
     return match

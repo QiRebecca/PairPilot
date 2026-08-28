@@ -16,6 +16,7 @@ def inspect_lena_roommate_context(request_summary: str) -> dict[str, object]:
             "gender": "female",
         },
         "availability": {"start": "2026-07-06", "end": "2026-07-10"},
+        "active_intent_id": "intent_lena_icml_roommate",
         "roommate_context": {
             "overnight_routine": "regular work calls until about 1:00 AM",
             "price_preference": "lower_cost",

@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -16,6 +16,8 @@ from google.auth.transport.requests import AuthorizedSession
 WORKFLOW_COLLECTIONS = (
     "agent_turns",
     "intents",
+    "intent_private",
+    "intent_pair_sessions",
     "agent_messages",
     "beliefs",
     "proposals",
@@ -114,10 +116,6 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "verifiedConferenceAttendee": True,
                 "conference": "ICML",
                 "gender": "female",
-                "availability": {"start": "2026-07-07", "end": "2026-07-10"},
-                "overnightRoutineClaim": "quiet",
-                "earlyRiser": True,
-                "budgetCompatibility": "compatible",
                 "openToColdContact": True,
             },
             "lena-agent": {
@@ -125,9 +123,6 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "verifiedConferenceAttendee": True,
                 "conference": "ICML",
                 "gender": "female",
-                "availability": {"start": "2026-07-06", "end": "2026-07-10"},
-                "pricePreference": "lower_cost",
-                "overnightRoutineClaim": "regular work calls until about 1:00 AM",
                 "openToColdContact": True,
             },
         },
@@ -152,12 +147,115 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
             "maya-agent": {
                 "ownerAgentId": "maya-agent",
                 "decisionAuthority": "maya-decides",
+                "activeIntentIds": ["intent_maya_icml_roommate"],
                 "readableBy": ["maya-agent"],
             },
             "lena-agent": {
                 "ownerAgentId": "lena-agent",
                 "decisionAuthority": "lena-decides",
+                "activeIntentIds": ["intent_lena_icml_roommate"],
                 "readableBy": ["lena-agent"],
+            },
+        },
+        "intents": {
+            "intent_maya_icml_roommate": {
+                "intent_id": "intent_maya_icml_roommate",
+                "owner_agent_id": "maya-agent",
+                "intent_type": "conference_room_share",
+                "raw_user_goal_ref": "intent-private://intent_maya_icml_roommate",
+                "public_title": "Looking for an ICML hotel roommate",
+                "public_summary": (
+                    "Female ICML attendee looking to share a hotel room in Seoul "
+                    "from July 7 to July 10."
+                ),
+                "public_constraints": {
+                    "event": "ICML",
+                    "location": "Seoul",
+                    "date_start": "2026-07-07",
+                    "date_end": "2026-07-10",
+                    "roommate_gender_preference": "female",
+                },
+                "public_requirements": ["verified ICML attendee", "equal split"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": True,
+                    "maximum_additional_cost_usd": 70,
+                },
+                "capacity": 1,
+                "capacity_remaining": 1,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {
+                    "public_constraints": "explicit_user_input",
+                    "negotiation_boundaries": "explicit_user_input",
+                },
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_peer_owner_seed"},
+            },
+            "intent_lena_icml_roommate": {
+                "intent_id": "intent_lena_icml_roommate",
+                "owner_agent_id": "lena-agent",
+                "intent_type": "conference_room_share",
+                "raw_user_goal_ref": "intent-private://intent_lena_icml_roommate",
+                "public_title": "Looking for an ICML hotel roommate",
+                "public_summary": (
+                    "Female ICML attendee looking to share a hotel room in Seoul "
+                    "from July 6 to July 10."
+                ),
+                "public_constraints": {
+                    "event": "ICML",
+                    "location": "Seoul",
+                    "date_start": "2026-07-06",
+                    "date_end": "2026-07-10",
+                    "roommate_gender_preference": "female",
+                },
+                "public_requirements": ["verified ICML attendee", "equal split"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": False,
+                    "maximum_additional_cost_usd": 40,
+                },
+                "capacity": 1,
+                "capacity_remaining": 1,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {
+                    "public_constraints": "explicit_user_input",
+                    "negotiation_boundaries": "explicit_user_input",
+                },
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_peer_owner_seed"},
+            },
+        },
+        "intent_private": {
+            "intent_maya_icml_roommate": {
+                "intent_id": "intent_maya_icml_roommate",
+                "owner_agent_id": "maya-agent",
+                "raw_user_goal": "Synthetic peer-owned ICML room-share request.",
+                "agent_only_constraints": {
+                    "quiet_overnight_compatibility": {
+                        "importance": "high",
+                        "source": "explicit_user_input",
+                    },
+                    "budget_compatibility": "compatible",
+                },
+                "protected_memory_refs": [],
+                "protected_fact_count": 0,
+                "readable_by": ["maya-agent"],
+            },
+            "intent_lena_icml_roommate": {
+                "intent_id": "intent_lena_icml_roommate",
+                "owner_agent_id": "lena-agent",
+                "raw_user_goal": "Synthetic peer-owned ICML room-share request.",
+                "agent_only_constraints": {
+                    "price_preference": "lower_cost",
+                    "overnight_routine": "regular work calls until about 1:00 AM",
+                },
+                "protected_memory_refs": [],
+                "protected_fact_count": 0,
+                "readable_by": ["lena-agent"],
             },
         },
         "relationships": {
@@ -172,7 +270,19 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "successfulPlans": 1,
                 "successfulIntroductions": 0,
                 "provenanceEventIds": ["seed-prior-dinner-001"],
-            }
+            },
+            "alice-agent__maya-agent__conference-coordination": {
+                "sourceAgentId": "alice-agent",
+                "targetAgentId": "maya-agent",
+                "context": "conference_coordination",
+                "relationType": "trusted_contact",
+                "coordinationReliability": 0.9,
+                "responseReliability": 0.9,
+                "privacyRespect": 1.0,
+                "successfulPlans": 1,
+                "successfulIntroductions": 0,
+                "provenanceEventIds": ["seed-alice-maya-001"],
+            },
         },
         "relationship_events": {
             "seed-prior-dinner-001": {
@@ -181,7 +291,14 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "participants": ["qi-agent", "alice-agent"],
                 "source": "seeded_world_fact",
                 "occurredBeforeDemo": True,
-            }
+            },
+            "seed-alice-maya-001": {
+                "eventType": "trusted_contact_confirmed",
+                "context": "conference_coordination",
+                "participants": ["alice-agent", "maya-agent"],
+                "source": "seeded_world_fact",
+                "occurredBeforeDemo": True,
+            },
         },
         "availability": {
             "maya-agent": {
@@ -201,7 +318,7 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
         },
         "seed_metadata": {
             "pairpilot-demo-v1": {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "seededAt": seeded_at,
                 "containsWorkflowTrajectory": False,
                 "source": "new_hackathon_implementation",

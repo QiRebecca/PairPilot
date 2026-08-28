@@ -2,12 +2,12 @@
 
 ## Project title
 
-PairPilot — The Relationship Layer for Personal Agents
+PairPilot — Intent Marketplace for Personal Agents
 
 ## Tagline
 
-Humans express intent. Personal agents build relationships and do the
-coordination. Infrastructure enforces truth, privacy, and authority.
+Tell your agent what you need once. Personal agents publish, discover,
+negotiate, and close the request—while you retain final authority.
 
 ## Track
 
@@ -15,111 +15,111 @@ Taskmaster
 
 ## Inspiration
 
-Finding a conference roommate looks like a recommendation problem, but the
-hard part begins after search: private preferences, trust, introductions,
-repeated questions, date negotiation, changing state, and knowing when a human
-must decide. We wanted personal agents to handle that social work without
-turning the human's private life or authority over to a model.
+Finding a conference roommate is not a recommendation result. The hard part is
+writing and monitoring a current request, finding someone who is still looking,
+repeating compatibility questions without oversharing, negotiating changed
+dates and cost, and knowing whether an agreement is still valid. We wanted
+personal agents to operate that workflow without giving a model the user's
+private life or power to commit.
 
 ## What it does
 
-Qi enters one goal: find a female roommate for ICML in Seoul, prioritize a
-quiet overnight environment, accept partial overlap only below `$70` extra.
-Qi's persistent personal agent inspects its relationship with Alice Agent,
-discovers open personal agents, sends authenticated A2A messages, evaluates
-reported compatibility, calculates cost, negotiates a versioned plan, and
-places a temporary hold. It then stops and shows the exact effect contract.
-Only Qi can authorize the commitment.
+PairPilot is an agent-operated intent marketplace. Each user's personal agent
+publishes and monitors active needs, discovers compatible intent posts,
+communicates with other personal agents, negotiates changing constraints, and
+closes the request only after human-approved commitment.
 
-If approved, infrastructure revalidates the proposal, hold, availability, both
-agent acceptances, disclosure scope, and idempotency in one atomic Firestore
-commit. That committed event—not a model prediction—grows the relationship
-network and scoped memory.
+Qi describes an ICML room-share need in natural language. A live Qi Agent drafts
+a structured post and separates public, agent-only, and protected information.
+Qi reviews and publishes it. The post enters the registry as `OPEN`; then Qi
+Agent searches Maya and Lena's current posts and may use Alice Agent for a
+trusted introduction. Authenticated A2A messages are bound to the two posts,
+not just the people.
+
+Gemini chooses whom to contact and how to negotiate. Infrastructure calculates
+the cost, versions the proposal, reserves post capacity for 15 minutes, and
+shows the exact effect. Only Qi can approve it. The atomic commit then creates
+one match, closes both posts, releases other negotiations, and emits the events
+that grow relationship memory.
 
 ## How we built it
 
-The public React/TypeScript interface is a three-panel relationship network,
-not a chatbot. It streams real state from a FastAPI orchestrator on Cloud Run.
-Qi, Alice, Maya, and Lena are separate Google ADK definitions running live
-`gemini-3.7-flash` through Vertex AI. The orchestrator resolves independent A2A
-1.0 Agent Cards and calls the private peer service with a Google-signed Cloud
-Run identity token.
+The product UI is React/TypeScript with composer, review, active-request,
+approval, matched, network, audit, and memory states. FastAPI on public Cloud
+Run streams Firestore-backed state through SSE.
 
-Firestore Native stores facts, messages, beliefs, proposals, holds, approvals,
-matches, relationships, provenance, and a durable Pub/Sub outbox. Typed Python
-schemas, deterministic privacy/authority services, and preconditioned Firestore
-writes keep model autonomy inside explicit boundaries.
+Qi, Alice, Maya, and Lena are independent Google ADK agents running live
+`gemini-3.7-flash` on Vertex AI. The orchestrator resolves official A2A Agent
+Cards and invokes private Cloud Run endpoints with a short-lived Google-signed
+identity token. Every envelope carries source intent, target intent, canonical
+pair session, speech act, expiry, and reported claims.
+
+Firestore Native stores the public Intent Registry, owner-private intent
+context, current authority, provenance, relationships, and durable outbox.
+Pub/Sub delivers committed domain events. Typed schemas, privacy guards,
+capacity-aware holds, and update-time-preconditioned writes keep model autonomy
+inside explicit authority boundaries.
 
 ## Google technologies used
 
-- Vertex AI global endpoint: `gemini-3.7-flash`
-- Google Agent Development Kit 2.8.0
-- Cloud Run: public orchestrator/UI and authenticated peer agents
-- Firestore Native: current truth, provenance, relationship memory, outbox
-- Pub/Sub: observable domain-event delivery
-- Cloud Build and Artifact Registry: immutable containers
-- IAM and Cloud Logging: service identity and deployment/run evidence
+- Vertex AI global endpoint with live `gemini-3.7-flash`.
+- Google Agent Development Kit 2.8.0.
+- Cloud Run for the public product and authenticated peer agents.
+- Firestore Native for intent truth, capacity, provenance, and memory.
+- Pub/Sub for durable `match.committed` / `intent.matched` delivery.
+- Cloud Build and Artifact Registry for immutable containers.
+- IAM and Cloud Logging for service identity and deployment/run evidence.
 
 We also use A2A Python SDK 1.1.2 with JSON-RPC protocol 1.0.
 
-## Challenges
+## Why it is agentic
 
-The hardest problem was preserving authentic agent autonomy while guaranteeing
-privacy and commitment safety. A semantic script would demo well but would not
-be an agent. Unbounded conversation would be authentic but unreliable. We
-instead exposed typed capabilities, let Gemini choose the path, and moved
-truth/authority into infrastructure.
+There is no deterministic “best person” matcher and no fixed candidate order.
+The code exposes bounded typed capabilities; Gemini chooses relationship
+inspection, open-post discovery, contacts, questions, dispositions, proposal
+timing, and recommendation language. Dynamic-input tests prove `$62` is inside
+a user-provided `$70` boundary but cannot silently pass a `$50` boundary.
 
-Live systems also surfaced honest engineering failures: Vertex throttling,
-occasional empty model output, an unsupported thinking level, and a serial peer
-path that crossed the 90-second bound. Bounded retry, supported model settings,
-and a model-selected two-candidate batch brought deployed runs to 38–68 seconds
-to the approval boundary without introducing a scripted fallback.
+Peer language never becomes authority. Availability, cost, post status,
+capacity, acceptances, holds, proposal versions, disclosure hashes, and human
+approval are revalidated by infrastructure.
+
+## Privacy and human control
+
+Raw user input and protected memory references live outside the public
+registry. Peers receive only minimum-necessary reformulated facts. Public APIs
+whitelist post fields and never expose `intent_private`. The approval card shows
+identity, dates, cost, maximum, terms, uncertainty, disclosure, version, and
+expiry. An agent cannot press it or call the commit endpoint as the user.
 
 ## Accomplishments
 
-- Four independent personal-agent contexts with genuine live model-selected
-  tools.
-- Authenticated official A2A cards and JSON-RPC exchanges on private Cloud Run.
-- A complete deployed workflow from one goal to a versioned, agent-accepted
-  proposal and human approval boundary.
-- Zero private-memory leakage and zero unauthorized commitment across three
-  fresh public runs.
-- Distinct valid action trajectories and different generated communication.
-- Atomic commit design with 13 preconditioned writes and provenance-backed
-  relationship/memory growth.
-- A public judge-ready relationship-network UI with reset, live run, pause,
-  approval, audit, and memory inspection controls.
+- A real composer → live structured agent draft → review → publish lifecycle.
+- Public post discovery plus relationship-based warm introductions.
+- Four isolated live personal-agent contexts and authenticated intent-scoped
+  A2A.
+- Proposal and 15-minute hold authority scoped to post capacity.
+- Safe explicit revalidation of an expired hold without reviving an expired
+  proposal.
+- One atomic design for match, both post closures, negotiation release,
+  provenance, durable events, relationship, and scoped memory.
+- 45 Python unit tests plus strict type, lint, React, and production-build
+  checks for the corrected local product layer.
 
-## What we learned
-
-Agentic products need two architectures at once: a probabilistic social layer
-that can adapt, and a deterministic authority layer that refuses stale or
-unauthorized effects. Relationships are also not just embeddings; they need
-context, counters, provenance, privacy scope, and event-driven updates.
-
-Most importantly, an approval button is not enough. A human must approve the
-current effect—including cost, dates, uncertainty, disclosure, version, and
-expiry—not an abstract agent recommendation.
-
-## What's next
-
-With the core safe workflow proven, the next steps are reusable goal schemas,
-more relationship contexts, user-editable memories, a durable A2A task store,
-and carefully evaluated managed semantic recall. Real payments, booking, and
-public onboarding remain intentionally out of scope until identity, dispute,
-and stronger abuse controls exist.
+Historical evaluation evidence for the original coordination engine remains
+separate. Corrected tagged-revision and positive-commit evidence is recorded
+only after those runs actually occur.
 
 ## Testing instructions
 
-1. Open the public URL; no sign-in is required.
-2. Click **Reset demo**.
-3. Click **Start live run** and watch live edges, messages, turns, model badge,
-   and run ID. A typical run takes 40–75 seconds.
-4. Inspect the audit log and relationship memory drawer.
-5. At the approval boundary, inspect the full effect contract. Approval is a
-   real internal demo commit; if you do not want to commit it, use Reject or
-   Reset.
-6. Refresh the page to confirm Firestore persistence.
-
-Synthetic facts only. No real booking or payment is performed.
+1. Open the public URL and click **Reset Demo**; the empty composer appears.
+2. Enter the sample ICML need and select **Let Qi Agent draft the post**.
+3. Review the three privacy sections, edit if desired, and publish.
+4. Start monitoring. Watch request progress in Overview and optional Network /
+   Audit tabs. Typical live execution takes under 90 seconds.
+5. Inspect the exact approval contract. If its hold expired, choose **Revalidate
+   offer**; an expired proposal is refused.
+6. Only if you intend to create the synthetic internal demo match, select
+   **Approve exact effect**. No payment or booking occurs.
+7. Confirm both posts close and relationship/memory provenance appears after
+   refresh.

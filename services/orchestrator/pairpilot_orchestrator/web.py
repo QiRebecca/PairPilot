@@ -7,7 +7,8 @@ import json
 import os
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 from typing import Any
@@ -21,7 +22,14 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pairpilot_schemas import (
+    FieldSource,
+    IntentPost,
+    IntentPublicConstraints,
+    IntentStatus,
+    NegotiationBoundaries,
+)
+from pydantic import BaseModel, ConfigDict, Field
 
 from pairpilot_orchestrator.config import LIVE_MODE, Settings
 from pairpilot_orchestrator.domain import (
@@ -30,13 +38,17 @@ from pairpilot_orchestrator.domain import (
     create_human_approval,
 )
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
-from pairpilot_orchestrator.run_golden_path import GOAL_TEXT, run
+from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
+from pairpilot_orchestrator.policies.privacy import OutboundPrivacyGuard
+from pairpilot_orchestrator.run_golden_path import run
 
 MAX_PUBLIC_RUNS_PER_UTC_DAY = 12
 MAX_REQUESTS_PER_MINUTE = 120
 POLL_SECONDS = 1.5
 PUBLIC_COLLECTIONS = (
     "runs",
+    "intents",
+    "intent_pair_sessions",
     "agent_turns",
     "agent_messages",
     "beliefs",
@@ -81,6 +93,43 @@ class RejectBody(BaseModel):
     proposal_version: int
 
 
+class DraftIntentBody(BaseModel):
+    """One raw owner need; it is never published directly."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    raw_goal: str = Field(min_length=20, max_length=2_000)
+
+
+class PublishIntentBody(BaseModel):
+    """User-confirmed editable fields for one draft."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intent_id: str
+    public_title: str = Field(min_length=1, max_length=120)
+    public_summary: str = Field(min_length=1, max_length=600)
+    event: str = Field(min_length=1, max_length=80)
+    location: str = Field(min_length=1, max_length=120)
+    date_start: date
+    date_end: date
+    roommate_gender_preference: str = Field(min_length=1, max_length=40)
+    public_requirements: list[str] = Field(default_factory=list, max_length=12)
+    quiet_overnight_compatibility_importance: str = Field(
+        pattern=r"^(low|medium|high)$"
+    )
+    maximum_additional_cost_usd: int = Field(ge=0, le=10_000)
+    partial_date_overlap_allowed: bool
+
+
+class RevalidateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    proposal_id: str
+    proposal_version: int
+
+
 def _store() -> GoogleCloudStore:
     settings = Settings.from_environment()
     return GoogleCloudStore(project_id=settings.project_id)
@@ -88,6 +137,26 @@ def _store() -> GoogleCloudStore:
 
 def _clean(item: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in item.items() if not key.startswith("_")}
+
+
+def _public_intent(item: dict[str, Any]) -> dict[str, Any]:
+    """Return the registry projection; never owner-only matching notes."""
+
+    return {
+        "intent_id": item.get("intent_id") or item.get("_id"),
+        "owner_agent_id": item.get("owner_agent_id"),
+        "intent_type": item.get("intent_type"),
+        "public_title": item.get("public_title"),
+        "public_summary": item.get("public_summary"),
+        "public_constraints": item.get("public_constraints"),
+        "public_requirements": item.get("public_requirements", []),
+        "capacity": item.get("capacity"),
+        "capacity_remaining": item.get("capacity_remaining"),
+        "status": item.get("status"),
+        "version": item.get("version"),
+        "published_at": item.get("published_at"),
+        "expires_at": item.get("expires_at"),
+    }
 
 
 def _for_run(items: list[dict[str, Any]], run_id: str) -> list[dict[str, Any]]:
@@ -129,6 +198,9 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
                 "messageId": item.get("message_id"),
                 "fromAgentId": item.get("from_agent_id"),
                 "toAgentId": item.get("to_agent_id"),
+                "fromIntentId": item.get("from_intent_id"),
+                "toIntentId": item.get("to_intent_id"),
+                "pairSessionId": item.get("pair_session_id"),
                 "speechAct": item.get("speech_act"),
                 "naturalLanguage": item.get("natural_language"),
                 "route": item.get("route"),
@@ -157,6 +229,13 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
     approval_requests = _for_run(data["approval_requests"], selected_id)
     approvals = _for_run(data["approvals"], selected_id)
     matches = _for_run(data["matches"], selected_id)
+    intents = [_public_intent(item) for item in data["intents"]]
+    qi_intents = [item for item in intents if item.get("owner_agent_id") == "qi-agent"]
+    active_intent = (
+        max(qi_intents, key=lambda item: str(item.get("created_at", "")))
+        if qi_intents
+        else None
+    )
     now = datetime.now(UTC)
     for hold in holds:
         expires = datetime.fromisoformat(str(hold["expires_at"]).replace("Z", "+00:00"))
@@ -165,7 +244,17 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
         "product": "PairPilot",
         "executionMode": LIVE_MODE,
         "exactModelId": "gemini-3.7-flash",
-        "goal": GOAL_TEXT,
+        "activeIntent": active_intent,
+        "intentRegistry": [
+            item
+            for item in intents
+            if item.get("owner_agent_id") != "qi-agent"
+            and item.get("status") == IntentStatus.OPEN.value
+        ],
+        "peerIntents": [
+            item for item in intents if item.get("owner_agent_id") != "qi-agent"
+        ],
+        "intentPairSessions": [_clean(item) for item in data["intent_pair_sessions"]],
         "run": _clean(selected) if selected else None,
         "turns": turns,
         "messages": messages,
@@ -176,9 +265,7 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
         "approvals": approvals,
         "matches": matches,
         "relationships": [_clean(item) for item in data["relationships"]],
-        "relationshipEvents": [
-            _clean(item) for item in data["relationship_events"]
-        ],
+        "relationshipEvents": [_clean(item) for item in data["relationship_events"]],
         "memories": _for_run(data["memories"], selected_id),
         "protectedMemoryCount": 1,
         "limits": {
@@ -214,8 +301,8 @@ def _sse(event: str, payload: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-async def _run_stream(run_id: UUID) -> AsyncIterator[str]:
-    task = asyncio.create_task(run(run_id=run_id))
+async def _run_stream(run_id: UUID, source_intent_id: str) -> AsyncIterator[str]:
+    task = asyncio.create_task(run(run_id=run_id, source_intent_id=source_intent_id))
     previous = ""
     try:
         yield _sse("started", {"runId": str(run_id)})
@@ -273,19 +360,319 @@ async def state(run_id: str | None = None) -> dict[str, Any]:
     return await public_state(run_id)
 
 
+@app.post("/api/intents/draft")
+async def draft_intent(body: DraftIntentBody) -> dict[str, Any]:
+    """Ask live Qi Agent for a typed draft, then store it without publishing."""
+
+    store = _store()
+    existing_qi_intents = [
+        item
+        for item in await store.list_documents("intents")
+        if item.get("owner_agent_id") == "qi-agent"
+        and item.get("status")
+        not in {
+            IntentStatus.MATCHED.value,
+            IntentStatus.CLOSED.value,
+            IntentStatus.EXPIRED.value,
+            IntentStatus.CANCELLED.value,
+        }
+    ]
+    if existing_qi_intents:
+        raise HTTPException(
+            409, "Qi already has an active request. Reset or finish it first."
+        )
+    try:
+        async with asyncio.timeout(60):
+            draft = await draft_with_qi_agent(body.raw_goal)
+    except TimeoutError as exc:
+        raise HTTPException(
+            504, "Qi Agent drafting exceeded the safe time bound."
+        ) from exc
+    now = datetime.now(UTC)
+    intent_id = f"intent_qi_{uuid4().hex[:16]}"
+    post = IntentPost(
+        intent_id=intent_id,
+        owner_agent_id="qi-agent",
+        intent_type=draft.intent_type,
+        raw_user_goal_ref=f"intent-private://{intent_id}",
+        public_title=draft.public_title,
+        public_summary=draft.public_summary,
+        public_constraints=IntentPublicConstraints(
+            event=draft.event,
+            location=draft.location,
+            date_start=draft.date_start,
+            date_end=draft.date_end,
+            roommate_gender_preference=draft.roommate_gender_preference,
+        ),
+        public_requirements=draft.public_requirements,
+        negotiation_boundaries=NegotiationBoundaries(
+            partial_date_overlap_allowed=(
+                draft.agent_only.partial_date_overlap_allowed
+            ),
+            maximum_additional_cost_usd=(draft.agent_only.maximum_additional_cost_usd),
+        ),
+        capacity=1,
+        capacity_remaining=1,
+        status=IntentStatus.DRAFT,
+        version=1,
+        field_provenance=draft.field_provenance.model_dump(),
+        created_at=now,
+        expires_at=now + timedelta(days=7),
+        provenance={"source": "user_goal_and_qi_agent_draft"},
+    )
+    created = await store.create("intents", intent_id, post.model_dump(mode="json"))
+    if not created:
+        raise HTTPException(409, "Draft identifier already exists.")
+    await store.create(
+        "intent_private",
+        intent_id,
+        {
+            "intent_id": intent_id,
+            "owner_agent_id": "qi-agent",
+            "raw_user_goal": body.raw_goal,
+            "agent_only_constraints": {
+                "quiet_overnight_compatibility": {
+                    "importance": (
+                        draft.agent_only.quiet_overnight_compatibility_importance
+                    ),
+                    "source": (
+                        draft.field_provenance.quiet_overnight_compatibility.value
+                    ),
+                },
+                "maximum_additional_cost_usd": (
+                    draft.agent_only.maximum_additional_cost_usd
+                ),
+                "partial_date_overlap_allowed": (
+                    draft.agent_only.partial_date_overlap_allowed
+                ),
+            },
+            "protected_memory_refs": ["private-sleep-memory-reference"],
+            "protected_fact_count": 1,
+            "readable_by": ["qi-agent"],
+            "uncertainties": draft.uncertainties,
+        },
+    )
+    await store.write_event(
+        event_type="intent.drafted",
+        run_id=f"draft:{intent_id}",
+        producer="qi-agent",
+        payload={"intentId": intent_id, "status": IntentStatus.DRAFT.value},
+        idempotency_key=f"intent.drafted:{intent_id}:v1",
+    )
+    return await _intent_review(store, intent_id)
+
+
+async def _intent_review(store: GoogleCloudStore, intent_id: str) -> dict[str, Any]:
+    post, private = await asyncio.gather(
+        store.get("intents", intent_id),
+        store.get("intent_private", intent_id),
+    )
+    if post is None or private is None or post.get("owner_agent_id") != "qi-agent":
+        raise HTTPException(404, "Qi intent draft was not found.")
+    return {
+        "publicPost": _public_intent(post),
+        "agentOnly": private.get("agent_only_constraints", {}),
+        "protected": {
+            "count": int(private.get("protected_fact_count", 0)),
+            "summary": "Protected sleep-related fact",
+            "disclosure": "Never included in public posts or peer-agent messages",
+        },
+        "fieldProvenance": post.get("field_provenance", {}),
+        "uncertainties": private.get("uncertainties", []),
+    }
+
+
+@app.get("/api/intents/{intent_id}/review")
+async def intent_review(intent_id: str) -> dict[str, Any]:
+    return await _intent_review(_store(), intent_id)
+
+
+@app.post("/api/intents/publish")
+async def publish_intent(body: PublishIntentBody) -> dict[str, Any]:
+    """Apply owner edits and make one post authoritatively searchable."""
+
+    if body.date_end <= body.date_start:
+        raise HTTPException(400, "End date must follow start date.")
+    privacy = OutboundPrivacyGuard()
+    try:
+        privacy.validate(
+            natural_language="\n".join(
+                [body.public_title, body.public_summary, *body.public_requirements]
+            ),
+            references=[],
+        )
+    except ValueError as exc:
+        raise HTTPException(400, "Public post contains protected information.") from exc
+    store = _store()
+    current = await store.get("intents", body.intent_id)
+    private = await store.get("intent_private", body.intent_id)
+    if (
+        current is None
+        or private is None
+        or current.get("owner_agent_id") != "qi-agent"
+    ):
+        raise HTTPException(404, "Qi intent draft was not found.")
+    if current.get("status") == IntentStatus.OPEN.value:
+        return {"status": "OPEN", "intent": _public_intent(current), "created": False}
+    if current.get("status") not in {
+        IntentStatus.DRAFT.value,
+        IntentStatus.READY_FOR_REVIEW.value,
+    }:
+        raise HTTPException(409, "Only a reviewable draft can be published.")
+    now = datetime.now(UTC)
+    provenance = dict(current.get("field_provenance", {}))
+    editable_values = {
+        "public_title": body.public_title,
+        "public_summary": body.public_summary,
+        "event": body.event,
+        "location": body.location,
+        "date_start": body.date_start.isoformat(),
+        "date_end": body.date_end.isoformat(),
+        "roommate_gender_preference": body.roommate_gender_preference,
+        "public_requirements": body.public_requirements,
+        "maximum_additional_cost_usd": body.maximum_additional_cost_usd,
+        "partial_date_overlap_allowed": body.partial_date_overlap_allowed,
+    }
+    current_constraints = dict(current.get("public_constraints", {}))
+    current_boundaries = dict(current.get("negotiation_boundaries", {}))
+    current_values = {
+        "public_title": current.get("public_title"),
+        "public_summary": current.get("public_summary"),
+        "event": current_constraints.get("event"),
+        "location": current_constraints.get("location"),
+        "date_start": str(current_constraints.get("date_start")),
+        "date_end": str(current_constraints.get("date_end")),
+        "roommate_gender_preference": current_constraints.get(
+            "roommate_gender_preference"
+        ),
+        "public_requirements": current.get("public_requirements", []),
+        "maximum_additional_cost_usd": current_boundaries.get(
+            "maximum_additional_cost_usd"
+        ),
+        "partial_date_overlap_allowed": current_boundaries.get(
+            "partial_date_overlap_allowed"
+        ),
+    }
+    for field, value in editable_values.items():
+        if value != current_values[field]:
+            provenance[field] = FieldSource.USER_EDIT.value
+    post = IntentPost(
+        intent_id=body.intent_id,
+        owner_agent_id="qi-agent",
+        intent_type=str(current["intent_type"]),
+        raw_user_goal_ref=str(current["raw_user_goal_ref"]),
+        public_title=body.public_title,
+        public_summary=body.public_summary,
+        public_constraints=IntentPublicConstraints(
+            event=body.event,
+            location=body.location,
+            date_start=body.date_start,
+            date_end=body.date_end,
+            roommate_gender_preference=body.roommate_gender_preference,
+        ),
+        public_requirements=body.public_requirements,
+        negotiation_boundaries=NegotiationBoundaries(
+            partial_date_overlap_allowed=body.partial_date_overlap_allowed,
+            maximum_additional_cost_usd=body.maximum_additional_cost_usd,
+        ),
+        capacity=int(current.get("capacity", 1)),
+        capacity_remaining=int(current.get("capacity_remaining", 1)),
+        status=IntentStatus.OPEN,
+        version=int(current.get("version", 1)) + 1,
+        field_provenance=provenance,
+        created_at=datetime.fromisoformat(
+            str(current["created_at"]).replace("Z", "+00:00")
+        ),
+        published_at=now,
+        expires_at=now + timedelta(days=7),
+        provenance={"source": "user_confirmed_qi_agent_draft"},
+    )
+    current_agent_only = dict(private.get("agent_only_constraints", {}))
+    current_quiet = dict(
+        current_agent_only.get("quiet_overnight_compatibility", {})
+    )
+    quiet_source = str(
+        current_quiet.get("source", FieldSource.EXPLICIT_USER_INPUT.value)
+    )
+    if (
+        current_quiet.get("importance")
+        != body.quiet_overnight_compatibility_importance
+    ):
+        quiet_source = FieldSource.USER_EDIT.value
+        provenance["quiet_overnight_compatibility"] = quiet_source
+        post.field_provenance = provenance
+    private.pop("_updateTime", None)
+    private["agent_only_constraints"] = {
+        "quiet_overnight_compatibility": {
+            "importance": body.quiet_overnight_compatibility_importance,
+            "source": quiet_source,
+        },
+        "maximum_additional_cost_usd": body.maximum_additional_cost_usd,
+        "partial_date_overlap_allowed": body.partial_date_overlap_allowed,
+    }
+    await asyncio.gather(
+        store.upsert("intents", body.intent_id, post.model_dump(mode="json")),
+        store.upsert("intent_private", body.intent_id, private),
+    )
+    event = await store.write_event(
+        event_type="intent.published",
+        run_id=f"intent:{body.intent_id}",
+        producer="qi-agent",
+        payload={"intentId": body.intent_id, "version": post.version},
+        idempotency_key=f"intent.published:{body.intent_id}",
+    )
+    return {
+        "status": "OPEN",
+        "intent": _public_intent(post.model_dump(mode="json")),
+        "created": event["created"],
+    }
+
+
+@app.get("/api/intents/open")
+async def open_intents() -> dict[str, Any]:
+    now = datetime.now(UTC)
+    results = []
+    for item in await _store().list_documents("intents"):
+        expires = datetime.fromisoformat(
+            str(item.get("expires_at", "1970-01-01T00:00:00Z")).replace("Z", "+00:00")
+        )
+        if (
+            item.get("status") == IntentStatus.OPEN.value
+            and int(item.get("capacity_remaining", 0)) > 0
+            and expires > now
+        ):
+            results.append(_public_intent(item))
+    return {"intents": results}
+
+
+@app.get("/api/intents/{intent_id}")
+async def public_intent(intent_id: str) -> dict[str, Any]:
+    item = await _store().get("intents", intent_id)
+    if item is None:
+        raise HTTPException(404, "Intent was not found.")
+    return _public_intent(item)
+
+
 @app.get("/api/demo/run/stream")
-async def start_run() -> StreamingResponse:
+async def start_run(intent_id: str) -> StreamingResponse:
     if _run_lock.locked():
         raise HTTPException(409, "A live public demo run is already active.")
     await _run_lock.acquire()
     try:
+        intent = await _store().get("intents", intent_id)
+        if (
+            intent is None
+            or intent.get("owner_agent_id") != "qi-agent"
+            or intent.get("status") != IntentStatus.OPEN.value
+        ):
+            raise HTTPException(409, "Publish an OPEN Qi intent before starting.")
         await _check_run_quota()
     except Exception:
         _run_lock.release()
         raise
     run_id = uuid4()
     return StreamingResponse(
-        _run_stream(run_id),
+        _run_stream(run_id, intent_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
@@ -304,6 +691,136 @@ async def reset_demo() -> dict[str, Any]:
     deleted = await asyncio.to_thread(reset_workflow, project_id)
     seeded = await asyncio.to_thread(seed, project_id, dry_run=False)
     return {"status": "RESET", "deleted": deleted, "seeded": seeded}
+
+
+@app.post("/api/demo/revalidate")
+async def revalidate_offer(body: RevalidateBody) -> dict[str, Any]:
+    """Explicitly renew an expired hold while the accepted proposal remains valid."""
+
+    store = _store()
+    request_id = f"{body.proposal_id}-v{body.proposal_version}"
+    request = await store.get("approval_requests", request_id)
+    proposal = await store.get("proposals", body.proposal_id)
+    if (
+        request is None
+        or proposal is None
+        or request.get("runId") != body.run_id
+        or int(proposal.get("version", 0)) != body.proposal_version
+    ):
+        raise HTTPException(404, "Current offer was not found.")
+    now = datetime.now(UTC)
+    old_hold = await store.get("holds", str(request["holdId"]))
+    if old_hold is not None:
+        old_expiry = datetime.fromisoformat(
+            str(old_hold["expires_at"]).replace("Z", "+00:00")
+        )
+        if old_hold.get("active") is True and old_expiry > now:
+            return {
+                "status": "STILL_ACTIVE",
+                "holdId": old_hold["hold_id"],
+                "holdExpiresAt": old_hold["expires_at"],
+                "proposalVersion": body.proposal_version,
+            }
+    proposal_expiry = datetime.fromisoformat(
+        str(proposal["expires_at"]).replace("Z", "+00:00")
+    )
+    if proposal_expiry <= now:
+        raise HTTPException(
+            409,
+            "The proposal itself expired. Qi Agent must resume search; "
+            "it was not revived.",
+        )
+    source_intent_id = str(proposal["source_intent_id"])
+    target_intent_id = str(proposal["target_intent_id"])
+    source_intent, target_intent = await asyncio.gather(
+        store.get("intents", source_intent_id),
+        store.get("intents", target_intent_id),
+    )
+    if any(item is None for item in (source_intent, target_intent)):
+        raise HTTPException(409, "One of the intent posts no longer exists.")
+    assert source_intent is not None
+    assert target_intent is not None
+    if any(
+        item.get("status") != IntentStatus.AWAITING_APPROVAL.value
+        or int(item.get("capacity_remaining", 0)) < 1
+        for item in (source_intent, target_intent)
+    ):
+        raise HTTPException(409, "Both intent posts are no longer available.")
+    candidate = str(proposal["candidate_agent_id"])
+    acceptance_ids = (
+        f"{body.proposal_id}-v{body.proposal_version}-qi-agent",
+        f"{body.proposal_id}-v{body.proposal_version}-{candidate}",
+    )
+    acceptances = await asyncio.gather(
+        *(store.get("proposal_acceptances", item) for item in acceptance_ids)
+    )
+    if any(item is None for item in acceptances):
+        raise HTTPException(409, "Both agents no longer have a current acceptance.")
+    renewal_count = int(request.get("renewalCount", 0)) + 1
+    hold_key = (
+        f"{proposal['pair_session_id']}:{body.proposal_id}:"
+        f"v{body.proposal_version}:renewal:{renewal_count}"
+    )
+    hold_id = f"hold-{sha256(hold_key.encode()).hexdigest()[:24]}"
+    expires_at = now + timedelta(minutes=15)
+    hold = {
+        "hold_id": hold_id,
+        "proposal_id": body.proposal_id,
+        "proposal_version": body.proposal_version,
+        "source_intent_id": source_intent_id,
+        "target_intent_id": target_intent_id,
+        "pair_session_id": proposal["pair_session_id"],
+        "candidate_agent_id": candidate,
+        "capacity_reserved": 1,
+        "status": "ACTIVE",
+        "idempotency_key": hold_key,
+        "expires_at": expires_at,
+        "active": True,
+        "runId": body.run_id,
+    }
+    created = await store.create("holds", hold_id, hold)
+    if not created:
+        existing = await store.get("holds", hold_id)
+        if existing is None:
+            raise HTTPException(409, "Renewed hold disappeared.")
+        hold = existing
+    if old_hold is not None:
+        old_hold.pop("_updateTime", None)
+        old_hold.update(
+            active=False,
+            status="EXPIRED",
+            releasedAt=now,
+            releaseReason="explicit_revalidation",
+        )
+        await store.upsert("holds", str(request["holdId"]), old_hold)
+    request.pop("_updateTime", None)
+    request.update(
+        status="AWAITING_HUMAN",
+        holdId=hold_id,
+        holdExpiresAt=expires_at,
+        renewalCount=renewal_count,
+        revalidatedAt=now,
+    )
+    await store.upsert("approval_requests", request_id, request)
+    await store.write_event(
+        event_type="hold.revalidated",
+        run_id=body.run_id,
+        producer="commit-authority",
+        payload={
+            "holdId": hold_id,
+            "proposalId": body.proposal_id,
+            "proposalVersion": body.proposal_version,
+            "sourceIntentId": source_intent_id,
+            "targetIntentId": target_intent_id,
+        },
+        idempotency_key=hold_key,
+    )
+    return {
+        "status": "REVALIDATED",
+        "holdId": hold_id,
+        "holdExpiresAt": expires_at,
+        "proposalVersion": body.proposal_version,
+    }
 
 
 @app.post("/api/demo/approve")
@@ -350,6 +867,30 @@ async def reject(body: RejectBody) -> dict[str, str]:
     approval_request["rejectedAt"] = datetime.now(UTC)
     approval_request.pop("_updateTime", None)
     await store.upsert("approval_requests", request_id, approval_request)
+    proposal = await store.get("proposals", body.proposal_id)
+    if proposal is not None:
+        for intent_id in (
+            str(proposal.get("source_intent_id", "")),
+            str(proposal.get("target_intent_id", "")),
+        ):
+            if not intent_id:
+                continue
+            intent = await store.get("intents", intent_id)
+            if intent is not None and int(intent.get("capacity_remaining", 0)) > 0:
+                intent.pop("_updateTime", None)
+                intent["status"] = IntentStatus.OPEN.value
+                intent.pop("active_hold_id", None)
+                await store.upsert("intents", intent_id, intent)
+        pair_session_id = str(proposal.get("pair_session_id", ""))
+        session = await store.get("intent_pair_sessions", pair_session_id)
+        if session is not None:
+            session.pop("_updateTime", None)
+            session.update(
+                status="RELEASED",
+                release_reason="human_rejected_effect",
+                released_at=datetime.now(UTC),
+            )
+            await store.upsert("intent_pair_sessions", pair_session_id, session)
     await store.upsert(
         "runs",
         body.run_id,
@@ -377,7 +918,9 @@ if WEB_DIST.exists():
         origin = os.environ.get("PAIRPILOT_PUBLIC_BASE_URL", "").rstrip("/")
         if not origin:
             origin = str(request.base_url).rstrip("/")
-        html = (WEB_DIST / "index.html").read_text().replace(
-            "__PAIRPILOT_ORIGIN__", origin
+        html = (
+            (WEB_DIST / "index.html")
+            .read_text()
+            .replace("__PAIRPILOT_ORIGIN__", origin)
         )
         return HTMLResponse(html)
