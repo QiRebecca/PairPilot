@@ -57,7 +57,7 @@ state.
 - ESLint: passed with zero warnings.
 - Strict mypy: passed across 40 source files.
 - TypeScript: passed.
-- Python unit tests: 45 passed.
+- Python unit tests: 48 passed.
 - React tests: passed.
 - Vite production build: passed.
 - `git diff --check`: passed.
@@ -69,10 +69,11 @@ The earlier three deployed evaluation runs remain historical baseline evidence
 for the coordination engine only. They are not represented as tests of this
 new composer/publish lifecycle.
 
-## Remaining deployment gate
+## Deployed outcome
 
-This report does not claim end-to-end completion yet. The candidate `intent-v2`
-revision must pass tagged Cloud Run verification, three fresh composer-to-
-approval runs, and one real human-approved positive commit. Evidence will be
-recorded in `docs/INTENT_LAYER_DEPLOYMENT_REPORT.md`, a corrected evaluation
-report, and `docs/POSITIVE_COMMIT_VERIFICATION.md`.
+The tagged revision passed three fresh composer-to-approval runs and one real
+human-approved positive commit. Production traffic now routes 100% to the
+verified corrected revisions, while the old revisions remain available for
+rollback. See `docs/INTENT_LAYER_DEPLOYMENT_REPORT.md`,
+`docs/INTENT_LAYER_EVAL_REPORT.md`, and
+`docs/POSITIVE_COMMIT_VERIFICATION.md`.

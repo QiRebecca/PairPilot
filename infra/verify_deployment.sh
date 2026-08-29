@@ -25,4 +25,4 @@ curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
   --project "${GOOGLE_CLOUD_PROJECT}" --region "${PAIRPILOT_REGION}" \
   --format 'table(status.latestReadyRevisionName,status.traffic[0].percent,status.url)'
 
-echo "Deployment verification passed. A live run and human approval remain explicit operations."
+echo "Deployment verification passed. Live runs and approvals remain explicit operator-controlled actions."

@@ -103,12 +103,12 @@ expiry. An agent cannot press it or call the commit endpoint as the user.
   proposal.
 - One atomic design for match, both post closures, negotiation release,
   provenance, durable events, relationship, and scoped memory.
-- 45 Python unit tests plus strict type, lint, React, and production-build
+- 48 Python unit tests plus strict type, lint, React, and production-build
   checks for the corrected local product layer.
 
 Historical evaluation evidence for the original coordination engine remains
-separate. Corrected tagged-revision and positive-commit evidence is recorded
-only after those runs actually occur.
+separate. The corrected product has three fresh approval-boundary runs and one
+real human-approved production commit, recorded without rewriting the baseline.
 
 ## Testing instructions
 

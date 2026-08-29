@@ -35,13 +35,13 @@ Today's assistants leave the user doing that coordination across messages.
 
 ## Taskmaster alignment
 
-The original coordination engine completed three deployed approval-boundary
-evaluations in 73.422, 42.351, and 47.250 seconds, with zero private-memory
-leakage and zero unauthorized commitment; that evidence remains historical and
-is not relabeled as a test of the new composer/publish lifecycle. Corrected
-intent-layer evidence is tracked separately during tagged deployment. See
-[the baseline evaluation](docs/EVAL_REPORT.md) and
-[the correction report](docs/PRODUCT_CORRECTION_REPORT.md).
+The corrected product completed three fresh composer-to-approval runs in
+73.298, 51.987, and 55.778 seconds, including direct and warm-introduction
+trajectories. A fourth production run received real human approval and
+atomically closed both posts, released the competing session, and grew scoped
+relationship memory. The original engine's earlier evidence remains separate.
+See [the corrected evaluation](docs/INTENT_LAYER_EVAL_REPORT.md) and
+[positive commit proof](docs/POSITIVE_COMMIT_VERIFICATION.md).
 
 ## Product workflow
 
@@ -224,16 +224,16 @@ A2A exchange.
 
 ## Evaluation
 
-Three earlier public Cloud Run runs reached the approval boundary inside 90
-seconds and remain evidence for the preserved coordination engine. New
-composer-to-approval runs must be recorded against the tagged corrected
-revision; they will not overwrite [docs/EVAL_REPORT.md](docs/EVAL_REPORT.md).
+Three corrected public Cloud Run runs reached the approval boundary inside 90
+seconds with distinct direct and relationship-introduction paths. One further
+run completed the verified human-approved commit. The old
+[baseline evaluation](docs/EVAL_REPORT.md) remains unchanged; current evidence
+is in [the intent-layer report](docs/INTENT_LAYER_EVAL_REPORT.md).
 
 ## Known limitations
 
-- Corrected tagged-deployment and positive-commit evidence remains pending until
-  a real person approves the visible current contract. Automation never
-  impersonates that action.
+- The public demo uses synthetic identities and creates no booking or payment;
+  the verified positive commit is an internal coordination record only.
 - Immediate A2A task state is in memory; durable business provenance is in
   Firestore.
 - The public safe demo allows one live run at a time and 12 run starts per UTC
