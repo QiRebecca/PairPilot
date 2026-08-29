@@ -158,7 +158,11 @@ async def test_bootstrap_prioritizes_decisions_and_filters_explore_to_open() -> 
             {"intent_id": "open", "status": "OPEN"},
             {"intent_id": "closed", "status": "MATCHED"},
         ],
-        "activeIntent": {"intent_id": "mine", "status": "OPEN"},
+        "activeIntent": {
+            "intent_id": "mine",
+            "owner_agent_id": "qi-agent",
+            "status": "AWAITING_APPROVAL",
+        },
     }
     result = await build_os_bootstrap(
         store,  # type: ignore[arg-type]

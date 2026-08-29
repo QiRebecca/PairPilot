@@ -566,7 +566,8 @@ async def build_os_bootstrap(
     latest_posts = [
         post
         for post in post_candidates
-        if post.get("status") == "OPEN"
+        if post.get("owner_agent_id") == "qi-agent"
+        or post.get("status") == "OPEN"
     ]
     return {
         "personalAgent": {
