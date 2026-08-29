@@ -82,7 +82,9 @@ async def load_os_collections(
         *(store.list_documents(collection) for collection in OS_COLLECTIONS)
     )
     return {
-        collection: [clean(item) for item in items]
+        collection: [
+            clean(item) for item in items if item.get("namespace") != "production"
+        ]
         for collection, items in zip(OS_COLLECTIONS, loaded, strict=True)
     }
 
@@ -240,9 +242,7 @@ async def find_task_by_intent(
     )
 
 
-async def update_task_after_publish(
-    store: GoogleCloudStore, *, intent_id: str
-) -> None:
+async def update_task_after_publish(store: GoogleCloudStore, *, intent_id: str) -> None:
     task = await find_task_by_intent(store, intent_id)
     if task is None:
         return
@@ -431,8 +431,7 @@ async def materialize_task_run(
             relationship_path=(
                 ["qi-agent", "alice-agent", agent_id]
                 if any(
-                    message.get("fromAgentId") == "alice-agent"
-                    for message in messages
+                    message.get("fromAgentId") == "alice-agent" for message in messages
                 )
                 and agent_id in {"maya-agent", "lena-agent"}
                 else ["qi-agent", agent_id]
@@ -476,9 +475,7 @@ async def materialize_task_run(
                     status=DecisionStatus.RESOLVED.value,
                     resolved_at=now,
                 )
-                await store.upsert(
-                    "decision_inbox", str(decision_id), stored_decision
-                )
+                await store.upsert("decision_inbox", str(decision_id), stored_decision)
         memories = [
             item
             for item in await store.list_documents("memories")
@@ -486,9 +483,7 @@ async def materialize_task_run(
         ]
         for memory in memories:
             memory_id = str(
-                memory.get("memoryId")
-                or memory.get("memory_id")
-                or memory.get("_id")
+                memory.get("memoryId") or memory.get("memory_id") or memory.get("_id")
             )
             decision_id = f"decision_memory_{memory_id}"
             memory_decision = DecisionInboxItem(
@@ -566,8 +561,7 @@ async def build_os_bootstrap(
     latest_posts = [
         post
         for post in post_candidates
-        if post.get("owner_agent_id") == "qi-agent"
-        or post.get("status") == "OPEN"
+        if post.get("owner_agent_id") == "qi-agent" or post.get("status") == "OPEN"
     ]
     return {
         "personalAgent": {

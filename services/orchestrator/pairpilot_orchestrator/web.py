@@ -1193,7 +1193,7 @@ async def personal_agent_message(body: PersonalAgentMessageBody) -> dict[str, An
 async def task_workspace(task_id: str) -> dict[str, Any]:
     store = _store()
     task = await store.get("task_workspaces", task_id)
-    if task is None:
+    if task is None or task.get("namespace") == "production":
         raise HTTPException(404, "Task workspace was not found.")
     collections = await build_os_bootstrap(store, demo_state=await public_state())
     return {
@@ -1222,7 +1222,7 @@ async def task_workspace(task_id: str) -> dict[str, Any]:
 async def change_room_mode(room_id: str, body: RoomModeBody) -> dict[str, Any]:
     store = _store()
     room = await store.get("coordination_rooms", room_id)
-    if room is None:
+    if room is None or room.get("namespace") == "production":
         raise HTTPException(404, "Coordination Room was not found.")
     room.pop("_updateTime", None)
     room.update(autonomy_mode=body.mode.value, updated_at=datetime.now(UTC))
@@ -1243,7 +1243,7 @@ async def room_message(room_id: str, body: RoomActionBody) -> dict[str, Any]:
 
     store = _store()
     room = await store.get("coordination_rooms", room_id)
-    if room is None:
+    if room is None or room.get("namespace") == "production":
         raise HTTPException(404, "Coordination Room was not found.")
     if body.action != "SEND_AS_MYSELF":
         task = await store.get("task_workspaces", str(room["task_id"]))
@@ -1315,7 +1315,7 @@ async def room_message(room_id: str, body: RoomActionBody) -> dict[str, Any]:
 async def update_memory(memory_id: str, body: MemoryActionBody) -> dict[str, Any]:
     store = _store()
     memory = await store.get("memories", memory_id)
-    if memory is None:
+    if memory is None or memory.get("namespace") == "production":
         raise HTTPException(404, "Memory was not found.")
     memory.pop("_updateTime", None)
     now = datetime.now(UTC)

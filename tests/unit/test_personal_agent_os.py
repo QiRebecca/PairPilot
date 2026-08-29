@@ -152,6 +152,12 @@ async def test_bootstrap_prioritizes_decisions_and_filters_explore_to_open() -> 
             "conversation_id": "conversation_decision",
             "intent_id": "intent_decision",
         },
+        "production_task": {
+            "namespace": "production",
+            "task_id": "production_task",
+            "title": "Must stay out of the synthetic demo",
+            "status": "SEARCHING",
+        },
     }
     demo_state = {
         "intentRegistry": [
@@ -177,6 +183,54 @@ async def test_bootstrap_prioritizes_decisions_and_filters_explore_to_open() -> 
         "mine",
     ]
     assert result["personalAgent"]["agentId"] == "qi-agent"
+
+
+def test_synthetic_demo_routes_reject_production_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = MemoryStore()
+    store.collections["task_workspaces"] = {
+        "production_task": {
+            "namespace": "production",
+            "task_id": "production_task",
+        }
+    }
+    store.collections["coordination_rooms"] = {
+        "production_room": {
+            "namespace": "production",
+            "room_id": "production_room",
+        }
+    }
+    store.collections["memories"] = {
+        "production_memory": {
+            "namespace": "production",
+            "memory_id": "production_memory",
+        }
+    }
+    monkeypatch.setattr(web, "_store", lambda: store)
+    client = TestClient(web.app)
+    assert client.get("/api/os/tasks/production_task").status_code == 404
+    assert (
+        client.post(
+            "/api/os/rooms/production_room/mode",
+            json={"mode": "COPILOT"},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/os/rooms/production_room/messages",
+            json={"action": "SEND_AS_MYSELF", "content": "blocked"},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/api/os/memories/production_memory",
+            json={"action": "ARCHIVE"},
+        ).status_code
+        == 404
+    )
 
 
 def test_room_actions_keep_private_instructions_out_of_agents_only(
