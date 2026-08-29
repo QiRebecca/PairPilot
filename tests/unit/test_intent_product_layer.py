@@ -515,3 +515,50 @@ def test_expired_proposal_is_not_revived(monkeypatch) -> None:
     )
     assert response.status_code == 409
     assert set(store.collections["holds"]) == {"hold-old"}
+
+
+def test_duplicate_human_approval_returns_existing_match(monkeypatch) -> None:
+    disclosure = "a" * 64
+    store = MemoryStore(
+        {
+            "approval_requests": {
+                "proposal-committed-v1": {
+                    "runId": "run-committed",
+                    "proposalId": "proposal-committed",
+                    "proposalVersion": 1,
+                    "disclosureHash": disclosure,
+                    "status": "APPROVED_AND_COMMITTED",
+                }
+            },
+            "approvals": {
+                "proposal-committed": {
+                    "runId": "run-committed",
+                    "proposalId": "proposal-committed",
+                    "proposalVersion": 1,
+                    "disclosureHash": disclosure,
+                }
+            },
+            "matches": {
+                "proposal-committed": {
+                    "runId": "run-committed",
+                    "proposalId": "proposal-committed",
+                    "proposalVersion": 1,
+                    "matchId": "proposal-committed",
+                }
+            },
+        }
+    )
+    monkeypatch.setattr(web, "_store", lambda: store)
+    response = TestClient(web.app).post(
+        "/api/demo/approve",
+        json={
+            "run_id": "run-committed",
+            "proposal_id": "proposal-committed",
+            "proposal_version": 1,
+            "confirmation": "APPROVE VERSION 1",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["replayed"] is True
+    assert response.json()["match"]["matchId"] == "proposal-committed"
+    assert store.events == {}

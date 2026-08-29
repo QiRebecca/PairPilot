@@ -833,6 +833,28 @@ async def approve(body: ApprovalBody) -> dict[str, Any]:
     approval_request = await store.get("approval_requests", request_id)
     if approval_request is None or approval_request.get("runId") != body.run_id:
         raise HTTPException(404, "Current approval request was not found.")
+    existing_match, existing_approval = await asyncio.gather(
+        store.get("matches", body.proposal_id),
+        store.get("approvals", body.proposal_id),
+    )
+    if existing_match is not None:
+        if (
+            existing_approval is None
+            or existing_match.get("runId") != body.run_id
+            or int(existing_match.get("proposalVersion", 0))
+            != body.proposal_version
+            or int(existing_approval.get("proposalVersion", 0))
+            != body.proposal_version
+            or existing_approval.get("disclosureHash")
+            != approval_request.get("disclosureHash")
+        ):
+            raise HTTPException(409, "Committed approval evidence is inconsistent.")
+        return {
+            "status": "COMMITTED",
+            "approval": _clean(existing_approval),
+            "match": _clean(existing_match),
+            "replayed": True,
+        }
     try:
         approval = await create_human_approval(
             store=store,
@@ -848,7 +870,12 @@ async def approve(body: ApprovalBody) -> dict[str, Any]:
         )
     except AuthorityError as exc:
         raise HTTPException(409, f"Commit blocked safely: {exc}") from exc
-    return {"status": "COMMITTED", "approval": approval, "match": match}
+    return {
+        "status": "COMMITTED",
+        "approval": approval,
+        "match": match,
+        "replayed": False,
+    }
 
 
 @app.post("/api/demo/reject")
