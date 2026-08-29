@@ -33,6 +33,15 @@ from pairpilot_schemas.intent_draft import (
     IntentDraft,
 )
 from pairpilot_schemas.introduction import IntroductionDecision
+from pairpilot_schemas.multi_user import (
+    BlockUserInput,
+    CreateUserTaskInput,
+    HumanProposalDecisionInput,
+    OnboardingInput,
+    PublishUserPostInput,
+    ReportInput,
+    UserRoomMessageInput,
+)
 from pairpilot_schemas.personal_agent_os import (
     AutonomyMode,
     CandidateAssessment,
@@ -79,6 +88,13 @@ __all__ = [
     "IntentStatus",
     "IntentDraft",
     "IntroductionDecision",
+    "BlockUserInput",
+    "CreateUserTaskInput",
+    "HumanProposalDecisionInput",
+    "OnboardingInput",
+    "PublishUserPostInput",
+    "ReportInput",
+    "UserRoomMessageInput",
     "Match",
     "MemoryRecord",
     "NegotiationBoundaries",

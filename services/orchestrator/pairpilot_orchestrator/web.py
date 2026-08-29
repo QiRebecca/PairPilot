@@ -11,10 +11,10 @@ from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
     ConversationRole,
+    CreateUserTaskInput,
     FieldSource,
     IntentPost,
     IntentPublicConstraints,
@@ -32,14 +33,22 @@ from pairpilot_schemas import (
     MessageAuthorship,
     MessageVisibility,
     NegotiationBoundaries,
+    OnboardingInput,
     PersonalAgentIntent,
     PresentationAction,
     PresentationMode,
+    PublishUserPostInput,
     RoomMessage,
     SpeakerType,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
+from pairpilot_orchestrator.auth import (
+    AuthenticatedPrincipal,
+    require_authenticated_user,
+    require_task_owner,
+)
+from pairpilot_orchestrator.auth.firebase_auth import public_firebase_config
 from pairpilot_orchestrator.config import LIVE_MODE, Settings
 from pairpilot_orchestrator.domain import (
     AuthorityError,
@@ -48,6 +57,14 @@ from pairpilot_orchestrator.domain import (
 )
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
+from pairpilot_orchestrator.multi_user_platform import (
+    build_user_bootstrap,
+    complete_onboarding,
+    create_user_task,
+    provision_user,
+    publish_user_post,
+    set_user_post_status,
+)
 from pairpilot_orchestrator.personal_agent_os import (
     GLOBAL_CONVERSATION_ID,
     build_os_bootstrap,
@@ -149,6 +166,12 @@ class RevalidateBody(BaseModel):
     run_id: str
     proposal_id: str
     proposal_version: int
+
+
+class PostStatusBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["OPEN", "PAUSED", "CLOSED"]
 
 
 class PersonalAgentMessageBody(BaseModel):
@@ -435,6 +458,131 @@ async def health() -> dict[str, str]:
         "executionMode": settings.execution_mode,
         "exactModelId": settings.model_id,
     }
+
+
+@app.get("/api/auth/config")
+async def auth_config() -> dict[str, Any]:
+    """Expose only Firebase's non-secret browser application configuration."""
+
+    config = public_firebase_config()
+    return {
+        "provider": "firebase",
+        "emailPasswordEnabled": True,
+        "emailVerificationRequiredForSocialActions": True,
+        "firebaseConfigured": all(config.values()),
+        "firebase": config,
+    }
+
+
+AuthenticatedUser = Annotated[
+    AuthenticatedPrincipal, Depends(require_authenticated_user)
+]
+
+
+@app.post("/api/app/provision")
+async def app_provision(principal: AuthenticatedUser) -> dict[str, Any]:
+    profile = await provision_user(_store(), principal)
+    return {"profile": profile}
+
+
+@app.get("/api/app/bootstrap")
+async def app_bootstrap(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await build_user_bootstrap(_store(), principal)
+
+
+@app.put("/api/app/onboarding")
+async def app_onboarding(
+    body: OnboardingInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    profile = await complete_onboarding(_store(), principal, body)
+    return {"profile": profile}
+
+
+@app.post("/api/app/tasks")
+async def app_create_task(
+    body: CreateUserTaskInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        task = await create_user_task(_store(), principal, body)
+    except ValueError as exc:
+        if str(exc) == "ACTIVE_TASK_QUOTA_EXCEEDED":
+            raise HTTPException(
+                429,
+                detail={
+                    "code": "ACTIVE_TASK_QUOTA_EXCEEDED",
+                    "message": "Close an active request before creating another.",
+                },
+            ) from exc
+        raise
+    return {"task": task}
+
+
+@app.get("/api/app/tasks/{task_id}")
+async def app_get_task(
+    task_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    task = await _store().get("task_workspaces", task_id)
+    if task is None or task.get("namespace") != "production":
+        raise HTTPException(404, "Task was not found.")
+    require_task_owner(principal, task)
+    private_intent = await _store().get(
+        "intent_private_data", str(task["intent_id"])
+    )
+    return {
+        "task": {key: value for key, value in task.items() if not key.startswith("_")},
+        "privateIntent": (
+            {
+                key: value
+                for key, value in private_intent.items()
+                if not key.startswith("_")
+            }
+            if private_intent is not None
+            else None
+        ),
+    }
+
+
+@app.post("/api/app/tasks/{task_id}/publish")
+async def app_publish_task(
+    task_id: str,
+    body: PublishUserPostInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        post = await publish_user_post(
+            _store(),
+            principal,
+            task_id=task_id,
+            public_title=body.public_title,
+            public_summary=body.public_summary,
+            public_requirements=body.public_requirements,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Task was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            403,
+            detail={"code": str(exc), "message": "Complete onboarding first."},
+        ) from exc
+    return {"post": post, "status": "PUBLISHED"}
+
+
+@app.patch("/api/app/posts/{intent_id}/status")
+async def app_set_post_status(
+    intent_id: str,
+    body: PostStatusBody,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        post = await set_user_post_status(
+            _store(), principal, intent_id=intent_id, status=body.status
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Post was not found.") from exc
+    return {"post": post}
 
 
 @app.get("/api/demo/state")

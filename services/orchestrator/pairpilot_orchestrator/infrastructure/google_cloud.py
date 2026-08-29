@@ -152,6 +152,66 @@ class GoogleCloudStore:
 
         return await asyncio.to_thread(read)
 
+    async def query_documents(
+        self,
+        collection: str,
+        *,
+        filters: list[tuple[str, str, Any]],
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Run a bounded server-side query for an authorized projection."""
+
+        if not 1 <= limit <= 100:
+            raise ValueError("query limit must be between 1 and 100")
+        field_filters = [
+            {
+                "fieldFilter": {
+                    "field": {"fieldPath": field},
+                    "op": operator,
+                    "value": encode_value(value),
+                }
+            }
+            for field, operator, value in filters
+        ]
+        where: dict[str, Any] | None
+        if len(field_filters) == 1:
+            where = field_filters[0]
+        elif field_filters:
+            where = {
+                "compositeFilter": {
+                    "op": "AND",
+                    "filters": field_filters,
+                }
+            }
+        else:
+            where = None
+
+        def read() -> list[dict[str, Any]]:
+            query: dict[str, Any] = {
+                "from": [{"collectionId": collection}],
+                "limit": limit,
+            }
+            if where is not None:
+                query["where"] = where
+            response = self._session.post(
+                f"{self._documents}:runQuery",
+                json={"structuredQuery": query},
+                timeout=20,
+            )
+            response.raise_for_status()
+            items = []
+            for result in response.json():
+                document = result.get("document")
+                if document is None:
+                    continue
+                item = decode_fields(document.get("fields", {}))
+                item["_id"] = document["name"].rsplit("/", 1)[-1]
+                item["_updateTime"] = document.get("updateTime")
+                items.append(item)
+            return items
+
+        return await asyncio.to_thread(read)
+
     async def upsert(
         self, collection: str, document_id: str, data: Mapping[str, Any]
     ) -> dict[str, Any]:
