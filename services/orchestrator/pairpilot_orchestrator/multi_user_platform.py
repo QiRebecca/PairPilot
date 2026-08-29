@@ -5,15 +5,20 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any, Protocol, cast
 from uuid import uuid4
 
-from pairpilot_schemas import CreateUserTaskInput, OnboardingInput
+from pairpilot_schemas import (
+    CreateUserTaskInput,
+    OnboardingInput,
+    UpdateAccountSettingsInput,
+)
 
 from pairpilot_orchestrator.auth.authorization import (
     require_resource_owner,
+    require_room_participant,
     require_task_owner,
     require_verified_email,
 )
@@ -810,5 +815,384 @@ async def set_user_post_status(
 
 
 def effect_contract_hash(contract: Mapping[str, Any]) -> str:
-    serialized = json.dumps(contract, sort_keys=True, separators=(",", ":"))
+    def encode(value: object) -> str:
+        if isinstance(value, datetime):
+            return value.astimezone(UTC).isoformat()
+        raise TypeError(f"unsupported effect-contract value: {type(value)!r}")
+
+    serialized = json.dumps(
+        contract,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=encode,
+    )
     return sha256(serialized.encode()).hexdigest()
+
+
+async def get_user_room(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    room_id: str,
+) -> dict[str, Any]:
+    room = await store.get("coordination_rooms", room_id)
+    if room is None or room.get("namespace") != PRODUCTION_NAMESPACE:
+        raise LookupError("room was not found")
+    require_room_participant(principal, room)
+    messages = await store.query_documents(
+        "room_messages", filters=[("room_id", "EQUAL", room_id)]
+    )
+    safe_room = _clean(room)
+    safe_room.pop("participant_uids", None)
+    safe_room.pop("revoked_participant_uids", None)
+    safe_messages = []
+    for message in messages:
+        clean_message = _clean(message)
+        clean_message.pop("principal_owner_uid_internal", None)
+        safe_messages.append(clean_message)
+    return {"room": safe_room, "messages": safe_messages}
+
+
+async def send_user_room_message(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    *,
+    room_id: str,
+    content: str,
+    authorship: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    require_verified_email(principal)
+    room = await store.get("coordination_rooms", room_id)
+    if room is None or room.get("namespace") != PRODUCTION_NAMESPACE:
+        raise LookupError("room was not found")
+    require_room_participant(principal, room)
+    if (
+        room.get("room_type") != "SHARED_COORDINATION_ROOM"
+        or room.get("human_participation_available") is not True
+    ):
+        raise PermissionError("SHARED_ROOM_NOT_UNLOCKED")
+    message_id = stable_id(
+        "room_message", room_id, principal.uid, idempotency_key
+    )
+    message = {
+        "schema_version": SCHEMA_VERSION,
+        "namespace": PRODUCTION_NAMESPACE,
+        "message_id": message_id,
+        "room_id": room_id,
+        "speaker_id": principal.uid,
+        "speaker_type": "HUMAN",
+        "authorship": authorship,
+        "visibility": "SHARED_ROOM",
+        "content": content,
+        "provenance": {"source": "authenticated_room_member"},
+        "created_at": datetime.now(UTC),
+    }
+    created = await store.create("room_messages", message_id, message)
+    if not created:
+        existing = await store.get("room_messages", message_id)
+        if existing is None:
+            raise RuntimeError("idempotent room message disappeared")
+        return _clean(existing)
+    return message
+
+
+async def block_agent_owner(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    *,
+    target_agent_id: str,
+    reason: str | None,
+) -> dict[str, Any]:
+    target_agent = await store.get("personal_agents", target_agent_id)
+    if target_agent is None or target_agent.get("namespace") != PRODUCTION_NAMESPACE:
+        raise LookupError("target was not found")
+    blocked_uid = str(target_agent.get("owner_uid", ""))
+    if not blocked_uid or blocked_uid == principal.uid:
+        raise ValueError("invalid block target")
+    block_id = stable_id("block", principal.uid, blocked_uid)
+    timestamp = datetime.now(UTC)
+    block = {
+        "schema_version": SCHEMA_VERSION,
+        "namespace": PRODUCTION_NAMESPACE,
+        "block_id": block_id,
+        "blocker_uid": principal.uid,
+        "blocked_uid": blocked_uid,
+        "blocked_agent_id": target_agent_id,
+        "reason": reason,
+        "status": "ACTIVE",
+        "created_at": timestamp,
+    }
+    await store.create("blocks", block_id, block)
+    proposals = await store.query_documents(
+        "proposals",
+        filters=[("participant_uids", "ARRAY_CONTAINS", principal.uid)],
+    )
+    for proposal in proposals:
+        if (
+            blocked_uid not in proposal.get("participant_uids", [])
+            or proposal.get("status") != "AWAITING_HUMANS"
+        ):
+            continue
+        proposal_clean = _clean(proposal)
+        proposal_clean.update(status="CANCELLED_BY_BLOCK", updated_at=timestamp)
+        await store.upsert(
+            "proposals", str(proposal["proposal_id"]), proposal_clean
+        )
+        hold_id = stable_id(
+            "hold", str(proposal["proposal_id"]), str(proposal["version"])
+        )
+        hold = await store.get("holds", hold_id)
+        if hold is not None and hold.get("active") is True:
+            hold_clean = _clean(hold)
+            hold_clean.update(
+                active=False,
+                status="RELEASED",
+                release_reason="participant_blocked",
+                released_at=timestamp,
+            )
+            await store.upsert("holds", hold_id, hold_clean)
+        room = await store.get("coordination_rooms", str(proposal["room_id"]))
+        if room is not None:
+            room_clean = _clean(room)
+            room_clean.update(
+                status="CLOSED",
+                human_participation_available=False,
+                updated_at=timestamp,
+            )
+            await store.upsert(
+                "coordination_rooms", str(proposal["room_id"]), room_clean
+            )
+    return {"block_id": block_id, "status": "ACTIVE"}
+
+
+async def create_user_report(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    *,
+    target_type: str,
+    target_id: str,
+    category: str,
+    details: str,
+) -> dict[str, Any]:
+    report_id = f"report_{uuid4().hex}"
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "namespace": PRODUCTION_NAMESPACE,
+        "report_id": report_id,
+        "reporter_uid": principal.uid,
+        "target_type": target_type,
+        "target_id": target_id,
+        "category": category,
+        "details": details,
+        "status": "OPEN",
+        "created_at": datetime.now(UTC),
+    }
+    await store.create("reports", report_id, report)
+    await store.write_event(
+        event_type="safety.report.created.v2",
+        run_id=report_id,
+        producer=principal.uid,
+        payload={
+            "reportId": report_id,
+            "targetType": target_type,
+            "category": category,
+        },
+        idempotency_key=f"v2:{report_id}:created",
+    )
+    return {"report_id": report_id, "status": "OPEN"}
+
+
+async def update_account_settings(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    body: UpdateAccountSettingsInput,
+) -> dict[str, Any]:
+    profile, privacy, autonomy = await asyncio.gather(
+        store.get("users", principal.uid),
+        store.get("user_privacy_configs", principal.uid),
+        store.get("user_autonomy_configs", principal.uid),
+    )
+    if profile is None or privacy is None or autonomy is None:
+        raise LookupError("account settings were not found")
+    timestamp = datetime.now(UTC)
+    profile_clean = _clean(profile)
+    profile_clean.update(display_name=body.display_name, updated_at=timestamp)
+    privacy_clean = _clean(privacy)
+    privacy_clean.update(
+        public_sharing_policy=body.public_sharing_policy,
+        agent_sharing_policy=body.agent_sharing_policy,
+        updated_at=timestamp,
+    )
+    autonomy_clean = _clean(autonomy)
+    autonomy_clean.update(
+        default_mode=body.default_autonomy_mode,
+        updated_at=timestamp,
+    )
+    await store.commit_writes(
+        [
+            _update_write(
+                store,
+                "users",
+                principal.uid,
+                profile_clean,
+                update_time=str(profile["_updateTime"]),
+            ),
+            _update_write(
+                store,
+                "user_privacy_configs",
+                principal.uid,
+                privacy_clean,
+                update_time=str(privacy["_updateTime"]),
+            ),
+            _update_write(
+                store,
+                "user_autonomy_configs",
+                principal.uid,
+                autonomy_clean,
+                update_time=str(autonomy["_updateTime"]),
+            ),
+        ]
+    )
+    return {
+        "profile": profile_clean,
+        "privacy": privacy_clean,
+        "autonomy": autonomy_clean,
+    }
+
+
+async def export_account_data(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+) -> dict[str, Any]:
+    """Return only the authenticated owner's portable private projection."""
+
+    bootstrap = await build_user_bootstrap(store, principal)
+    private_intents = await store.query_documents(
+        "intent_private_data", filters=[("owner_uid", "EQUAL", principal.uid)]
+    )
+    reports = await store.query_documents(
+        "reports", filters=[("reporter_uid", "EQUAL", principal.uid)]
+    )
+    bootstrap["privateIntents"] = [_clean(item) for item in private_intents]
+    bootstrap["reportsFiled"] = [_clean(item) for item in reports]
+    bootstrap["exportedAt"] = datetime.now(UTC)
+    bootstrap["exportFormat"] = "pairpilot-account-v2"
+    return bootstrap
+
+
+async def leave_user_room(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    room_id: str,
+) -> dict[str, Any]:
+    room = await store.get("coordination_rooms", room_id)
+    if room is None or room.get("namespace") != PRODUCTION_NAMESPACE:
+        raise LookupError("room was not found")
+    require_room_participant(principal, room)
+    clean = _clean(room)
+    revoked = {str(item) for item in clean.get("revoked_participant_uids", [])}
+    revoked.add(principal.uid)
+    clean.update(
+        revoked_participant_uids=sorted(revoked),
+        updated_at=datetime.now(UTC),
+    )
+    await store.upsert("coordination_rooms", room_id, clean)
+    participant_id = stable_id("room_participant", room_id, principal.uid)
+    membership = await store.get("room_participants", participant_id)
+    if membership is not None:
+        member_clean = _clean(membership)
+        member_clean.update(status="REVOKED", revoked_at=datetime.now(UTC))
+        await store.upsert("room_participants", participant_id, member_clean)
+    return {"room_id": room_id, "status": "LEFT"}
+
+
+async def schedule_account_deletion(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+) -> dict[str, Any]:
+    """Remove the account from social activity before deferred erasure."""
+
+    profile = await store.get("users", principal.uid)
+    if profile is None:
+        raise LookupError("account was not found")
+    timestamp = datetime.now(UTC)
+    posts, tasks, proposals, rooms = await asyncio.gather(
+        store.query_documents(
+            "intent_posts", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "task_workspaces", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "proposals",
+            filters=[("participant_uids", "ARRAY_CONTAINS", principal.uid)],
+        ),
+        store.query_documents(
+            "coordination_rooms",
+            filters=[("participant_uids", "ARRAY_CONTAINS", principal.uid)],
+        ),
+    )
+    for post in posts:
+        clean = _clean(post)
+        clean.update(
+            status="CLOSED",
+            closed_to_new_contacts=True,
+            closed_reason="account_deletion",
+            updated_at=timestamp,
+        )
+        await store.upsert("intent_posts", str(post["intent_id"]), clean)
+    for task in tasks:
+        if task.get("status") not in {"COMPLETED", "CANCELLED"}:
+            clean = _clean(task)
+            clean.update(status="CANCELLED", updated_at=timestamp)
+            await store.upsert("task_workspaces", str(task["task_id"]), clean)
+    for proposal in proposals:
+        if proposal.get("status") == "AWAITING_HUMANS":
+            clean = _clean(proposal)
+            clean.update(status="CANCELLED_ACCOUNT_DELETION", updated_at=timestamp)
+            await store.upsert("proposals", str(proposal["proposal_id"]), clean)
+            hold_id = stable_id(
+                "hold", str(proposal["proposal_id"]), str(proposal["version"])
+            )
+            hold = await store.get("holds", hold_id)
+            if hold is not None and hold.get("active") is True:
+                hold_clean = _clean(hold)
+                hold_clean.update(
+                    active=False,
+                    status="RELEASED",
+                    release_reason="account_deletion",
+                    released_at=timestamp,
+                )
+                await store.upsert("holds", hold_id, hold_clean)
+    for room in rooms:
+        clean = _clean(room)
+        revoked = {
+            str(item) for item in clean.get("revoked_participant_uids", [])
+        }
+        revoked.add(principal.uid)
+        clean.update(revoked_participant_uids=sorted(revoked), updated_at=timestamp)
+        await store.upsert("coordination_rooms", str(room["room_id"]), clean)
+    profile_clean = _clean(profile)
+    profile_clean.update(
+        account_status="DELETION_PENDING",
+        deletion_requested_at=timestamp,
+        discovery_enabled=False,
+        updated_at=timestamp,
+    )
+    await store.upsert("users", principal.uid, profile_clean)
+    request_id = stable_id("deletion_request", principal.uid)
+    await store.create(
+        "account_deletion_requests",
+        request_id,
+        {
+            "schema_version": SCHEMA_VERSION,
+            "namespace": PRODUCTION_NAMESPACE,
+            "request_id": request_id,
+            "owner_uid": principal.uid,
+            "status": "SCHEDULED",
+            "requested_at": timestamp,
+            "private_erasure_after": timestamp + timedelta(days=30),
+            "preserve_categories": ["safety_reports", "minimum_audit_records"],
+        },
+    )
+    return {"request_id": request_id, "status": "SCHEDULED"}

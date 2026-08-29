@@ -72,6 +72,7 @@ class UserRoomMessageInput(BaseModel):
     authorship: Literal[
         "HUMAN_WRITTEN", "AGENT_DRAFTED_HUMAN_APPROVED"
     ] = "HUMAN_WRITTEN"
+    idempotency_key: str = Field(min_length=8, max_length=100)
 
 
 class BlockUserInput(BaseModel):
@@ -91,3 +92,17 @@ class ReportInput(BaseModel):
     ]
     details: str = Field(min_length=1, max_length=1_000)
 
+
+class UpdateAccountSettingsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(min_length=1, max_length=60)
+    default_autonomy_mode: Literal["AGENT", "COPILOT", "HUMAN"]
+    public_sharing_policy: str = Field(min_length=1, max_length=500)
+    agent_sharing_policy: str = Field(min_length=1, max_length=500)
+
+
+class DeleteAccountInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: Literal["DELETE MY PAIRPILOT ACCOUNT"]

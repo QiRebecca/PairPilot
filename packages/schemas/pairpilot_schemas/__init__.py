@@ -36,10 +36,12 @@ from pairpilot_schemas.introduction import IntroductionDecision
 from pairpilot_schemas.multi_user import (
     BlockUserInput,
     CreateUserTaskInput,
+    DeleteAccountInput,
     HumanProposalDecisionInput,
     OnboardingInput,
     PublishUserPostInput,
     ReportInput,
+    UpdateAccountSettingsInput,
     UserRoomMessageInput,
 )
 from pairpilot_schemas.personal_agent_os import (
@@ -90,10 +92,12 @@ __all__ = [
     "IntroductionDecision",
     "BlockUserInput",
     "CreateUserTaskInput",
+    "DeleteAccountInput",
     "HumanProposalDecisionInput",
     "OnboardingInput",
     "PublishUserPostInput",
     "ReportInput",
+    "UpdateAccountSettingsInput",
     "UserRoomMessageInput",
     "Match",
     "MemoryRecord",

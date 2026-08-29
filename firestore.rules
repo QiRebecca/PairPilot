@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The browser never receives direct access to sensitive PairPilot state.
+    // Authenticated Cloud Run APIs enforce owner and participant authorization.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

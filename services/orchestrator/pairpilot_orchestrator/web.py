@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 from collections import defaultdict, deque
@@ -24,9 +25,12 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
+    BlockUserInput,
     ConversationRole,
     CreateUserTaskInput,
+    DeleteAccountInput,
     FieldSource,
+    HumanProposalDecisionInput,
     IntentPost,
     IntentPublicConstraints,
     IntentStatus,
@@ -38,32 +42,58 @@ from pairpilot_schemas import (
     PresentationAction,
     PresentationMode,
     PublishUserPostInput,
+    ReportInput,
     RoomMessage,
     SpeakerType,
+    UpdateAccountSettingsInput,
+    UserRoomMessageInput,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
 from pairpilot_orchestrator.auth import (
     AuthenticatedPrincipal,
     require_authenticated_user,
+    require_internal_worker,
     require_task_owner,
 )
-from pairpilot_orchestrator.auth.firebase_auth import public_firebase_config
+from pairpilot_orchestrator.auth.firebase_auth import (
+    public_firebase_config,
+    revoke_user_sessions,
+)
 from pairpilot_orchestrator.config import LIVE_MODE, Settings
 from pairpilot_orchestrator.domain import (
     AuthorityError,
     commit_approved_match,
     create_human_approval,
 )
+from pairpilot_orchestrator.generic_agent_runtime import (
+    AgentRuntimeError,
+    compatible_posts,
+    load_personal_agent,
+    process_published_intent,
+)
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
+from pairpilot_orchestrator.multi_user_agent import negotiate_pair_with_adk
+from pairpilot_orchestrator.multi_user_commit import (
+    MultiUserCommitError,
+    approve_multi_user_proposal,
+)
 from pairpilot_orchestrator.multi_user_platform import (
+    block_agent_owner,
     build_user_bootstrap,
     complete_onboarding,
+    create_user_report,
     create_user_task,
+    export_account_data,
+    get_user_room,
+    leave_user_room,
     provision_user,
     publish_user_post,
+    schedule_account_deletion,
+    send_user_room_message,
     set_user_post_status,
+    update_account_settings,
 )
 from pairpilot_orchestrator.personal_agent_os import (
     GLOBAL_CONVERSATION_ID,
@@ -172,6 +202,20 @@ class PostStatusBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["OPEN", "PAUSED", "CLOSED"]
+
+
+class PubSubPushMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    data: str
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class PubSubPushBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message: PubSubPushMessage
+    subscription: str | None = None
 
 
 class PersonalAgentMessageBody(BaseModel):
@@ -583,6 +627,206 @@ async def app_set_post_status(
     except LookupError as exc:
         raise HTTPException(404, "Post was not found.") from exc
     return {"post": post}
+
+
+@app.post("/api/app/proposals/{proposal_id}/approve")
+async def app_approve_proposal(
+    proposal_id: str,
+    body: HumanProposalDecisionInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        result = await approve_multi_user_proposal(
+            _store(),
+            principal,
+            proposal_id=proposal_id,
+            proposal_version=body.proposal_version,
+            confirmation=body.confirmation,
+        )
+    except PermissionError as exc:
+        raise HTTPException(
+            403,
+            detail={"code": "FORBIDDEN", "message": "You cannot approve this."},
+        ) from exc
+    except MultiUserCommitError as exc:
+        raise HTTPException(
+            409,
+            detail={"code": "APPROVAL_PRECONDITION_FAILED", "message": str(exc)},
+        ) from exc
+    if "match" in result:
+        result["match"] = {
+            key: value
+            for key, value in dict(result["match"]).items()
+            if key not in {"participant_uids"}
+        }
+    return result
+
+
+@app.get("/api/app/rooms/{room_id}")
+async def app_get_room(
+    room_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await get_user_room(_store(), principal, room_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
+
+
+@app.post("/api/app/rooms/{room_id}/messages")
+async def app_send_room_message(
+    room_id: str,
+    body: UserRoomMessageInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        message = await send_user_room_message(
+            _store(),
+            principal,
+            room_id=room_id,
+            content=body.content,
+            authorship=body.authorship,
+            idempotency_key=body.idempotency_key,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(
+            403,
+            detail={"code": str(exc), "message": "The shared room is locked."},
+        ) from exc
+    return {"message": message}
+
+
+@app.post("/api/app/blocks")
+async def app_block_user(
+    body: BlockUserInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await block_agent_owner(
+            _store(),
+            principal,
+            target_agent_id=body.target_agent_id,
+            reason=body.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Target was not found.") from exc
+
+
+@app.post("/api/app/reports")
+async def app_report(
+    body: ReportInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await create_user_report(
+        _store(),
+        principal,
+        target_type=body.target_type,
+        target_id=body.target_id,
+        category=body.category,
+        details=body.details,
+    )
+
+
+@app.put("/api/app/settings")
+async def app_update_settings(
+    body: UpdateAccountSettingsInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await update_account_settings(_store(), principal, body)
+    except LookupError as exc:
+        raise HTTPException(404, "Account settings were not found.") from exc
+
+
+@app.get("/api/app/account/export")
+async def app_export_account(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await export_account_data(_store(), principal)
+
+
+@app.post("/api/app/rooms/{room_id}/leave")
+async def app_leave_room(
+    room_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await leave_user_room(_store(), principal, room_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
+
+
+@app.post("/api/app/account/delete")
+async def app_delete_account(
+    _body: DeleteAccountInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        result = await schedule_account_deletion(_store(), principal)
+    except LookupError as exc:
+        raise HTTPException(404, "Account was not found.") from exc
+    await revoke_user_sessions(principal.uid)
+    return result
+
+
+InternalWorker = Annotated[str, Depends(require_internal_worker)]
+
+
+@app.post("/api/internal/events")
+async def internal_event_worker(
+    body: PubSubPushBody,
+    _worker: InternalWorker,
+) -> dict[str, Any]:
+    """Consume one authenticated Pub/Sub push as one bounded Agent turn."""
+
+    try:
+        event = json.loads(base64.b64decode(body.message.data).decode())
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(400, "Invalid Pub/Sub event payload.") from exc
+    if event.get("eventType") != "intent.published.v2":
+        return {"status": "IGNORED"}
+    intent_id = str(dict(event.get("payload", {})).get("intentId", ""))
+    if not intent_id:
+        raise HTTPException(400, "Published intent event is missing intentId.")
+    try:
+        store = _store()
+        source = await store.get("intent_posts", intent_id)
+        if source is None:
+            raise AgentRuntimeError("source post is unavailable")
+        open_posts = await store.query_documents(
+            "intent_posts", filters=[("status", "EQUAL", "OPEN")]
+        )
+        target = next(
+            (
+                item
+                for item in open_posts
+                if item.get("intent_id") != intent_id
+                and item.get("owner_uid") != source.get("owner_uid")
+                and compatible_posts(source, item)
+            ),
+            None,
+        )
+        agent_messages: dict[str, str] | None = None
+        if target is not None:
+            source_runtime, target_runtime = await asyncio.gather(
+                load_personal_agent(store, str(source["owner_agent_id"])),
+                load_personal_agent(store, str(target["owner_agent_id"])),
+            )
+            try:
+                agent_messages = await negotiate_pair_with_adk(
+                    source_runtime=source_runtime,
+                    target_runtime=target_runtime,
+                    source_post=source,
+                    target_post=target,
+                )
+            except ValueError as exc:
+                return {"status": "NO_ACTION", "reason": str(exc)}
+        result = await process_published_intent(
+            store, intent_id, agent_messages=agent_messages
+        )
+    except AgentRuntimeError as exc:
+        return {"status": "NO_ACTION", "reason": str(exc)}
+    return {"status": "PROCESSED", "result": result}
 
 
 @app.get("/api/demo/state")

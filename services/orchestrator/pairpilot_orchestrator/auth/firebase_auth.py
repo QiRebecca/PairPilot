@@ -49,6 +49,12 @@ class FirebaseAdminTokenVerifier:
             raise AuthenticationError("invalid authentication session") from exc
 
 
+async def revoke_user_sessions(uid: str) -> None:
+    """Revoke provider-managed refresh tokens without creating any key material."""
+
+    await asyncio.to_thread(auth.revoke_refresh_tokens, uid, _firebase_app())
+
+
 def public_firebase_config() -> dict[str, Any]:
     """Return non-secret browser configuration from runtime environment."""
 
@@ -60,6 +66,7 @@ def public_firebase_config() -> dict[str, Any]:
         "projectId": "GOOGLE_CLOUD_PROJECT",
         "appId": "PAIRPILOT_FIREBASE_APP_ID",
         "messagingSenderId": "PAIRPILOT_FIREBASE_MESSAGING_SENDER_ID",
+        "storageBucket": "PAIRPILOT_FIREBASE_STORAGE_BUCKET",
     }
     return {
         public: os.getenv(environment, "")

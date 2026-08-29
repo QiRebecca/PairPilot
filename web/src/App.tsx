@@ -142,7 +142,7 @@ export default function App() {
 
   let page = <div className="loading-page"><LoaderCircle className="spin" size={25} /><span>Loading your Personal Agent…</span></div>;
   if (data) {
-    if (path === "/agent" || path === "/") page = <AgentHomePage data={data} busy={busy} onSend={(content) => sendMessage(content)} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
+    if (path === "/agent" || path === "/" || path === "/demo") page = <AgentHomePage data={data} busy={busy} onSend={(content) => sendMessage(content)} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
     else if (path === "/requests") page = <RequestsPage data={data} onNavigate={navigate} />;
     else if (currentTask) page = <RequestWorkspacePage data={data} task={currentTask} review={reviewTaskId === currentTask.task_id ? review : null} busy={busy} onSend={(content) => sendMessage(content, currentTask.task_id)} onPublish={publish} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
     else if (path === "/explore") page = <ExplorePage data={data} onNavigate={navigate} onEvaluate={evaluate} />;

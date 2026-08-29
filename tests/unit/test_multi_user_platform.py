@@ -10,7 +10,13 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pairpilot_orchestrator import web
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
+from pairpilot_orchestrator.generic_agent_runtime import process_published_intent
 from pairpilot_orchestrator.infrastructure.google_cloud import decode_fields
+from pairpilot_orchestrator.multi_user_commit import (
+    MultiUserCommitError,
+    approve_multi_user_proposal,
+    commit_dual_approved_match,
+)
 from pairpilot_orchestrator.multi_user_platform import (
     agent_id_for_uid,
     build_user_bootstrap,
@@ -345,3 +351,135 @@ def test_protected_app_routes_use_token_uid_and_reject_idor(monkeypatch) -> None
         },
     )
     assert impersonation.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
+    store = MemoryMultiUserStore()
+    user_a, user_b, attacker = (
+        principal("uid-a"),
+        principal("uid-b"),
+        principal("uid-attacker"),
+    )
+    for user, name in (
+        (user_a, "Alex"),
+        (user_b, "Blair"),
+        (attacker, "Attacker"),
+    ):
+        await provision_user(store, user)
+        await complete_onboarding(store, user, onboarding(name))
+    task_a = await create_user_task(store, user_a, task_input("Alex live post"))
+    task_b = await create_user_task(store, user_b, task_input("Blair live post"))
+    for user, task, title in (
+        (user_a, task_a, "Alex public post"),
+        (user_b, task_b, "Blair public post"),
+    ):
+        await publish_user_post(
+            store,
+            user,
+            task_id=str(task["task_id"]),
+            public_title=title,
+            public_summary="Compatible adult ICML hotel room share in Seoul.",
+            public_requirements=["Adult ICML attendee"],
+        )
+
+    proposal = await process_published_intent(store, str(task_a["intent_id"]))
+    proposal_id = str(proposal["proposal_id"])
+    assert proposal["participant_agent_ids"] == [
+        agent_id_for_uid("uid-a"),
+        agent_id_for_uid("uid-b"),
+    ]
+    assert len(store.collections["proposal_acceptances"]) == 2
+    assert len(store.collections["decisions"]) == 4
+    assert len(store.collections["room_participants"]) == 2
+
+    with pytest.raises(PermissionError):
+        await approve_multi_user_proposal(
+            store,
+            attacker,
+            proposal_id=proposal_id,
+            proposal_version=1,
+            confirmation="APPROVE VERSION 1",
+        )
+    first = await approve_multi_user_proposal(
+        store,
+        user_a,
+        proposal_id=proposal_id,
+        proposal_version=1,
+        confirmation="APPROVE VERSION 1",
+    )
+    assert first["status"] == "WAITING_FOR_OTHER_HUMAN"
+    assert store.collections["matches"] == {}
+
+    second = await approve_multi_user_proposal(
+        store,
+        user_b,
+        proposal_id=proposal_id,
+        proposal_version=1,
+        confirmation="APPROVE VERSION 1",
+    )
+    assert second["status"] == "MATCH_COMMITTED"
+    assert len(store.collections["matches"]) == 1
+    assert {
+        item["status"] for item in store.collections["intent_posts"].values()
+    } == {"MATCHED"}
+    room = next(iter(store.collections["coordination_rooms"].values()))
+    assert room["room_type"] == "SHARED_COORDINATION_ROOM"
+    assert room["human_participation_available"] is True
+    assert len(store.collections["relationships"]) == 2
+
+    bootstrap_a = await build_user_bootstrap(store, user_a)
+    bootstrap_b = await build_user_bootstrap(store, user_b)
+    assert len(bootstrap_a["matches"]) == 1
+    assert len(bootstrap_b["matches"]) == 1
+    assert len(bootstrap_a["rooms"]) == 1
+    assert len(bootstrap_b["rooms"]) == 1
+    assert "participant_uids" not in bootstrap_a["rooms"][0]
+    duplicate = await approve_multi_user_proposal(
+        store,
+        user_a,
+        proposal_id=proposal_id,
+        proposal_version=1,
+        confirmation="APPROVE VERSION 1",
+    )
+    assert duplicate["status"] == "MATCH_COMMITTED"
+    assert len(store.collections["matches"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_material_proposal_version_change_invalidates_old_approvals() -> None:
+    store = MemoryMultiUserStore()
+    user_a, user_b = principal("uid-a"), principal("uid-b")
+    for user, name in ((user_a, "Alex"), (user_b, "Blair")):
+        await provision_user(store, user)
+        await complete_onboarding(store, user, onboarding(name))
+    task_a = await create_user_task(store, user_a, task_input("Alex terms"))
+    task_b = await create_user_task(store, user_b, task_input("Blair terms"))
+    for user, task, title in (
+        (user_a, task_a, "Alex post"),
+        (user_b, task_b, "Blair post"),
+    ):
+        await publish_user_post(
+            store,
+            user,
+            task_id=str(task["task_id"]),
+            public_title=title,
+            public_summary="Compatible ICML room share.",
+            public_requirements=[],
+        )
+    proposal = await process_published_intent(store, str(task_a["intent_id"]))
+    proposal_id = str(proposal["proposal_id"])
+    await approve_multi_user_proposal(
+        store,
+        user_a,
+        proposal_id=proposal_id,
+        proposal_version=1,
+        confirmation="APPROVE VERSION 1",
+    )
+    changed = dict(store.collections["proposals"][proposal_id])
+    changed["version"] = 2
+    changed["terms"] = {**dict(changed["terms"]), "cost_difference_usd": 25}
+    await store.upsert("proposals", proposal_id, changed)
+    with pytest.raises(MultiUserCommitError):
+        await commit_dual_approved_match(store, proposal_id=proposal_id)
+    assert store.collections["matches"] == {}
