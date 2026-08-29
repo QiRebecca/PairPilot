@@ -20,9 +20,9 @@ curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
 
 "${GCLOUD}" run services describe pairpilot-orchestrator \
   --project "${GOOGLE_CLOUD_PROJECT}" --region "${PAIRPILOT_REGION}" \
-  --format 'table(status.latestReadyRevisionName,status.traffic[0].percent,status.url)'
+  --format 'table(status.latestReadyRevisionName,status.traffic[].revisionName,status.traffic[].percent,status.traffic[].tag,status.url)'
 "${GCLOUD}" run services describe pairpilot-peer-agents \
   --project "${GOOGLE_CLOUD_PROJECT}" --region "${PAIRPILOT_REGION}" \
-  --format 'table(status.latestReadyRevisionName,status.traffic[0].percent,status.url)'
+  --format 'table(status.latestReadyRevisionName,status.traffic[].revisionName,status.traffic[].percent,status.traffic[].tag,status.url)'
 
 echo "Deployment verification passed. Live runs and approvals remain explicit operator-controlled actions."

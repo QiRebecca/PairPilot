@@ -16,14 +16,21 @@ Status: **PRODUCTION MIGRATION VERIFIED** on 2026-08-29.
 
 | Evidence | Peer agents | Orchestrator |
 |---|---|---|
-| Final revision | `pairpilot-peer-agents-00013-yem` | `pairpilot-orchestrator-00009-poy` |
-| Image digest | `sha256:3ebca863c7a73ea40fb7eb5817a8c9723f7495b14b052dc106ee5104c4a783f1` | `sha256:b1204b4a3a00729b47298a646325f5731bfbcc8d1ca6a26dc78d37238f8c9132` |
-| Tagged URL | `https://intent-v2---pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app` | `https://intent-v2---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app` |
+| Final revision | `pairpilot-peer-agents-00013-yem` | `pairpilot-orchestrator-00011-xeg` |
+| Image digest | `sha256:3ebca863c7a73ea40fb7eb5817a8c9723f7495b14b052dc106ee5104c4a783f1` | `sha256:148afd80cc32dec4c02620f81271b1a745d7cd8cecd0c3491bd7860d4a2879a6` |
+| Tagged URL | `https://intent-v2---pairpilot-peer-agents-ew4hz5g3la-nw.a.run.app` | `https://user-ui---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app` |
 | Authentication | runtime identity / Cloud Run Invoker | public UI/API |
 | Final traffic | 100% | 100% |
 
 The canonical public URL remains:
 `https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app`.
+
+After the verified positive commit, a UI-only follow-up exposed a prominent
+`Start a new request` action from the persisted matched screen, added a visible
+user journey, and made publish immediately launch the agent workflow. Cloud
+Build `04909243-1acd-45d0-b1a9-06048c906dbe` succeeded; revision
+`pairpilot-orchestrator-00011-xeg` was browser-tested at zero traffic before the
+canonical service moved to it. The existing committed match was not reset.
 
 ## Migration
 
@@ -80,7 +87,7 @@ gcloud run services update-traffic pairpilot-peer-agents \
   --to-revisions pairpilot-peer-agents-00013-yem=100
 gcloud run services update-traffic pairpilot-orchestrator \
   --project pairpilot-agentic-ecb84a --region europe-west2 \
-  --to-revisions pairpilot-orchestrator-00009-poy=100
+  --to-revisions pairpilot-orchestrator-00011-xeg=100
 ```
 
 Exact rollback commands, if needed:
@@ -91,7 +98,8 @@ gcloud run services update-traffic pairpilot-peer-agents \
   --to-revisions pairpilot-peer-agents-00009-8l4=100
 gcloud run services update-traffic pairpilot-orchestrator \
   --project pairpilot-agentic-ecb84a --region europe-west2 \
-  --to-revisions pairpilot-orchestrator-00005-lbc=100
+  --to-revisions pairpilot-orchestrator-00009-poy=100
 ```
 
-No old revision was deleted.
+The original `pairpilot-orchestrator-00005-lbc` baseline is also retained. No
+old revision was deleted.

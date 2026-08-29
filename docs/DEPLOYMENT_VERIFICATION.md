@@ -15,13 +15,15 @@ No login is required. Anonymous production requests returned HTTP 200 for `/`,
 
 | Service | Access | 100% revision | Image digest |
 |---|---|---|---|
-| `pairpilot-orchestrator` | public | `pairpilot-orchestrator-00009-poy` | `sha256:b1204b4a3a00729b47298a646325f5731bfbcc8d1ca6a26dc78d37238f8c9132` |
+| `pairpilot-orchestrator` | public | `pairpilot-orchestrator-00011-xeg` | `sha256:148afd80cc32dec4c02620f81271b1a745d7cd8cecd0c3491bd7860d4a2879a6` |
 | `pairpilot-peer-agents` | authenticated only | `pairpilot-peer-agents-00013-yem` | `sha256:3ebca863c7a73ea40fb7eb5817a8c9723f7495b14b052dc106ee5104c4a783f1` |
 
-The previous `pairpilot-orchestrator-00005-lbc` and
-`pairpilot-peer-agents-00009-8l4` revisions were not deleted and remain exact
-rollback targets. `intent-v2` tagged URLs remain available for both final
-revisions.
+The user-journey follow-up revision makes the new-request entry visible from a
+persisted matched state and automatically starts coordination after publish.
+It was first verified at the zero-traffic `user-ui` tag, then routed to 100%.
+The intent-layer revision `pairpilot-orchestrator-00009-poy`, original baseline
+`pairpilot-orchestrator-00005-lbc`, and previous peer revision were not deleted
+and remain rollback targets.
 
 ## Functional verification
 
