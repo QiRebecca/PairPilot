@@ -34,9 +34,7 @@ MAX_NEW_CONTACTS_PER_TASK = 5
 class MultiUserStore(Protocol):
     def document_name(self, collection: str, document_id: str) -> str: ...
 
-    async def get(
-        self, collection: str, document_id: str
-    ) -> dict[str, Any] | None: ...
+    async def get(self, collection: str, document_id: str) -> dict[str, Any] | None: ...
 
     async def query_documents(
         self,
@@ -385,6 +383,7 @@ def _public_post_projection(post: Mapping[str, Any]) -> dict[str, Any]:
         "public_display_name",
         "task_type",
         "public_title",
+        "public_summary",
         "public_constraints",
         "public_requirements",
         "status",
@@ -441,9 +440,7 @@ async def build_user_bootstrap(
         store.query_documents(
             "intent_posts", filters=[("owner_uid", "EQUAL", principal.uid)]
         ),
-        store.query_documents(
-            "intent_posts", filters=[("status", "EQUAL", "OPEN")]
-        ),
+        store.query_documents("intent_posts", filters=[("status", "EQUAL", "OPEN")]),
         store.query_documents(
             "blocks", filters=[("blocker_uid", "EQUAL", principal.uid)]
         ),
@@ -468,9 +465,9 @@ async def build_user_bootstrap(
     open_posts = cast(list[dict[str, Any]], results[14])
     outgoing_blocks = cast(list[dict[str, Any]], results[15])
     incoming_blocks = cast(list[dict[str, Any]], results[16])
-    blocked_uids = {
-        str(item.get("blocked_uid")) for item in outgoing_blocks
-    } | {str(item.get("blocker_uid")) for item in incoming_blocks}
+    blocked_uids = {str(item.get("blocked_uid")) for item in outgoing_blocks} | {
+        str(item.get("blocker_uid")) for item in incoming_blocks
+    }
     explore = [
         _public_post_projection(item)
         for item in open_posts
@@ -726,7 +723,7 @@ async def publish_user_post(
             "approved_at": timestamp,
         },
         "published_at": timestamp,
-        "expires_at": timestamp.replace(year=timestamp.year + 1),
+        "expires_at": timestamp + timedelta(days=365),
         "updated_at": timestamp,
     }
     task_clean = _clean(task)
@@ -871,9 +868,7 @@ async def send_user_room_message(
         or room.get("human_participation_available") is not True
     ):
         raise PermissionError("SHARED_ROOM_NOT_UNLOCKED")
-    message_id = stable_id(
-        "room_message", room_id, principal.uid, idempotency_key
-    )
+    message_id = stable_id("room_message", room_id, principal.uid, idempotency_key)
     message = {
         "schema_version": SCHEMA_VERSION,
         "namespace": PRODUCTION_NAMESPACE,
@@ -935,9 +930,7 @@ async def block_agent_owner(
             continue
         proposal_clean = _clean(proposal)
         proposal_clean.update(status="CANCELLED_BY_BLOCK", updated_at=timestamp)
-        await store.upsert(
-            "proposals", str(proposal["proposal_id"]), proposal_clean
-        )
+        await store.upsert("proposals", str(proposal["proposal_id"]), proposal_clean)
         hold_id = stable_id(
             "hold", str(proposal["proposal_id"]), str(proposal["version"])
         )
@@ -1166,9 +1159,7 @@ async def schedule_account_deletion(
                 await store.upsert("holds", hold_id, hold_clean)
     for room in rooms:
         clean = _clean(room)
-        revoked = {
-            str(item) for item in clean.get("revoked_participant_uids", [])
-        }
+        revoked = {str(item) for item in clean.get("revoked_participant_uids", [])}
         revoked.add(principal.uid)
         clean.update(revoked_participant_uids=sorted(revoked), updated_at=timestamp)
         await store.upsert("coordination_rooms", str(room["room_id"]), clean)

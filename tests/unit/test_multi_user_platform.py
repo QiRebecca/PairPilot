@@ -10,8 +10,13 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pairpilot_orchestrator import web
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
-from pairpilot_orchestrator.generic_agent_runtime import process_published_intent
+from pairpilot_orchestrator.generic_agent_runtime import (
+    AgentRuntimeError,
+    consume_daily_agent_turns,
+    process_published_intent,
+)
 from pairpilot_orchestrator.infrastructure.google_cloud import decode_fields
+from pairpilot_orchestrator.multi_user_agent import public_agent_projection
 from pairpilot_orchestrator.multi_user_commit import (
     MultiUserCommitError,
     approve_multi_user_proposal,
@@ -45,9 +50,7 @@ class MemoryMultiUserStore:
     def document_name(self, collection: str, document_id: str) -> str:
         return f"projects/test/databases/(default)/documents/{collection}/{document_id}"
 
-    async def get(
-        self, collection: str, document_id: str
-    ) -> dict[str, Any] | None:
+    async def get(self, collection: str, document_id: str) -> dict[str, Any] | None:
         item = self.collections[collection].get(document_id)
         return dict(item) if item is not None else None
 
@@ -98,8 +101,7 @@ class MemoryMultiUserStore:
             if condition.get("exists") is False and current is not None:
                 raise RuntimeError("already exists")
             if condition.get("updateTime") and (
-                current is None
-                or current.get("_updateTime") != condition["updateTime"]
+                current is None or current.get("_updateTime") != condition["updateTime"]
             ):
                 raise RuntimeError("precondition failed")
             pending.append(
@@ -224,19 +226,60 @@ async def test_two_users_receive_isolated_private_bootstraps_and_real_posts() ->
 
     bootstrap_a = await build_user_bootstrap(store, user_a)
     bootstrap_b = await build_user_bootstrap(store, user_b)
-    assert {item["task_id"] for item in bootstrap_a["tasks"]} == {
-        task_a["task_id"]
-    }
-    assert {item["task_id"] for item in bootstrap_b["tasks"]} == {
-        task_b["task_id"]
-    }
+    assert {item["task_id"] for item in bootstrap_a["tasks"]} == {task_a["task_id"]}
+    assert {item["task_id"] for item in bootstrap_b["tasks"]} == {task_b["task_id"]}
     assert bootstrap_a["explorePosts"][0]["public_title"] == "Blair public post"
+    assert (
+        bootstrap_a["explorePosts"][0]["public_summary"]
+        == "Seeking a compatible ICML room share."
+    )
     assert bootstrap_b["explorePosts"][0]["public_title"] == "Alex public post"
     assert "owner_uid" not in bootstrap_a["explorePosts"][0]
     assert "email" not in bootstrap_a["explorePosts"][0]
     assert "maximum_additional_cost_usd" not in bootstrap_a["explorePosts"][0]
     assert "Blair request: find" not in str(bootstrap_a)
     assert "Alex request: find" not in str(bootstrap_b)
+
+
+def test_peer_agent_projection_contains_only_reviewed_public_fields() -> None:
+    projected = public_agent_projection(
+        {
+            "intent_id": "intent-a",
+            "owner_agent_id": "agent-a",
+            "public_display_name": "Alex",
+            "public_summary": "Public summary",
+            "public_constraints": {"event": "ICML"},
+            "owner_uid": "private-uid",
+            "task_id": "private-task-id",
+            "email": "private@example.test",
+            "raw_user_goal": "private goal",
+            "_updateTime": "internal-version",
+        }
+    )
+    assert projected["public_summary"] == "Public summary"
+    assert "owner_uid" not in projected
+    assert "task_id" not in projected
+    assert "email" not in projected
+    assert "raw_user_goal" not in projected
+    assert "_updateTime" not in projected
+
+
+@pytest.mark.asyncio
+async def test_daily_agent_turn_quota_is_charged_atomically() -> None:
+    store = MemoryMultiUserStore()
+    await provision_user(store, principal("uid-a"))
+    await provision_user(store, principal("uid-b"))
+    timestamp = datetime(2026, 8, 29, tzinfo=UTC)
+    await consume_daily_agent_turns(store, ["uid-a", "uid-b"], now=timestamp)
+    assert store.collections["usage_quotas"]["uid-a"]["agent_turns_today"] == 1
+    assert store.collections["usage_quotas"]["uid-b"]["agent_turns_today"] == 1
+    exhausted = dict(store.collections["usage_quotas"]["uid-a"])
+    exhausted["agent_turns_today"] = exhausted["daily_agent_turn_limit"]
+    exhausted["quota_date"] = timestamp.date().isoformat()
+    await store.upsert("usage_quotas", "uid-a", exhausted)
+    with pytest.raises(AgentRuntimeError, match="daily Agent turn quota"):
+        await consume_daily_agent_turns(store, ["uid-a", "uid-b"], now=timestamp)
+    assert store.collections["usage_quotas"]["uid-b"]["agent_turns_today"] == 1
 
 
 @pytest.mark.asyncio
@@ -392,6 +435,9 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     assert len(store.collections["proposal_acceptances"]) == 2
     assert len(store.collections["decisions"]) == 4
     assert len(store.collections["room_participants"]) == 2
+    assert {
+        item["contact_count"] for item in store.collections["task_workspaces"].values()
+    } == {1}
 
     with pytest.raises(PermissionError):
         await approve_multi_user_proposal(
@@ -420,9 +466,9 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     )
     assert second["status"] == "MATCH_COMMITTED"
     assert len(store.collections["matches"]) == 1
-    assert {
-        item["status"] for item in store.collections["intent_posts"].values()
-    } == {"MATCHED"}
+    assert {item["status"] for item in store.collections["intent_posts"].values()} == {
+        "MATCHED"
+    }
     room = next(iter(store.collections["coordination_rooms"].values()))
     assert room["room_type"] == "SHARED_COORDINATION_ROOM"
     assert room["human_participation_available"] is True

@@ -69,8 +69,10 @@ from pairpilot_orchestrator.domain import (
 from pairpilot_orchestrator.generic_agent_runtime import (
     AgentRuntimeError,
     compatible_posts,
+    consume_daily_agent_turns,
     load_personal_agent,
     process_published_intent,
+    users_blocked,
 )
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
@@ -80,6 +82,7 @@ from pairpilot_orchestrator.multi_user_commit import (
     approve_multi_user_proposal,
 )
 from pairpilot_orchestrator.multi_user_platform import (
+    MAX_NEW_CONTACTS_PER_TASK,
     block_agent_owner,
     build_user_bootstrap,
     complete_onboarding,
@@ -310,9 +313,7 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
     )
     data = dict(zip(PUBLIC_COLLECTIONS, loaded, strict=True))
     raw_qi_intents = [
-        item
-        for item in data["intents"]
-        if item.get("owner_agent_id") == "qi-agent"
+        item for item in data["intents"] if item.get("owner_agent_id") == "qi-agent"
     ]
     active_intent_raw = (
         max(
@@ -460,9 +461,7 @@ async def _run_stream(run_id: UUID, source_intent_id: str) -> AsyncIterator[str]
         final_state = await public_state(str(run_id))
         task_workspace = await find_task_by_intent(_store(), source_intent_id)
         if task_workspace is not None:
-            await materialize_task_run(
-                _store(), task=task_workspace, state=final_state
-            )
+            await materialize_task_run(_store(), task=task_workspace, state=final_state)
         yield _sse("snapshot", final_state)
         yield _sse("complete", result)
     except asyncio.CancelledError:
@@ -572,9 +571,7 @@ async def app_get_task(
     if task is None or task.get("namespace") != "production":
         raise HTTPException(404, "Task was not found.")
     require_task_owner(principal, task)
-    private_intent = await _store().get(
-        "intent_private_data", str(task["intent_id"])
-    )
+    private_intent = await _store().get("intent_private_data", str(task["intent_id"]))
     return {
         "task": {key: value for key, value in task.items() if not key.startswith("_")},
         "privateIntent": (
@@ -785,7 +782,8 @@ async def internal_event_worker(
         raise HTTPException(400, "Invalid Pub/Sub event payload.") from exc
     if event.get("eventType") != "intent.published.v2":
         return {"status": "IGNORED"}
-    intent_id = str(dict(event.get("payload", {})).get("intentId", ""))
+    event_payload = dict(event.get("payload", {}))
+    intent_id = str(event_payload.get("intentId", ""))
     if not intent_id:
         raise HTTPException(400, "Published intent event is missing intentId.")
     try:
@@ -796,18 +794,38 @@ async def internal_event_worker(
         open_posts = await store.query_documents(
             "intent_posts", filters=[("status", "EQUAL", "OPEN")]
         )
-        target = next(
-            (
-                item
-                for item in open_posts
-                if item.get("intent_id") != intent_id
-                and item.get("owner_uid") != source.get("owner_uid")
-                and compatible_posts(source, item)
-            ),
-            None,
-        )
+        target = None
+        source_task = await store.get("task_workspaces", str(source["task_id"]))
+        if source_task is None:
+            raise AgentRuntimeError("source task is missing")
+        if int(source_task.get("contact_count", 0)) >= MAX_NEW_CONTACTS_PER_TASK:
+            raise AgentRuntimeError("task contact quota is exhausted")
+        for candidate in open_posts:
+            if (
+                candidate.get("intent_id") == intent_id
+                or candidate.get("owner_uid") == source.get("owner_uid")
+                or not compatible_posts(source, candidate)
+            ):
+                continue
+            target_task = await store.get("task_workspaces", str(candidate["task_id"]))
+            if (
+                target_task is None
+                or int(target_task.get("contact_count", 0)) >= MAX_NEW_CONTACTS_PER_TASK
+                or await users_blocked(
+                    store,
+                    str(source["owner_uid"]),
+                    str(candidate["owner_uid"]),
+                )
+            ):
+                continue
+            target = candidate
+            break
         agent_messages: dict[str, str] | None = None
         if target is not None:
+            await consume_daily_agent_turns(
+                store,
+                [str(source["owner_uid"]), str(target["owner_uid"])],
+            )
             source_runtime, target_runtime = await asyncio.gather(
                 load_personal_agent(store, str(source["owner_agent_id"])),
                 load_personal_agent(store, str(target["owner_agent_id"])),
@@ -819,8 +837,35 @@ async def internal_event_worker(
                     source_post=source,
                     target_post=target,
                 )
-            except ValueError as exc:
-                return {"status": "NO_ACTION", "reason": str(exc)}
+            except Exception as exc:
+                attempt = int(event_payload.get("agentAttempt", 0))
+                await store.write_event(
+                    event_type="agent.negotiation_turn_failed.v2",
+                    run_id=str(event_payload.get("taskId", intent_id)),
+                    producer="generic-personal-agent-runtime",
+                    payload={
+                        "intentId": intent_id,
+                        "attempt": attempt,
+                        "errorType": type(exc).__name__,
+                    },
+                    idempotency_key=(f"v2:{intent_id}:agent-turn-failed:{attempt}"),
+                )
+                if attempt < 1:
+                    await store.write_event(
+                        event_type="intent.published.v2",
+                        run_id=str(event_payload.get("taskId", intent_id)),
+                        producer="generic-personal-agent-runtime",
+                        payload={**event_payload, "agentAttempt": attempt + 1},
+                        idempotency_key=f"v2:{intent_id}:agent-retry:{attempt + 1}",
+                    )
+                    return {
+                        "status": "BOUNDED_RETRY_SCHEDULED",
+                        "attempt": attempt + 1,
+                    }
+                return {
+                    "status": "NO_ACTION",
+                    "reason": "bounded Personal Agent turn did not accept",
+                }
         result = await process_published_intent(
             store, intent_id, agent_messages=agent_messages
         )
@@ -991,8 +1036,7 @@ async def _directive_entities(
             if item.get("task_id") == task_id
         ]
         return [
-            str(item.get("assessment_id") or item.get("_id"))
-            for item in assessments
+            str(item.get("assessment_id") or item.get("_id")) for item in assessments
         ]
     if action == PresentationAction.OPEN_COORDINATION_ROOM:
         rooms = [
@@ -1025,9 +1069,7 @@ async def personal_agent_message(body: PersonalAgentMessageBody) -> dict[str, An
     """Route one global or task message through the typed persistent Qi Agent."""
 
     store = _store()
-    tasks = [
-        _clean(item) for item in await store.list_documents("task_workspaces")
-    ]
+    tasks = [_clean(item) for item in await store.list_documents("task_workspaces")]
     selected_task = next(
         (item for item in tasks if item.get("task_id") == body.task_id), None
     )
@@ -1112,11 +1154,7 @@ async def personal_agent_message(body: PersonalAgentMessageBody) -> dict[str, An
             "taskMessage": task_message,
         }
     target_task = selected_task or next(
-        (
-            item
-            for item in tasks
-            if item.get("task_id") == routing.target_task_id
-        ),
+        (item for item in tasks if item.get("task_id") == routing.target_task_id),
         None,
     )
     directive_payload: dict[str, Any] | None = None
@@ -1410,16 +1448,11 @@ async def publish_intent(body: PublishIntentBody) -> dict[str, Any]:
         provenance={"source": "user_confirmed_qi_agent_draft"},
     )
     current_agent_only = dict(private.get("agent_only_constraints", {}))
-    current_quiet = dict(
-        current_agent_only.get("quiet_overnight_compatibility", {})
-    )
+    current_quiet = dict(current_agent_only.get("quiet_overnight_compatibility", {}))
     quiet_source = str(
         current_quiet.get("source", FieldSource.EXPLICIT_USER_INPUT.value)
     )
-    if (
-        current_quiet.get("importance")
-        != body.quiet_overnight_compatibility_importance
-    ):
+    if current_quiet.get("importance") != body.quiet_overnight_compatibility_importance:
         quiet_source = FieldSource.USER_EDIT.value
         provenance["quiet_overnight_compatibility"] = quiet_source
         post.field_provenance = provenance
@@ -1672,10 +1705,8 @@ async def approve(body: ApprovalBody) -> dict[str, Any]:
         if (
             existing_approval is None
             or existing_match.get("runId") != body.run_id
-            or int(existing_match.get("proposalVersion", 0))
-            != body.proposal_version
-            or int(existing_approval.get("proposalVersion", 0))
-            != body.proposal_version
+            or int(existing_match.get("proposalVersion", 0)) != body.proposal_version
+            or int(existing_approval.get("proposalVersion", 0)) != body.proposal_version
             or existing_approval.get("disclosureHash")
             != approval_request.get("disclosureHash")
         ):

@@ -16,6 +16,48 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pairpilot_orchestrator.config import Settings
 
+PUBLIC_AGENT_POST_FIELDS = {
+    "schema_version",
+    "intent_id",
+    "owner_agent_id",
+    "public_display_name",
+    "task_type",
+    "public_title",
+    "public_summary",
+    "public_constraints",
+    "public_requirements",
+    "status",
+    "capacity_remaining",
+    "authorship",
+    "published_at",
+    "expires_at",
+}
+
+
+def public_agent_projection(post: dict[str, Any]) -> dict[str, Any]:
+    """Return the reviewed public fields that a peer Agent may inspect."""
+
+    return {
+        key: value for key, value in post.items() if key in PUBLIC_AGENT_POST_FIELDS
+    }
+
+
+def _policy_projection(runtime: dict[str, Any]) -> dict[str, Any]:
+    privacy = dict(runtime.get("privacy", {}))
+    autonomy = dict(runtime.get("autonomy", {}))
+    return {
+        "privacy": {
+            key: privacy[key]
+            for key in ("public_sharing_policy", "agent_sharing_policy")
+            if key in privacy
+        },
+        "autonomy": {
+            key: autonomy[key]
+            for key in ("default_mode", "always_ask_policy")
+            if key in autonomy
+        },
+    }
+
 
 class BoundedNegotiationDecision(BaseModel):
     """Observable result only; no chain-of-thought or hidden confidence."""
@@ -82,12 +124,13 @@ async def run_personal_agent_turn(
         agent=_agent(settings),
         session_service=sessions,
     )
+    policies = _policy_projection(runtime)
     prompt = {
         "actingAgentId": dict(runtime["agent"])["agent_id"],
-        "ownPublicPost": own_public_post,
-        "peerPublicPost": peer_public_post,
-        "privacyPolicy": runtime["privacy"],
-        "autonomyPolicy": runtime["autonomy"],
+        "ownPublicPost": public_agent_projection(own_public_post),
+        "peerPublicPost": public_agent_projection(peer_public_post),
+        "privacyPolicy": policies["privacy"],
+        "autonomyPolicy": policies["autonomy"],
         "authority": {
             "mayNegotiateReversibleIntroduction": True,
             "mayCommitHuman": False,
@@ -107,9 +150,7 @@ async def run_personal_agent_turn(
             fragments.extend(
                 part.text for part in event.content.parts or [] if part.text
             )
-    return BoundedNegotiationDecision.model_validate_json(
-        "".join(fragments).strip()
-    )
+    return BoundedNegotiationDecision.model_validate_json("".join(fragments).strip())
 
 
 async def negotiate_pair_with_adk(

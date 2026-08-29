@@ -1,33 +1,35 @@
 flowchart LR
-    U["PairPilot Personal Agent OS<br/>Global Qi conversation<br/>Task workspaces<br/>Explore · Rooms · Decisions<br/>Matches · Network · Memory"]
-    O["Public Cloud Run<br/>Routed React UI + FastAPI<br/>typed PresentationDirective allowlist"]
-    W[("Product projections<br/>TaskWorkspace<br/>Conversation + messages<br/>Decision Inbox<br/>Assessment + Coordination Room")]
-    Q["Persistent Qi Personal Agent<br/>typed model router<br/>Google ADK 2.8.0<br/>gemini-3.7-flash"]
-    I[("Intent Registry / Post Network<br/>public intent posts<br/>status · capacity · expiry · owner<br/>post-scoped negotiation state")]
-    P["Private Cloud Run<br/>Alice · Maya · Lena ADK agents<br/>A2A JSON-RPC 1.0"]
-    V["Vertex AI global<br/>live model turns<br/>no silent fallback"]
-    H["Proposal / Hold / Approval<br/>15-minute intent-capacity hold<br/>exact current human effect"]
-    F[("Firestore authoritative commit<br/>match + both post closures<br/>release other negotiations<br/>provenance + durable outbox")]
-    S["Pub/Sub<br/>match.committed<br/>intent.matched × 2"]
-    R["Relationship Memory<br/>Qi ↔ Maya relationship<br/>conditional Alice credit<br/>scoped editable inference"]
-    G["Cloud Logging<br/>revision · requests · run IDs"]
+    PUB["Unauthenticated website<br/>Landing · Sign up · Sign in<br/>Privacy · Terms"]
+    DEMO["Synthetic demo namespace<br/>Qi · Alice · Maya · Lena<br/>never enters production Explore"]
+    AUTH["Firebase Authentication<br/>Email/password · verification<br/>reset · session restoration"]
+    APP["Authenticated PairPilot App<br/>/app/agent · requests · explore<br/>decisions · rooms · network · memory"]
+    API["Cloud Run auth middleware<br/>verify Firebase ID token + revocation<br/>derive UID · owner/member checks"]
+    AGENT["User-scoped Personal Agent runtime<br/>load arbitrary agent_id + owner policy<br/>two bounded ADK/Gemini turns"]
+    TASK["Task Workspace Registry<br/>owner-scoped conversations<br/>decisions · quotas · leases"]
+    POSTS["Public Intent Registry<br/>human-approved projection only<br/>OPEN · PAUSED · MATCHED · CLOSED"]
+    PRIVATE["Private Intent + Memory stores<br/>raw goal · Agent-only boundaries<br/>owner UID never sent to peers"]
+    BUS["Pub/Sub async orchestration<br/>OIDC push · intent.published.v2<br/>bounded retry · idempotent delivery"]
+    A2A["Intent-scoped Agent communication<br/>principal Agent + internal owner UID<br/>source/target task + intent provenance"]
+    COMMIT["Proposal · Hold · Dual Approval<br/>Agent A + Agent B accept version N<br/>Human A + Human B approve hashes"]
+    ROOM["Participant-scoped rooms<br/>AGENTS_ONLY before match<br/>SHARED_ROOM after atomic commit"]
+    SOCIAL["Independent owner networks<br/>relationship + scoped memory<br/>block · report · leave · delete"]
+    FS[("Firestore authoritative state<br/>server-only access<br/>client rules deny by default")]
 
-    U -->|"global or task conversation"| O
-    O -->|"authoritative views"| W
-    O -->|"typed route + task summaries"| Q
-    Q -->|"create isolated task + draft"| W
-    W -->|"approved publication"| I
-    Q -->|"search OPEN posts"| I
-    Q <-->|"Google-signed ID token<br/>intent-scoped A2A"| P
-    Q <-->|"live turns"| V
-    P <-->|"isolated live turns"| V
-    Q -->|"versioned proposal"| H
-    Q -->|"room + assessment projections"| W
-    U -->|"approve exact effect"| H
-    H -->|"revalidate + atomic commit"| F
-    F -->|"both posts MATCHED"| I
-    F -->|"durable committed events"| S
-    S -->|"committed event only"| R
-    O --> G
-    P --> G
-    F --> G
+    PUB --> AUTH
+    PUB --> DEMO
+    AUTH -->|"fresh Firebase ID token"| APP
+    APP --> API
+    API --> TASK
+    API --> POSTS
+    API --> PRIVATE
+    POSTS -->|"publish event"| BUS
+    BUS --> AGENT
+    AGENT <-->|"task-scoped A2A"| A2A
+    AGENT --> COMMIT
+    COMMIT -->|"two current human approvals"| FS
+    FS --> POSTS
+    FS --> ROOM
+    FS --> SOCIAL
+    TASK --> FS
+    PRIVATE --> AGENT
+    DEMO -. isolated .-> FS

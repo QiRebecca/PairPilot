@@ -1,5 +1,27 @@
 # Architecture
 
+## Authenticated production plane
+
+The public website and `/demo` sandbox are unauthenticated and isolated. The
+production `/app/*` plane restores Firebase Auth state and sends a fresh ID
+token to Cloud Run on every protected request. Firebase Admin verifies the
+token with revocation checks; server-side authorization derives the UID and
+compares it with authoritative owner or participant records. The browser has
+no direct Firestore access.
+
+One scalable generic runtime loads any registered user's Personal Agent,
+owner-approved policy, task scope, and permitted memory. Publishing returns
+promptly and writes `intent.published.v2`; Pub/Sub invokes `/api/internal/events`
+with a short-lived Google OIDC token. Per-task and per-intent-pair Firestore
+leases replace the demo's global lock.
+
+Each matched pair has two Agent acceptances, two owner-perspective effect
+contracts and two independent human approvals. The atomic commit creates one
+match, consumes both posts, opens one participant-scoped shared room, and
+writes independent owner-scoped relationships/memories. The synthetic demo
+collections and routes are not queried by the production bootstrap or Explore
+feed.
+
 PairPilot is an agent-operated intent marketplace. Current needs live as
 capacity-bearing intent posts; durable relationships help personal agents
 decide whom to contact. Models choose semantic strategy, while deterministic

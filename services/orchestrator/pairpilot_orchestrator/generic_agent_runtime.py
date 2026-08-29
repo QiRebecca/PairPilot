@@ -30,6 +30,56 @@ class AgentRuntimeError(Exception):
     """The generic Agent cannot safely process the requested bounded turn."""
 
 
+async def consume_daily_agent_turns(
+    store: MultiUserStore,
+    owner_uids: list[str],
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Atomically charge one bounded model turn to every participating owner."""
+
+    timestamp = (now or datetime.now(UTC)).astimezone(UTC)
+    quota_date = timestamp.date().isoformat()
+    unique_uids = sorted(set(owner_uids))
+    for attempt in range(3):
+        quotas = await asyncio.gather(
+            *(store.get("usage_quotas", uid) for uid in unique_uids)
+        )
+        writes: list[dict[str, Any]] = []
+        for uid, quota in zip(unique_uids, quotas, strict=True):
+            if quota is None:
+                raise AgentRuntimeError("owner Agent quota is unavailable")
+            clean = _clean(quota)
+            turns = (
+                int(clean.get("agent_turns_today", 0))
+                if clean.get("quota_date") == quota_date
+                else 0
+            )
+            limit = int(clean.get("daily_agent_turn_limit", 40))
+            if turns >= limit:
+                raise AgentRuntimeError("daily Agent turn quota is exhausted")
+            clean.update(
+                agent_turns_today=turns + 1,
+                quota_date=quota_date,
+                updated_at=timestamp,
+            )
+            writes.append(
+                _update_write(
+                    store,
+                    "usage_quotas",
+                    uid,
+                    clean,
+                    update_time=str(quota["_updateTime"]),
+                )
+            )
+        try:
+            await store.commit_writes(writes)
+            return
+        except Exception:
+            if attempt == 2:
+                raise AgentRuntimeError("Agent quota update conflicted") from None
+
+
 async def load_personal_agent(
     store: MultiUserStore,
     agent_id: str,
@@ -83,13 +133,15 @@ def compatible_posts(source: dict[str, Any], target: dict[str, Any]) -> bool:
         return False
     source_constraints = dict(source.get("public_constraints", {}))
     target_constraints = dict(target.get("public_constraints", {}))
-    if str(source_constraints.get("event", "")).casefold() != str(
-        target_constraints.get("event", "")
-    ).casefold():
+    if (
+        str(source_constraints.get("event", "")).casefold()
+        != str(target_constraints.get("event", "")).casefold()
+    ):
         return False
-    if str(source_constraints.get("location", "")).casefold() != str(
-        target_constraints.get("location", "")
-    ).casefold():
+    if (
+        str(source_constraints.get("location", "")).casefold()
+        != str(target_constraints.get("location", "")).casefold()
+    ):
         return False
     source_start, source_end = _date_range(source)
     target_start, target_end = _date_range(target)
@@ -103,8 +155,9 @@ async def users_blocked(
 ) -> bool:
     first_block = stable_id("block", first_uid, second_uid)
     second_block = stable_id("block", second_uid, first_uid)
-    first, second = await store.get("blocks", first_block), await store.get(
-        "blocks", second_block
+    first, second = (
+        await store.get("blocks", first_block),
+        await store.get("blocks", second_block),
     )
     return first is not None or second is not None
 
@@ -118,9 +171,7 @@ def _decision_id(proposal_id: str, version: int, owner_uid: str) -> str:
     return stable_id("decision_proposal", proposal_id, str(version), owner_uid)
 
 
-def _agent_acceptance_id(
-    proposal_id: str, version: int, agent_id: str
-) -> str:
+def _agent_acceptance_id(proposal_id: str, version: int, agent_id: str) -> str:
     return stable_id("agent_acceptance", proposal_id, str(version), agent_id)
 
 
@@ -395,12 +446,8 @@ async def create_negotiation_for_pair(
         writes.extend(
             [
                 _create_write(store, "decisions", decision_id, decision),
-                _create_write(
-                    store, "proposal_acceptances", acceptance_id, acceptance
-                ),
-                _create_write(
-                    store, "room_participants", participant_id, participant
-                ),
+                _create_write(store, "proposal_acceptances", acceptance_id, acceptance),
+                _create_write(store, "room_participants", participant_id, participant),
             ]
         )
     source_message_id = stable_id("room_message", proposal_id, "source")
@@ -471,10 +518,13 @@ async def create_negotiation_for_pair(
         task = await store.get("task_workspaces", str(post["task_id"]))
         if task is None:
             raise AgentRuntimeError("proposal task is missing")
+        if int(task.get("contact_count", 0)) >= MAX_NEW_CONTACTS_PER_TASK:
+            raise AgentRuntimeError("task contact quota is exhausted")
         clean_task = _clean(task)
         clean_task.update(
             status="NEEDS_DECISION",
             active_proposal_id=proposal_id,
+            contact_count=int(clean_task.get("contact_count", 0)) + 1,
             updated_at=timestamp,
         )
         decision_id = _decision_id(proposal_id, version, str(post["owner_uid"]))

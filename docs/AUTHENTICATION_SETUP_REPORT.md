@@ -28,7 +28,7 @@ Authorized domains at this stage:
 - `pairpilot-agentic-ecb84a.web.app`
 - `pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app`
 - `personal-os---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app`
-- The `multi-user-beta` tagged hostname is added during candidate verification.
+- `multi-user-beta---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app`
 
 ## Email actions
 
@@ -56,7 +56,7 @@ Non-secret runtime variables:
 
 ## Test accounts
 
-No controlled end-to-end account password is stored here or in the repository. Two verified test accounts must still be exercised through secure human entry before launch.
+Two controlled Firebase test accounts were created with different UIDs and `emailVerified=true`. Their random passwords exist only as Secret Manager versions and were never printed or committed. They passed the authenticated API E2E. Provider-delivered verification links must still be tested through secure human inbox interaction before launch.
 
 ## Operational notice
 

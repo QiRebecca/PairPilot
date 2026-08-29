@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the intent-marketplace architecture PNG used in the submission."""
+"""Render the real multi-user public-beta architecture used in the submission."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-WIDTH, HEIGHT = 1900, 1200
+WIDTH, HEIGHT = 1900, 1260
 BACKGROUND = "#090b0a"
 PANEL = "#131714"
 LINE = "#343a35"
@@ -88,10 +88,15 @@ def arrow(
 def main() -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
-    draw.text((65, 45), "PairPilot Personal Agent OS", font=font(42), fill=INK)
+    draw.text(
+        (65, 45),
+        "PairPilot Real Multi-User Public Beta",
+        font=font(42),
+        fill=INK,
+    )
     draw.text(
         (65, 96),
-        "Personal agents operate active posts; infrastructure governs commitment.",
+        "One authenticated human, one owned Agent, isolated state, and dual consent.",
         font=font(21),
         fill=MUTED,
     )
@@ -101,105 +106,108 @@ def main() -> None:
     box(
         draw,
         (65, 180, 430, 455),
-        "Routed Product Shell",
-        "Global Qi conversation\nTask conversations\nExplore + Rooms\n"
-        "Decision Inbox + Matches\nNetwork + Memory + Audit",
+        "Public + Authenticated Web",
+        "Landing · Sign up · Sign in\nEmail verification + reset\n"
+        "Agent · Requests · Explore\nDecisions · Rooms · Network\n"
+        "Memory · Settings · Export",
         LIME,
     )
     box(
         draw,
         (555, 180, 900, 350),
-        "Public Cloud Run",
-        "React + FastAPI orchestrator\nTyped router + UI directives\n"
-        "HTTPS · SSE · safe demo quota",
+        "Firebase Authentication",
+        "Email/password identity\nfresh ID token per request\n"
+        "revocation + disabled checks",
         TEAL,
     )
     box(
         draw,
         (555, 435, 900, 625),
-        "Persistent Qi Personal Agent",
-        "bounded cross-task summaries\nGoogle ADK 2.8.0\ngemini-3.7-flash",
+        "Authenticated Cloud Run API",
+        "derive UID from verified token\nowner/member/admin checks\n"
+        "no client-supplied authority",
         LIME,
     )
     box(
         draw,
         (1025, 165, 1465, 390),
-        "Firestore Product + Intent Registry",
-        "tasks · conversations · decisions · rooms\npublic intent posts\n"
-        "status · capacity · expiry · owner\nprivate context stored separately",
+        "Firestore Authoritative State",
+        "owner-scoped users · tasks · memory\npublic post projections · decisions\n"
+        "leases · proposals · rooms · outbox\ndirect browser rules deny by default",
         TEAL,
     )
     box(
         draw,
         (1025, 465, 1465, 655),
-        "Private Cloud Run",
-        "Alice · Maya · Lena ADK agents\nA2A JSON-RPC 1.0\n"
-        "Google-signed identity token",
+        "Pub/Sub OIDC Worker",
+        "intent.published.v2\nGoogle-signed service identity\n"
+        "at-least-once + bounded retry",
         VIOLET,
     )
     box(
         draw,
         (1570, 465, 1835, 655),
-        "Vertex AI · global",
-        "gemini-3.7-flash\nlive agent turns\nno silent fallback",
+        "Vertex AI",
+        "gemini-3.7-flash\ntwo bounded ADK turns\npublic fields only",
         LIME,
     )
     box(
         draw,
-        (555, 750, 900, 950),
-        "Proposal / Hold / Approval",
-        "versioned intent pair\n15-minute capacity hold\n"
-        "exact human effect approval\nexplicit expiry revalidation",
+        (555, 750, 900, 970),
+        "Generic Personal Agents",
+        "load arbitrary agent_id\nowner privacy + autonomy policy\n"
+        "task/intent-scoped A2A\ndaily turns + contact quotas",
         ORANGE,
     )
     box(
         draw,
-        (1025, 750, 1465, 965),
-        "Firestore authoritative commit",
-        "match + both post closures\nrelease other negotiations\n"
-        "provenance + durable outbox\nupdate-time preconditions",
+        (1025, 750, 1465, 970),
+        "Proposal · Hold · Dual Approval",
+        "Agent A + Agent B accept version N\nHuman A + Human B approve hashes\n"
+        "atomic match + both post closures\nupdate-time preconditions",
         TEAL,
     )
     box(
         draw,
-        (1570, 750, 1835, 925),
-        "Pub/Sub",
-        "match.committed\nintent.matched × 2\nat-least-once delivery",
+        (1570, 750, 1835, 970),
+        "Rooms + Social State",
+        "participant-only access\nAGENTS_ONLY → SHARED\n"
+        "relationships · block\nreport · leave · delete",
         VIOLET,
     )
     box(
         draw,
-        (1025, 1020, 1465, 1165),
-        "Relationship Memory",
-        "Qi ↔ Maya provenance\nconditional Alice credit · scoped editable inference",
-        LIME,
+        (65, 770, 430, 950),
+        "Operations + Safety",
+        "Cloud Logging + trace IDs\nper-IP endpoint limits\n"
+        "session revoke · deletion delay",
+        "#ffffff",
     )
     box(
         draw,
-        (65, 770, 430, 925),
-        "Cloud Logging",
-        "revision + request proof\nrun IDs · errors · probes",
-        "#ffffff",
+        (65, 1010, 430, 1170),
+        "Synthetic Demo Boundary",
+        "/demo only · visibly labeled\nnever enters production Explore",
+        VIOLET,
     )
 
-    arrow(draw, (430, 265), (555, 265), LIME, "global + task messages")
-    arrow(draw, (900, 260), (1025, 260), TEAL, "project + publish")
-    arrow(draw, (725, 350), (725, 435), LIME, "live ADK")
-    arrow(draw, (900, 525), (1025, 555), VIOLET, "intent-scoped A2A")
-    arrow(draw, (1465, 555), (1570, 555), LIME, "live turns")
-    arrow(draw, (725, 625), (725, 750), ORANGE, "versioned proposal")
-    arrow(draw, (900, 850), (1025, 850), TEAL, "exact approval → commit")
-    arrow(draw, (1245, 750), (1245, 390), TEAL, "both posts MATCHED")
-    arrow(draw, (1465, 850), (1570, 850), VIOLET, "durable events")
-    arrow(draw, (1700, 925), (1465, 1090), LIME, "committed event only")
-    arrow(draw, (555, 830), (430, 830), "#ffffff", "observe")
+    arrow(draw, (430, 265), (555, 265), LIME, "authenticate")
+    arrow(draw, (725, 350), (725, 435), TEAL, "fresh ID token")
+    arrow(draw, (900, 525), (1025, 300), TEAL, "authorized reads/writes")
+    arrow(draw, (1245, 390), (1245, 465), VIOLET, "publish event")
+    arrow(draw, (1465, 555), (1570, 555), LIME, "two live turns")
+    arrow(draw, (1025, 555), (725, 750), VIOLET, "OIDC worker")
+    arrow(draw, (900, 860), (1025, 860), ORANGE, "dual Agent acceptance")
+    arrow(draw, (1245, 750), (1245, 390), TEAL, "dual human commit")
+    arrow(draw, (1465, 860), (1570, 860), LIME, "committed access")
+    arrow(draw, (555, 850), (430, 850), "#ffffff", "observe")
 
-    draw.text((65, 1060), "PRODUCT FLOW", font=font(13), fill=MUTED)
+    draw.text((555, 1050), "REAL USER FLOW", font=font(13), fill=MUTED)
     steps = (
-        "1  EXPRESS INTENT   →   2  DRAFT + PUBLISH   →   3  DISCOVER + A2A   "
-        "→   4  HOLD + APPROVE   →   5  COMMIT + CLOSE   →   6  LEARN"
+        "1  AUTHENTICATE   →   2  TELL MY AGENT   →   3  REVIEW + PUBLISH   "
+        "→   4  AGENT ↔ AGENT   →   5  TWO HUMANS APPROVE   →   6  SHARED ROOM"
     )
-    draw.text((65, 1095), steps, font=font(15), fill=INK)
+    draw.text((555, 1090), steps, font=font(15), fill=INK)
 
     image.save(OUT, optimize=True)
     print(OUT)

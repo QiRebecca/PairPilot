@@ -1,100 +1,60 @@
-# Four-minute demo script
+# Four-minute real multi-user demo script
 
-Target length: **4:00**. Record one uninterrupted live run. If accelerated,
-label the speed and preserve the continuous execution and one human approval.
+Use two already verified controlled test accounts in separate browser contexts.
+Never show or paste passwords, ID tokens, private email addresses or Secret
+Manager values. Keep the old named-person flow only as an optional synthetic
+walkthrough.
 
-## 0:00–0:25 — Problem
+## 0:00–0:25 — Product and trust boundary
 
-“Finding a conference roommate is not just search. It means writing posts,
-checking who is still looking, repeating private compatibility questions,
-negotiating dates, and discovering that another person is already matched.”
+Open the public landing page. Show **Create your Personal Agent**, **Sign in**,
+and **See the synthetic demo**. State that the production app has real isolated
+users, while the demo route contains synthetic people.
 
-Click **Reset Demo** and show Qi's empty intent composer.
+## 0:25–0:55 — User A tells their Agent
 
-## 0:25–0:55 — Tell the agent once
+Sign in as Test User A. In `/app/agent`, describe an ICML roommate need. Show
+that the Agent creates a private request first, with event, city-level location,
+dates and safe-to-publish requirements separated from the raw goal.
 
-Enter the ICML need, including quiet overnight fit, partial overlap, and the
-`$70` additional-cost maximum. Select **Let Qi Agent draft the post**.
+Review the public title and summary, then click **Approve post & publish**.
+Point out that the browser sends a fresh Firebase ID token and cannot supply an
+authoritative owner UID.
 
-“This is a live structured `gemini-3.7-flash` turn through Google ADK, not a
-hardcoded form fill.”
+## 0:55–1:25 — A real second user
 
-Show the review's three sections:
+Switch to Test User B's browser context. Show a different display name,
+different Personal Agent ID and no User A private task. Publish a compatible
+request. In Explore, show only public, human-approved projection fields—never
+emails, private goals or Agent-only boundaries.
 
-- public marketplace post;
-- agent-only negotiation boundaries;
-- protected information that is never sent.
+## 1:25–2:10 — Asynchronous user-owned Agents
 
-Edit one field if useful, then click **Publish request**.
+Briefly show Cloud Logging: `intent.published.v2` reaches the OIDC-authenticated
+Pub/Sub worker. The generic runtime loads A and B's separate Agent policies and
+runs two bounded Google ADK / `gemini-3.7-flash` turns. Show the Agents-only
+room messages with explicit Agent authorship and task/intent scope.
 
-## 0:55–1:20 — Post enters the agent network
+## 2:10–3:00 — Two humans, one current version
 
-Show Qi's real `OPEN` request and Maya/Lena's current posts.
+In User A's decision, show candidate, shared dates, disclosure, uncertainty,
+hold expiry and proposal version. Approve. Show
+**Waiting for the other person** and confirm there is still no match.
 
-“PairPilot searches active needs, not a static people directory. Each post has
-an owner, capacity, expiry, and lifecycle.”
+Switch to User B. Show B's separate owner-perspective effect contract and
+approve the same version. The match now commits exactly once; both posts become
+`MATCHED`.
 
-Click **Start agent work**.
+## 3:00–3:35 — Shared result, private graphs
 
-## 1:20–2:05 — Personal agents communicate
+Open the shared room in both contexts. Send one clearly human-authored message.
+Show that each user has an independent relationship entry and private memory
+surface. Mention participant membership, block/report, leave-room, export and
+account-deletion controls.
 
-Use Overview first, then briefly open Network or Audit.
+## 3:35–4:00 — Proof and limits
 
-“Qi Agent chooses its tools and path live. It can search open posts and use its
-trusted Alice relationship for an introduction. Alice, Maya, and Lena are
-isolated personal agents behind A2A endpoints on private Cloud Run.”
-
-Point to source intent, target intent, and pair-session IDs. Explain that peer
-claims are reports and the protected raw fact never leaves Qi Agent.
-
-## 2:05–2:35 — Agents create a plan
-
-Show the live proposal trajectory and deterministic cost result:
-
-```text
-4 total nights · 3 shared nights · $62 extra < $70
-```
-
-“Gemini chose when and for whom to calculate. Infrastructure owns the math,
-proposal version, current availability, and post capacity.”
-
-Show both agent acceptances and the 15-minute intent-pair hold.
-
-## 2:35–3:05 — Human approval
-
-Read the candidate, source/target posts, shared and solo dates, cost and
-maximum, terms, uncertainty, disclosure scope, proposal version, and countdown.
-
-“The agents can publish, discover, contact, negotiate, and hold. They cannot
-commit.”
-
-The real operator clicks **Approve exact effect**. If the hold expired but the
-proposal is current, first click **Revalidate offer**. Never splice approval
-from another run and never automate this product-evidence action.
-
-## 3:05–3:30 — Product result and network growth
-
-Show the matched state:
-
-- Qi and Maya posts are `MATCHED` and closed to new contacts;
-- other negotiations are released;
-- the safe introduction is available.
-
-Open Memory/Network and show the provenance-backed Qi–Maya relationship,
-conditional Alice introduction credit, and scoped editable inference.
-
-“The network grows only from the committed event.”
-
-Refresh to prove Firestore persistence.
-
-## 3:30–4:00 — Google proof
-
-Show the `.run.app` URL, tagged/current Cloud Run revision, exact run ID in
-Cloud Logging, Firestore match and both posts, Pub/Sub event evidence, and the
-architecture diagram.
-
-Close:
-
-“PairPilot is an intent marketplace operated by personal agents. Humans express
-the need and retain final authority; agents do the coordination; Google Cloud
-enforces truth, privacy, and commitment.”
+Show the zero-traffic candidate revision, Firestore production namespace,
+Pub/Sub subscription, Firebase Email/Password method and test report. State the
+limits plainly: email verification is not identity verification; PairPilot
+does not book, process payments, or guarantee compatibility or safety.

@@ -2,6 +2,16 @@
 
 ## Required product evidence
 
+- [x] Two distinct Firebase UIDs and persistent Personal Agents
+- [x] Cross-user private task IDOR returns 403
+- [x] Two public posts, two Agent acceptances and two effect contracts
+- [x] First human approval waits; second commits exactly once
+- [x] Shared-room membership and independent relationship projections
+- [x] Zero-traffic `multi-user-beta` candidate
+- [ ] Provider-delivered verification and reset links tested while signed out
+- [ ] Same-browser A→sign-out→B cache-isolation evidence
+- [ ] Two visible browser-context screenshots
+
 - [x] New repository and prior-work disclosure
 - [x] Taskmaster scope
 - [x] Live eligible `gemini-3.7-flash`

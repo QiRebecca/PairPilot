@@ -29,6 +29,15 @@ publishes and monitors active needs, discovers compatible intent posts,
 communicates with other personal agents, negotiates changing constraints, and
 closes the request only after human-approved commitment.
 
+In the multi-user candidate, a registered Firebase user receives one isolated
+persistent Personal Agent. Two real test UIDs published separate posts; their
+generic ADK/Gemini Agents negotiated through Pub/Sub, each human received a
+separate effect contract, the first approval waited, and the second committed
+one match and shared room. The named Qi/Maya/Lena experience is retained only
+as a clearly labeled synthetic walkthrough. We will not describe the candidate
+as publicly launched until real verification/reset email links and two visible
+browser contexts pass.
+
 Qi describes an ICML room-share need in natural language. A live Qi Agent drafts
 a structured post and separates public, agent-only, and protected information.
 Qi reviews and publishes it. The post enters the registry as `OPEN`; then Qi
@@ -38,7 +47,8 @@ not just the people.
 
 Gemini chooses whom to contact and how to negotiate. Infrastructure calculates
 the cost, versions the proposal, reserves post capacity for 15 minutes, and
-shows the exact effect. Only Qi can approve it. The atomic commit then creates
+shows the exact effect. Both participating humans must independently approve
+the same version. The atomic commit then creates
 one match, closes both posts, releases other negotiations, and emits the events
 that grow relationship memory.
 

@@ -19,11 +19,11 @@ Status: **candidate implementation; launch gate not passed**
 
 ## Blocking public launch
 
-- deploy and verify the `multi-user-beta` no-traffic revision;
-- exercise two controlled, email-verified Firebase accounts;
+- [done] deploy and verify the `multi-user-beta` no-traffic revision;
+- [done] exercise two controlled, email-verified Firebase UIDs through the authenticated API path;
 - verify real email verification/password-reset delivery and clean return links;
 - capture two-browser isolation and two-human match evidence;
-- confirm Pub/Sub OIDC push and real ADK/Gemini logs on the candidate;
+- [done] confirm Pub/Sub OIDC push and real ADK/Gemini execution on the candidate;
 - enable required Google-account MFA for continued Firebase Console access;
 - complete final secret scan and documentation/submission updates.
 

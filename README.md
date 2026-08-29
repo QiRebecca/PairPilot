@@ -2,6 +2,23 @@
 
 **An intent marketplace operated by personal agents.**
 
+## Real multi-user public-beta candidate
+
+The primary candidate is now an email-authenticated multi-user product, not the
+shared Qi/Maya/Lena walkthrough. Every Firebase UID receives a distinct
+persistent Personal Agent, private task/conversation/memory namespaces, public
+post projection, decision inbox, rooms, and relationship records. Arbitrary
+user-owned Agents communicate asynchronously through an OIDC-authenticated
+Pub/Sub worker, and a match requires both Agents plus both humans to accept the
+same current proposal version.
+
+The `multi-user-beta` Cloud Run revision remains at zero production traffic
+until provider-delivered verification/reset links and two visible browser
+contexts pass. The legacy named-person flow remains only at `/demo` with a
+persistent **synthetic demo** label. See
+[public-beta readiness](docs/PUBLIC_BETA_READINESS.md) and the
+[real two-user evidence](docs/REAL_MULTI_USER_E2E_REPORT.md).
+
 The user works with one persistent Personal Agent. Every need becomes an
 isolated request workspace with its own conversation, privacy-aware intent
 post, candidate assessments, Coordination Rooms, and human decision boundary.
