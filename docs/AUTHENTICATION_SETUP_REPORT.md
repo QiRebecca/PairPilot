@@ -58,6 +58,8 @@ Non-secret runtime variables:
 
 Two controlled Firebase test accounts were created with different UIDs and `emailVerified=true`. Their random passwords exist only as Secret Manager versions and were never printed or committed. They passed the authenticated API E2E. Provider-delivered verification links must still be tested through secure human inbox interaction before launch.
 
+The final zero-traffic candidate is revision `pairpilot-orchestrator-00020-vig`. Its unauthenticated protected bootstrap returns HTTP `401`; direct unauthenticated Firestore access returns HTTP `403` under ruleset `768731ac-ee2e-4acc-adf0-3265c316aedf`.
+
 ## Operational notice
 
 The Firebase Console displayed a requirement for the signed-in project account to enable Google-account MFA by 2026-08-29. This is an account-access requirement, not an application tenant-mode setting.

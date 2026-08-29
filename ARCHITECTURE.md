@@ -32,55 +32,60 @@ current and authorized.
 
 ## Product-to-runtime flow
 
-1. The user describes a need in the PairPilot User App.
-2. Qi Agent runs a live structured-output Google ADK turn with Vertex AI and
-   drafts public, agent-only, protected, and field-provenance sections.
-3. Nothing is discoverable until the user reviews, edits, and publishes. The
-   published document becomes an `OPEN` post in the Intent Registry; its raw
-   request and protected references remain in owner-scoped `intent_private`.
-4. Qi Agent searches current `OPEN` posts and may also inspect relationship
-   memory to request a warm introduction. It never searches private profiles.
-5. Qi, Alice, Maya, and Lena communicate through authenticated A2A envelopes
-   bound to source intent, target intent, and a canonical intent-pair session.
-6. Gemini chooses the strategy and tool sequence. Deterministic services own
-   availability, cost math, proposal versions, privacy checks, capacity, and
-   authority.
-7. After both agents accept one current version, infrastructure reserves one
-   unit of intent capacity for 15 minutes and shows the human the exact effect.
-8. Human approval triggers update-time revalidation and one Firestore atomic
-   commit: create the match, consume and close both posts, release conflicting
-   sessions/holds, update provenance, and persist durable outbox events.
-9. Only `match.committed` / `intent.matched` events can produce relationship
-   growth and scoped editable memory. No peer agent can write success memory.
+1. Firebase authenticates the user; provisioning deterministically creates one
+   persistent Personal Agent and private namespace for the verified UID.
+2. The user tells that Agent a need. PairPilot creates an owner-scoped task,
+   conversation, private intent and review decision.
+3. Nothing is discoverable until the owner explicitly approves the public
+   title, summary, constraints and requirements. The result becomes an `OPEN`
+   document in `intent_posts`; raw input remains in `intent_private_data`.
+4. The durable publish event reaches the Cloud Run worker through Pub/Sub with
+   an audience-bound Google OIDC token.
+5. The worker checks post compatibility, blocks, task contact limits and daily
+   per-owner turn limits before loading both arbitrary user-owned Agents.
+6. Two separate bounded ADK / `gemini-3.7-flash` turns receive only reviewed
+   public projections and the acting owner's allowlisted policies.
+7. When both Agents accept a reversible introduction, PairPilot creates a
+   versioned proposal, capacity hold, two Agent acceptances, two participant
+   memberships and two owner-perspective effect contracts.
+8. Human A's approval records consent but cannot create a match. Human B must
+   independently approve the same current version and hashes.
+9. One update-time-preconditioned Firestore commit creates the match, consumes
+   both posts, completes both tasks, opens the shared room and updates two
+   independent relationship/memory projections.
 
 ## First-class stores
 
-- `intents`: public marketplace documents with lifecycle, owner, capacity,
-  expiry, public constraints, negotiation boundaries, and provenance.
-- `intent_private`: owner-only raw input, agent-only constraints, protected
-  references, and explicit read scope. It is never part of public API state.
-- `intent_pair_sessions`: one canonical negotiation session per post pair.
-- `agent_messages`: intent-scoped A2A requests and responses; claims remain
-  `REPORTED_CLAIM` rather than authoritative facts.
-- `proposals`, `proposal_acceptances`, `holds`, `approval_requests`,
-  `approvals`, and `matches`: the authority pipeline.
-- `relationships`, `relationship_events`, and `memories`: downstream learning
-  with match/event provenance.
-- `events`: durable Firestore outbox delivered through Pub/Sub.
+- `users`, `personal_agents`, `user_privacy_configs`,
+  `user_autonomy_configs`, `usage_quotas`: identity-bound Agent configuration.
+- `task_workspaces`, `conversations`, `conversation_messages`,
+  `intent_private_data`: owner-private work state.
+- `intent_posts`: explicitly approved public marketplace projections.
+- `execution_leases`, `intent_pair_sessions`, `room_messages`: bounded and
+  provenance-carrying Agent execution.
+- `proposals`, `proposal_acceptances`, `human_approvals`, `holds`, `decisions`
+  and `matches`: the dual-consent authority pipeline.
+- `coordination_rooms`, `room_participants`, `relationships`, `memories`,
+  `blocks` and `reports`: participant/owner-scoped social state.
+- `events`: durable outbox delivered through Pub/Sub.
 
 ## Trust boundaries
 
-- **PairPilot User App:** public and untrusted; receives whitelisted public
-  posts plus only the signed-in demo owner's review data.
-- **Public Cloud Run orchestrator:** rate-limited, one run at a time, validates
-  user/model actions, and streams observable state—not hidden chain-of-thought.
-- **Private Cloud Run peers:** callable only by the runtime service identity;
-  each peer has isolated owner context and its own A2A Agent Card.
+- **Browser:** public and untrusted; receives public projections plus only
+  resources authorized for the verified Firebase UID. Direct Firestore rules
+  deny all access.
+- **Cloud Run API:** verifies token revocation and derives every owner/member
+  decision from the token UID and authoritative records.
+- **Pub/Sub worker:** callable only with the runtime service account's
+  audience-bound OIDC token; retries are idempotent and bounded.
+- **Personal Agent runtime:** loads one owner's policies and sends the model
+  only reviewed public post fields; model output cannot commit.
 - **Vertex AI:** live `gemini-3.7-flash` calls through service identity; there is
   no API key, replay path, or silent model fallback.
 - **Firestore:** source of current truth, idempotency, capacity, and commit
   preconditions.
-- **Pub/Sub:** at-least-once event delivery backed by the durable outbox.
+- **Synthetic demo:** public but visibly labeled; production namespace records
+  are excluded from its bootstrap and rejected by its legacy mutation routes.
 
 The diagram source is [docs/architecture.mmd](docs/architecture.mmd), rendered
 by `python3 infra/render_architecture.py`.

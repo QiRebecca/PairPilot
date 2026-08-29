@@ -38,19 +38,17 @@ as a clearly labeled synthetic walkthrough. We will not describe the candidate
 as publicly launched until real verification/reset email links and two visible
 browser contexts pass.
 
-Qi describes an ICML room-share need in natural language. A live Qi Agent drafts
-a structured post and separates public, agent-only, and protected information.
-Qi reviews and publishes it. The post enters the registry as `OPEN`; then Qi
-Agent searches Maya and Lena's current posts and may use Alice Agent for a
-trusted introduction. Authenticated A2A messages are bound to the two posts,
-not just the people.
+A user describes an ICML room-share need to their own Agent. PairPilot creates a
+private task and a reviewable public projection; nothing enters Explore until
+the owner approves it. Pub/Sub then wakes the generic runtime, which loads two
+different user-owned Agents and runs a separate bounded ADK/Gemini turn for
+each. Their task/intent-scoped messages contain only reviewed public fields.
 
-Gemini chooses whom to contact and how to negotiate. Infrastructure calculates
-the cost, versions the proposal, reserves post capacity for 15 minutes, and
-shows the exact effect. Both participating humans must independently approve
-the same version. The atomic commit then creates
-one match, closes both posts, releases other negotiations, and emits the events
-that grow relationship memory.
+Infrastructure versions the proposal, reserves capacity and shows a separate
+effect contract to each owner. The first human approval waits; only the second
+approval of the same version and hashes triggers one atomic match, both post
+closures, a participant-authorized shared room and independent relationship
+updates.
 
 ## How we built it
 
@@ -58,11 +56,12 @@ The product UI is React/TypeScript with composer, review, active-request,
 approval, matched, network, audit, and memory states. FastAPI on public Cloud
 Run streams Firestore-backed state through SSE.
 
-Qi, Alice, Maya, and Lena are independent Google ADK agents running live
-`gemini-3.7-flash` on Vertex AI. The orchestrator resolves official A2A Agent
-Cards and invokes private Cloud Run endpoints with a short-lived Google-signed
-identity token. Every envelope carries source intent, target intent, canonical
-pair session, speech act, expiry, and reported claims.
+Each Firebase UID owns a deterministic persistent Personal Agent. The generic
+Google ADK runtime runs live `gemini-3.7-flash` on Vertex AI and carries acting
+Agent, source/target intent and task provenance in every exchange. Pub/Sub
+invokes the worker with a short-lived Google-signed identity token. The named
+Qi/Alice/Maya/Lena agents remain in the isolated synthetic demo and earlier A2A
+evidence only.
 
 Firestore Native stores the public Intent Registry, owner-private intent
 context, current authority, provenance, relationships, and durable outbox.
@@ -106,15 +105,19 @@ expiry. An agent cannot press it or call the commit endpoint as the user.
 
 - A real composer → live structured agent draft → review → publish lifecycle.
 - Public post discovery plus relationship-based warm introductions.
-- Four isolated live personal-agent contexts and authenticated intent-scoped
-  A2A.
+- Arbitrary user-owned Personal Agents with authenticated intent-scoped
+  communication and per-user quotas.
 - Proposal and 15-minute hold authority scoped to post capacity.
 - Safe explicit revalidation of an expired hold without reviving an expired
   proposal.
 - One atomic design for match, both post closures, negotiation release,
   provenance, durable events, relationship, and scoped memory.
-- 48 Python unit tests plus strict type, lint, React, and production-build
-  checks for the corrected local product layer.
+- 74 Python tests plus strict mypy, Ruff, React type/lint tests, and a verified
+  production Vite build.
+- A repeatable real two-Firebase-user candidate E2E with dual Agent turns, dual
+  human approval, atomic replay safety, IDOR 403 and shared-room access.
+- Deny-all direct Firestore rules and a synthetic demo boundary that excludes
+  every production-namespace record.
 
 Historical evaluation evidence for the original coordination engine remains
 separate. The corrected product has three fresh approval-boundary runs and one

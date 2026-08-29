@@ -19,6 +19,10 @@ persistent **synthetic demo** label. See
 [public-beta readiness](docs/PUBLIC_BETA_READINESS.md) and the
 [real two-user evidence](docs/REAL_MULTI_USER_E2E_REPORT.md).
 
+[Open the zero-traffic real multi-user candidate](https://multi-user-beta---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app)
+(`pairpilot-orchestrator-00020-vig`). Production traffic remains on the previous
+revision until the human email-link and two-browser launch gates pass.
+
 The user works with one persistent Personal Agent. Every need becomes an
 isolated request workspace with its own conversation, privacy-aware intent
 post, candidate assessments, Coordination Rooms, and human decision boundary.
@@ -26,7 +30,13 @@ Qi discovers other current posts, communicates with their owners' agents,
 negotiates a real plan, and closes both requests only after exact human-
 approved commitment.
 
-[Open the public live demo](https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app)
+## Legacy synthetic evaluation evidence
+
+The sections below describe the named-person synthetic scenario retained at
+`/demo` and its earlier hackathon evaluation. They are not claims about real
+users or the authenticated production namespace.
+
+[Open the public synthetic demo](https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/demo)
 
 Track: **Taskmaster** · Exact live model: **`gemini-3.7-flash`** · Built from
 scratch for the Google All Things Agentic Hackathon.

@@ -8,6 +8,9 @@
 - [x] First human approval waits; second commits exactly once
 - [x] Shared-room membership and independent relationship projections
 - [x] Zero-traffic `multi-user-beta` candidate
+- [x] Final candidate `00020-vig` passes the repeatable authenticated E2E
+- [x] Synthetic demo excludes production tasks and rejects production resource IDs
+- [x] Direct unauthenticated Firestore access returns 403
 - [ ] Provider-delivered verification and reset links tested while signed out
 - [ ] Same-browser A→sign-out→B cache-isolation evidence
 - [ ] Two visible browser-context screenshots
@@ -47,7 +50,7 @@
 - [x] dependency vulnerability audit
 - [x] Python production-image dependency audit
 - [x] source and Git-history secret scan
-- [x] repository working tree clean
+- [x] repository working tree clean after the final evidence commit
 - [x] public URL verified after scale-to-zero cold start
 
 ## Devpost and media

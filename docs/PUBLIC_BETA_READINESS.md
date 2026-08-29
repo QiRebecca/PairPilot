@@ -16,6 +16,8 @@ Status: **candidate implementation; launch gate not passed**
 - participant-authorized rooms, authored messages, leave, block and report
 - account export and deletion social-shutdown model
 - direct Firestore browser access denied by default
+- atomic per-user daily Agent-turn charging and per-task contact quotas
+- synthetic `/demo` reads and writes isolated from `namespace=production`
 
 ## Blocking public launch
 
@@ -25,6 +27,8 @@ Status: **candidate implementation; launch gate not passed**
 - capture two-browser isolation and two-human match evidence;
 - [done] confirm Pub/Sub OIDC push and real ADK/Gemini execution on the candidate;
 - enable required Google-account MFA for continued Firebase Console access;
-- complete final secret scan and documentation/submission updates.
+- [done] complete final source and Git-history secret scans plus candidate documentation updates.
+
+Current candidate: `pairpilot-orchestrator-00020-vig`, tagged `multi-user-beta`, zero traffic. Production remains `pairpilot-orchestrator-00011-xeg` at 100%.
 
 Production traffic must remain on the previous revision until every item above passes.
