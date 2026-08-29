@@ -11,7 +11,7 @@ from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -23,11 +23,20 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
+    AutonomyMode,
+    ConversationRole,
     FieldSource,
     IntentPost,
     IntentPublicConstraints,
     IntentStatus,
+    MessageAuthorship,
+    MessageVisibility,
     NegotiationBoundaries,
+    PersonalAgentIntent,
+    PresentationAction,
+    PresentationMode,
+    RoomMessage,
+    SpeakerType,
 )
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,6 +48,18 @@ from pairpilot_orchestrator.domain import (
 )
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
+from pairpilot_orchestrator.personal_agent_os import (
+    GLOBAL_CONVERSATION_ID,
+    build_os_bootstrap,
+    create_presentation_directive,
+    create_task_workspace,
+    find_task_by_intent,
+    materialize_task_run,
+    public_task_summary,
+    update_task_after_publish,
+    write_conversation_message,
+)
+from pairpilot_orchestrator.personal_agent_routing import route_personal_agent_message
 from pairpilot_orchestrator.policies.privacy import OutboundPrivacyGuard
 from pairpilot_orchestrator.run_golden_path import run
 
@@ -130,6 +151,39 @@ class RevalidateBody(BaseModel):
     proposal_version: int
 
 
+class PersonalAgentMessageBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=2, max_length=4_000)
+    task_id: str | None = None
+
+
+class RoomModeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: AutonomyMode
+
+
+class RoomActionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal[
+        "TELL_QI_PRIVATELY",
+        "ASK_QI_TO_DRAFT",
+        "ASK_QI_TO_SEND",
+        "SEND_AS_MYSELF",
+    ]
+    content: str = Field(min_length=1, max_length=4_000)
+
+
+class MemoryActionBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["CONFIRM", "CORRECT", "ARCHIVE", "DELETE", "RESTRICT_SCOPE"]
+    content: str | None = Field(default=None, max_length=1_000)
+    scope: str | None = Field(default=None, max_length=120)
+
+
 def _store() -> GoogleCloudStore:
     settings = Settings.from_environment()
     return GoogleCloudStore(project_id=settings.project_id)
@@ -154,6 +208,10 @@ def _public_intent(item: dict[str, Any]) -> dict[str, Any]:
         "capacity_remaining": item.get("capacity_remaining"),
         "status": item.get("status"),
         "version": item.get("version"),
+        "task_id": item.get("task_id"),
+        "authorship": item.get("authorship"),
+        "demo_data": item.get("demo_data", item.get("owner_agent_id") != "qi-agent"),
+        "created_at": item.get("created_at"),
         "published_at": item.get("published_at"),
         "expires_at": item.get("expires_at"),
     }
@@ -184,11 +242,35 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
         *(store.list_documents(collection) for collection in PUBLIC_COLLECTIONS)
     )
     data = dict(zip(PUBLIC_COLLECTIONS, loaded, strict=True))
+    raw_qi_intents = [
+        item
+        for item in data["intents"]
+        if item.get("owner_agent_id") == "qi-agent"
+    ]
+    active_intent_raw = (
+        max(
+            raw_qi_intents,
+            key=lambda item: str(
+                item.get("created_at") or item.get("_updateTime") or ""
+            ),
+        )
+        if raw_qi_intents
+        else None
+    )
+    active_intent = _public_intent(active_intent_raw) if active_intent_raw else None
+    active_intent_id = str(active_intent.get("intent_id")) if active_intent else ""
     runs = sorted(data["runs"], key=lambda item: str(item.get("startedAt", "")))
     selected = (
         next((item for item in runs if item.get("runId") == run_id), None)
         if run_id
-        else (runs[-1] if runs else None)
+        else next(
+            (
+                item
+                for item in reversed(runs)
+                if item.get("sourceIntentId") == active_intent_id
+            ),
+            None,
+        )
     )
     selected_id = str(selected.get("runId")) if selected else ""
     turns = _sort_time(_for_run(data["agent_turns"], selected_id))
@@ -230,12 +312,6 @@ async def public_state(run_id: str | None = None) -> dict[str, Any]:
     approvals = _for_run(data["approvals"], selected_id)
     matches = _for_run(data["matches"], selected_id)
     intents = [_public_intent(item) for item in data["intents"]]
-    qi_intents = [item for item in intents if item.get("owner_agent_id") == "qi-agent"]
-    active_intent = (
-        max(qi_intents, key=lambda item: str(item.get("created_at", "")))
-        if qi_intents
-        else None
-    )
     now = datetime.now(UTC)
     for hold in holds:
         expires = datetime.fromisoformat(str(hold["expires_at"]).replace("Z", "+00:00"))
@@ -314,7 +390,13 @@ async def _run_stream(run_id: UUID, source_intent_id: str) -> AsyncIterator[str]
                 yield _sse("snapshot", snapshot)
             await asyncio.sleep(POLL_SECONDS)
         result = await task
-        yield _sse("snapshot", await public_state(str(run_id)))
+        final_state = await public_state(str(run_id))
+        task_workspace = await find_task_by_intent(_store(), source_intent_id)
+        if task_workspace is not None:
+            await materialize_task_run(
+                _store(), task=task_workspace, state=final_state
+            )
+        yield _sse("snapshot", final_state)
         yield _sse("complete", result)
     except asyncio.CancelledError:
         await asyncio.shield(task)
@@ -377,9 +459,9 @@ async def draft_intent(body: DraftIntentBody) -> dict[str, Any]:
             IntentStatus.CANCELLED.value,
         }
     ]
-    if existing_qi_intents:
+    if len(existing_qi_intents) >= 5:
         raise HTTPException(
-            409, "Qi already has an active request. Reset or finish it first."
+            409, "The public demo supports at most five simultaneous active requests."
         )
     try:
         async with asyncio.timeout(60):
@@ -485,6 +567,348 @@ async def _intent_review(store: GoogleCloudStore, intent_id: str) -> dict[str, A
 @app.get("/api/intents/{intent_id}/review")
 async def intent_review(intent_id: str) -> dict[str, Any]:
     return await _intent_review(_store(), intent_id)
+
+
+@app.get("/api/os/bootstrap")
+async def os_bootstrap() -> dict[str, Any]:
+    """Return the routed product shell from authoritative, redacted records."""
+
+    store = _store()
+    return await build_os_bootstrap(store, demo_state=await public_state())
+
+
+async def _directive_entities(
+    store: GoogleCloudStore,
+    *,
+    task: dict[str, Any],
+    action: PresentationAction,
+) -> list[str]:
+    task_id = str(task["task_id"])
+    intent_id = str(task["intent_id"])
+    if action in {PresentationAction.OPEN_TASK, PresentationAction.SHOW_TASK_STATUS}:
+        return [task_id]
+    if action == PresentationAction.SHOW_POST:
+        return [intent_id]
+    if action in {
+        PresentationAction.SHOW_RELATED_POSTS,
+        PresentationAction.SHOW_CANDIDATE_COMPARISON,
+    }:
+        assessments = [
+            item
+            for item in await store.list_documents("candidate_assessments")
+            if item.get("task_id") == task_id
+        ]
+        return [
+            str(item.get("assessment_id") or item.get("_id"))
+            for item in assessments
+        ]
+    if action == PresentationAction.OPEN_COORDINATION_ROOM:
+        rooms = [
+            item
+            for item in await store.list_documents("coordination_rooms")
+            if item.get("task_id") == task_id
+        ]
+        return [str(item.get("room_id") or item.get("_id")) for item in rooms[:1]]
+    if action in {PresentationAction.SHOW_PROPOSAL, PresentationAction.SHOW_APPROVAL}:
+        return [
+            value
+            for value in [
+                str(task.get("active_proposal_id") or ""),
+                *[str(item) for item in task.get("decision_ids", [])],
+            ]
+            if value
+        ]
+    if action in {
+        PresentationAction.SHOW_NETWORK_PATH,
+        PresentationAction.SHOW_RELATIONSHIP,
+        PresentationAction.SHOW_MEMORY,
+        PresentationAction.FILTER_EXPLORE,
+    }:
+        return [task_id]
+    return [task_id, intent_id]
+
+
+@app.post("/api/os/messages")
+async def personal_agent_message(body: PersonalAgentMessageBody) -> dict[str, Any]:
+    """Route one global or task message through the typed persistent Qi Agent."""
+
+    store = _store()
+    tasks = [
+        _clean(item) for item in await store.list_documents("task_workspaces")
+    ]
+    selected_task = next(
+        (item for item in tasks if item.get("task_id") == body.task_id), None
+    )
+    if body.task_id and selected_task is None:
+        raise HTTPException(404, "Task workspace was not found.")
+    conversation_id = (
+        str(selected_task["conversation_id"])
+        if selected_task
+        else GLOBAL_CONVERSATION_ID
+    )
+    await write_conversation_message(
+        store,
+        conversation_id=conversation_id,
+        task_id=body.task_id,
+        role=ConversationRole.USER,
+        author_id="qi-owner",
+        content=body.content,
+    )
+    try:
+        async with asyncio.timeout(60):
+            routing = await route_personal_agent_message(
+                message=body.content,
+                task_summaries=[public_task_summary(task) for task in tasks],
+                current_task_id=body.task_id,
+            )
+    except TimeoutError as exc:
+        raise HTTPException(
+            504, "Qi Agent routing exceeded the safe time bound."
+        ) from exc
+    if routing.target_task_id and routing.target_task_id not in {
+        str(item.get("task_id")) for item in tasks
+    }:
+        raise HTTPException(400, "Qi Agent referenced an unauthorized task.")
+    if routing.intent == PersonalAgentIntent.NEW_TASK:
+        if body.task_id:
+            raise HTTPException(
+                409, "A new request must begin with the global Qi Agent."
+            )
+        review = await draft_intent(DraftIntentBody(raw_goal=body.content))
+        intent_id = str(review["publicPost"]["intent_id"])
+        title = routing.suggested_title or str(review["publicPost"]["public_title"])
+        task, decision = await create_task_workspace(
+            store,
+            intent_id=intent_id,
+            raw_goal=body.content,
+            title=title,
+        )
+        directive = await create_presentation_directive(
+            store,
+            action=PresentationAction.OPEN_TASK,
+            explanation=(
+                "Qi created an isolated request workspace and a reviewable post draft."
+            ),
+            task_id=str(task["task_id"]),
+            entity_ids=[str(task["task_id"]), intent_id],
+        )
+        task_message = await write_conversation_message(
+            store,
+            conversation_id=str(task["conversation_id"]),
+            task_id=str(task["task_id"]),
+            role=ConversationRole.PERSONAL_AGENT,
+            author_id="qi-agent",
+            content=routing.response_text,
+            directive_ids=[str(directive["directive_id"])],
+        )
+        global_message = await write_conversation_message(
+            store,
+            conversation_id=GLOBAL_CONVERSATION_ID,
+            task_id=None,
+            role=ConversationRole.PERSONAL_AGENT,
+            author_id="qi-agent",
+            content=routing.response_text,
+            directive_ids=[str(directive["directive_id"])],
+        )
+        return {
+            "routing": routing.model_dump(mode="json"),
+            "task": task,
+            "decision": decision,
+            "review": review,
+            "directive": directive,
+            "message": global_message,
+            "taskMessage": task_message,
+        }
+    target_task = selected_task or next(
+        (
+            item
+            for item in tasks
+            if item.get("task_id") == routing.target_task_id
+        ),
+        None,
+    )
+    directive_payload: dict[str, Any] | None = None
+    if target_task and routing.presentation_actions:
+        action = routing.presentation_actions[0]
+        entities = await _directive_entities(store, task=target_task, action=action)
+        directive_payload = await create_presentation_directive(
+            store,
+            action=action,
+            explanation=routing.response_text,
+            task_id=str(target_task["task_id"]),
+            entity_ids=entities,
+            presentation=PresentationMode.INLINE_CARD,
+        )
+    response_message = await write_conversation_message(
+        store,
+        conversation_id=conversation_id,
+        task_id=body.task_id,
+        role=ConversationRole.PERSONAL_AGENT,
+        author_id="qi-agent",
+        content=routing.response_text,
+        directive_ids=(
+            [str(directive_payload["directive_id"])]
+            if directive_payload is not None
+            else []
+        ),
+    )
+    return {
+        "routing": routing.model_dump(mode="json"),
+        "directive": directive_payload,
+        "message": response_message,
+    }
+
+
+@app.get("/api/os/tasks/{task_id}")
+async def task_workspace(task_id: str) -> dict[str, Any]:
+    store = _store()
+    task = await store.get("task_workspaces", task_id)
+    if task is None:
+        raise HTTPException(404, "Task workspace was not found.")
+    collections = await build_os_bootstrap(store, demo_state=await public_state())
+    return {
+        "task": _clean(task),
+        "messages": [
+            item
+            for item in collections["conversationMessages"]
+            if item.get("task_id") == task_id
+        ],
+        "decisions": [
+            item for item in collections["decisions"] if item.get("task_id") == task_id
+        ],
+        "assessments": [
+            item
+            for item in collections["candidateAssessments"]
+            if item.get("task_id") == task_id
+        ],
+        "rooms": [
+            item for item in collections["rooms"] if item.get("task_id") == task_id
+        ],
+        "demoState": collections["demoState"],
+    }
+
+
+@app.post("/api/os/rooms/{room_id}/mode")
+async def change_room_mode(room_id: str, body: RoomModeBody) -> dict[str, Any]:
+    store = _store()
+    room = await store.get("coordination_rooms", room_id)
+    if room is None:
+        raise HTTPException(404, "Coordination Room was not found.")
+    room.pop("_updateTime", None)
+    room.update(autonomy_mode=body.mode.value, updated_at=datetime.now(UTC))
+    await store.upsert("coordination_rooms", room_id, room)
+    await store.write_event(
+        event_type="room.mode.changed",
+        run_id=str(room["task_id"]),
+        producer="qi-owner",
+        payload={"roomId": room_id, "mode": body.mode.value},
+        idempotency_key=f"room.mode.changed:{room_id}:{body.mode.value}",
+    )
+    return _clean(room)
+
+
+@app.post("/api/os/rooms/{room_id}/messages")
+async def room_message(room_id: str, body: RoomActionBody) -> dict[str, Any]:
+    """Keep private, agents-only and shared-room channels structurally separate."""
+
+    store = _store()
+    room = await store.get("coordination_rooms", room_id)
+    if room is None:
+        raise HTTPException(404, "Coordination Room was not found.")
+    if body.action != "SEND_AS_MYSELF":
+        task = await store.get("task_workspaces", str(room["task_id"]))
+        if task is None:
+            raise HTTPException(404, "Task workspace was not found.")
+        private_message = await write_conversation_message(
+            store,
+            conversation_id=str(task["conversation_id"]),
+            task_id=str(room["task_id"]),
+            role=ConversationRole.USER,
+            author_id="qi-owner",
+            content=body.content,
+        )
+        room_entry = RoomMessage(
+            message_id=f"room_message_{uuid4().hex}",
+            room_id=room_id,
+            task_id=str(room["task_id"]),
+            source_intent_id=str(room["source_intent_id"]),
+            target_intent_id=str(room["target_intent_id"]),
+            speaker_id="qi-owner",
+            speaker_type=SpeakerType.HUMAN,
+            authorship=MessageAuthorship.HUMAN_WRITTEN,
+            visibility=MessageVisibility.PRIVATE_USER_AGENT,
+            content=body.content,
+            provenance={"source": "explicit_room_action", "action": body.action},
+        )
+        await store.create(
+            "room_messages",
+            room_entry.message_id,
+            room_entry.model_dump(mode="json"),
+        )
+        return {
+            "channel": MessageVisibility.PRIVATE_USER_AGENT.value,
+            "message": room_entry.model_dump(mode="json"),
+            "conversationMessage": private_message,
+        }
+    if (
+        room.get("room_type") != "SHARED_COORDINATION_ROOM"
+        or room.get("human_participation_available") is not True
+    ):
+        raise HTTPException(409, "Human messages require an unlocked shared room.")
+    visibility = MessageVisibility.SHARED_ROOM
+    authorship = MessageAuthorship.HUMAN_WRITTEN
+    speaker_id = "qi-owner"
+    speaker_type = SpeakerType.HUMAN
+    room_entry = RoomMessage(
+        message_id=f"room_message_{uuid4().hex}",
+        room_id=room_id,
+        task_id=str(room["task_id"]),
+        source_intent_id=str(room["source_intent_id"]),
+        target_intent_id=str(room["target_intent_id"]),
+        speaker_id=speaker_id,
+        speaker_type=speaker_type,
+        authorship=authorship,
+        visibility=visibility,
+        content=body.content,
+        provenance={"source": "explicit_room_action", "action": body.action},
+    )
+    await store.create(
+        "room_messages", room_entry.message_id, room_entry.model_dump(mode="json")
+    )
+    return {
+        "channel": visibility.value,
+        "message": room_entry.model_dump(mode="json"),
+    }
+
+
+@app.post("/api/os/memories/{memory_id}")
+async def update_memory(memory_id: str, body: MemoryActionBody) -> dict[str, Any]:
+    store = _store()
+    memory = await store.get("memories", memory_id)
+    if memory is None:
+        raise HTTPException(404, "Memory was not found.")
+    memory.pop("_updateTime", None)
+    now = datetime.now(UTC)
+    if body.action == "DELETE":
+        memory.update(confirmation_status="deleted", archived=True, updated_at=now)
+    elif body.action == "ARCHIVE":
+        memory.update(confirmation_status="archived", archived=True, updated_at=now)
+    elif body.action == "CONFIRM":
+        memory.update(confirmation_status="confirmed", last_confirmed_at=now)
+    elif body.action == "CORRECT":
+        if not body.content:
+            raise HTTPException(400, "Corrected memory content is required.")
+        memory.update(
+            content=body.content,
+            confirmation_status="confirmed_user_corrected",
+            last_confirmed_at=now,
+        )
+    elif body.action == "RESTRICT_SCOPE":
+        if not body.scope:
+            raise HTTPException(400, "A restricted scope is required.")
+        memory.update(scope=body.scope, use_for_matching=False, updated_at=now)
+    await store.upsert("memories", memory_id, memory)
+    return _clean(memory)
 
 
 @app.post("/api/intents/publish")
@@ -621,6 +1045,7 @@ async def publish_intent(body: PublishIntentBody) -> dict[str, Any]:
         payload={"intentId": body.intent_id, "version": post.version},
         idempotency_key=f"intent.published:{body.intent_id}",
     )
+    await update_task_after_publish(store, intent_id=body.intent_id)
     return {
         "status": "OPEN",
         "intent": _public_intent(post.model_dump(mode="json")),
@@ -849,6 +1274,14 @@ async def approve(body: ApprovalBody) -> dict[str, Any]:
             != approval_request.get("disclosureHash")
         ):
             raise HTTPException(409, "Committed approval evidence is inconsistent.")
+        source_intent_id = str(approval_request.get("sourceIntentId", ""))
+        task_workspace = await find_task_by_intent(store, source_intent_id)
+        if task_workspace is not None:
+            await materialize_task_run(
+                store,
+                task=task_workspace,
+                state=await public_state(body.run_id),
+            )
         return {
             "status": "COMMITTED",
             "approval": _clean(existing_approval),
@@ -870,6 +1303,14 @@ async def approve(body: ApprovalBody) -> dict[str, Any]:
         )
     except AuthorityError as exc:
         raise HTTPException(409, f"Commit blocked safely: {exc}") from exc
+    source_intent_id = str(approval_request.get("sourceIntentId", ""))
+    task_workspace = await find_task_by_intent(store, source_intent_id)
+    if task_workspace is not None:
+        await materialize_task_run(
+            store,
+            task=task_workspace,
+            state=await public_state(body.run_id),
+        )
     return {
         "status": "COMMITTED",
         "approval": approval,

@@ -33,6 +33,16 @@ WORKFLOW_COLLECTIONS = (
     "memories",
     "relationships",
     "relationship_events",
+    "task_workspaces",
+    "conversations",
+    "conversation_messages",
+    "candidate_assessments",
+    "coordination_rooms",
+    "room_participants",
+    "room_messages",
+    "presentation_directives",
+    "decision_inbox",
+    "internal_worker_runs",
 )
 
 
@@ -104,6 +114,30 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "active": True,
                 "memoryNamespace": "agent/lena-agent",
             },
+            "nora-demo-agent": {
+                "ownerId": "nora-demo-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "demoBrowseOnly": True,
+            },
+            "min-demo-agent": {
+                "ownerId": "min-demo-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "demoBrowseOnly": True,
+            },
+            "sam-demo-agent": {
+                "ownerId": "sam-demo-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "demoBrowseOnly": True,
+            },
+            "zoe-demo-agent": {
+                "ownerId": "zoe-demo-owner",
+                "agentType": "personal_agent",
+                "active": True,
+                "demoBrowseOnly": True,
+            },
         },
         "agent_public_cards": {
             "alice-agent": {
@@ -125,6 +159,10 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "gender": "female",
                 "openToColdContact": True,
             },
+            "nora-demo-agent": {"agentId": "nora-demo-agent", "demoBrowseOnly": True},
+            "min-demo-agent": {"agentId": "min-demo-agent", "demoBrowseOnly": True},
+            "sam-demo-agent": {"agentId": "sam-demo-agent", "demoBrowseOnly": True},
+            "zoe-demo-agent": {"agentId": "zoe-demo-agent", "demoBrowseOnly": True},
         },
         "agent_private_profiles": {
             "qi-agent": {
@@ -227,6 +265,138 @@ def documents() -> dict[str, dict[str, dict[str, Any]]]:
                 "published_at": seeded_at,
                 "expires_at": seeded_at + timedelta(days=7),
                 "provenance": {"source": "synthetic_peer_owner_seed"},
+            },
+            "intent_nora_icml_dinner": {
+                "intent_id": "intent_nora_icml_dinner",
+                "owner_agent_id": "nora-demo-agent",
+                "intent_type": "conference_dinner",
+                "raw_user_goal_ref": "demo-browse-only",
+                "public_title": "Looking for a small ICML dinner group",
+                "public_summary": (
+                    "Synthetic demo post for an informal dinner near COEX "
+                    "after sessions."
+                ),
+                "public_constraints": {
+                    "event": "ICML",
+                    "location": "Seoul",
+                    "date_start": "2026-07-07",
+                    "date_end": "2026-07-08",
+                    "roommate_gender_preference": "not applicable",
+                },
+                "public_requirements": ["small group", "after sessions"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": False,
+                    "maximum_additional_cost_usd": 0,
+                },
+                "capacity": 4,
+                "capacity_remaining": 3,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {"public_constraints": "explicit_user_input"},
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_browse_only_seed"},
+                "demo_data": True,
+            },
+            "intent_min_icml_workshop": {
+                "intent_id": "intent_min_icml_workshop",
+                "owner_agent_id": "min-demo-agent",
+                "intent_type": "conference_workshop_companion",
+                "raw_user_goal_ref": "demo-browse-only",
+                "public_title": "Seeking an ICML workshop companion",
+                "public_summary": (
+                    "Synthetic demo post for attending the trustworthy ML "
+                    "workshop together."
+                ),
+                "public_constraints": {
+                    "event": "ICML",
+                    "location": "Seoul",
+                    "date_start": "2026-07-06",
+                    "date_end": "2026-07-07",
+                    "roommate_gender_preference": "not applicable",
+                },
+                "public_requirements": ["trustworthy ML interest"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": False,
+                    "maximum_additional_cost_usd": 0,
+                },
+                "capacity": 2,
+                "capacity_remaining": 1,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {"public_constraints": "explicit_user_input"},
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_browse_only_seed"},
+                "demo_data": True,
+            },
+            "intent_sam_seoul_explore": {
+                "intent_id": "intent_sam_seoul_explore",
+                "owner_agent_id": "sam-demo-agent",
+                "intent_type": "city_exploration",
+                "raw_user_goal_ref": "demo-browse-only",
+                "public_title": "Explore Seoul after ICML",
+                "public_summary": (
+                    "Synthetic demo post for a relaxed evening walk and "
+                    "street-food visit."
+                ),
+                "public_constraints": {
+                    "event": "ICML",
+                    "location": "Seoul",
+                    "date_start": "2026-07-09",
+                    "date_end": "2026-07-10",
+                    "roommate_gender_preference": "not applicable",
+                },
+                "public_requirements": ["relaxed pace", "public transit"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": True,
+                    "maximum_additional_cost_usd": 0,
+                },
+                "capacity": 3,
+                "capacity_remaining": 2,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {"public_constraints": "explicit_user_input"},
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_browse_only_seed"},
+                "demo_data": True,
+            },
+            "intent_zoe_hackathon_teammate": {
+                "intent_id": "intent_zoe_hackathon_teammate",
+                "owner_agent_id": "zoe-demo-agent",
+                "intent_type": "hackathon_teammate",
+                "raw_user_goal_ref": "demo-browse-only",
+                "public_title": "Looking for an agentic hackathon teammate",
+                "public_summary": (
+                    "Synthetic demo post seeking a frontend-focused teammate "
+                    "for a weekend build."
+                ),
+                "public_constraints": {
+                    "event": "Build Weekend",
+                    "location": "Remote",
+                    "date_start": "2026-09-05",
+                    "date_end": "2026-09-07",
+                    "roommate_gender_preference": "not applicable",
+                },
+                "public_requirements": ["frontend", "agent products"],
+                "negotiation_boundaries": {
+                    "partial_date_overlap_allowed": True,
+                    "maximum_additional_cost_usd": 0,
+                },
+                "capacity": 2,
+                "capacity_remaining": 1,
+                "status": "OPEN",
+                "version": 1,
+                "field_provenance": {"public_constraints": "explicit_user_input"},
+                "created_at": seeded_at,
+                "published_at": seeded_at,
+                "expires_at": seeded_at + timedelta(days=7),
+                "provenance": {"source": "synthetic_browse_only_seed"},
+                "demo_data": True,
             },
         },
         "intent_private": {

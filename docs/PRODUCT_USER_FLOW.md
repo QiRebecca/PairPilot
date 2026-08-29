@@ -1,12 +1,18 @@
 # Product user flow
 
-## 1. Empty state
+## 1. Persistent Personal Agent home
 
-`Reset Demo` removes mutable Qi/workflow state and returns to the composer. Qi
-has no goal and no post. Maya and Lena each own one synthetic `OPEN` ICML
-roommate post; Alice remains a trusted introducer and owns no candidate post.
+`/agent` is the default product page. The center is the persistent user ↔ Qi
+conversation; a contextual rail contains authoritative decisions, active work,
+recent outcomes, and reviewable memory. The sidebar orders separate requests by
+human decision, active negotiation, search, draft, completed, and cancelled.
 
-## 2. Describe once
+Reset removes mutable Qi/workflow and Personal Agent OS state. Qi has no goal
+and no post. Maya and Lena own live-workflow `OPEN` ICML roommate posts; four
+additional synthetic `OPEN` posts make Explore legible without participating in
+the golden-path workflow.
+
+## 2. Describe once in the global conversation
 
 The user enters a natural-language need. In the demo:
 
@@ -14,7 +20,9 @@ The user enters a natural-language need. In the demo:
 > overnight compatibility matters, partial overlap is okay, and do not exceed
 > $70 additional cost.
 
-This text is owner-private input, not a public post.
+This text is owner-private input, not a public post. The live typed router
+classifies it, then creates a `TaskWorkspace`, an isolated task conversation,
+a draft-review decision, and an inline presentation directive.
 
 ## 3. Live agent draft
 
@@ -57,6 +65,11 @@ Gemini chooses whom to contact, what to ask, how to evaluate the reports, and
 when to propose. Infrastructure calculates costs and enforces the user's
 published maximum. A `$62` compromise is allowed under `$70` but not `$50`.
 
+Actual A2A evidence is projected into one Coordination Room and current
+candidate assessment per contacted post. Private user instructions, the
+agents-only transcript, and an eventual shared room are separate visibility
+channels with explicit authorship.
+
 ## 7. Hold and exact approval
 
 After both agents accept a versioned proposal, infrastructure reserves one unit
@@ -83,3 +96,7 @@ Exact human approval causes one preconditioned Firestore commit to:
 
 Refresh reads the committed state from Firestore. Duplicate approval returns
 the existing match rather than duplicating any effect.
+
+The committed result appears under Matches, the shared Coordination Room
+becomes available, Network shows relationship provenance, and Memory offers
+confirm/restrict/delete controls for the scoped inference.

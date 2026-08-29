@@ -1,0 +1,16 @@
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...init?.headers },
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(body.detail || `Request failed (${response.status})`);
+  }
+  return (await response.json()) as T;
+}
+
+export function post<T>(path: string, body: unknown): Promise<T> {
+  return api<T>(path, { method: "POST", body: JSON.stringify(body) });
+}
+

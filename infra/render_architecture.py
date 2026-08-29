@@ -88,7 +88,7 @@ def arrow(
 def main() -> None:
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
-    draw.text((65, 45), "PairPilot intent marketplace", font=font(42), fill=INK)
+    draw.text((65, 45), "PairPilot Personal Agent OS", font=font(42), fill=INK)
     draw.text(
         (65, 96),
         "Personal agents operate active posts; infrastructure governs commitment.",
@@ -101,31 +101,32 @@ def main() -> None:
     box(
         draw,
         (65, 180, 430, 455),
-        "PairPilot User App",
-        "Intent Composer\nMy Active Requests\nApproval\n"
-        "Live Agent Work\nRelationship Network",
+        "Routed Product Shell",
+        "Global Qi conversation\nTask conversations\nExplore + Rooms\n"
+        "Decision Inbox + Matches\nNetwork + Memory + Audit",
         LIME,
     )
     box(
         draw,
         (555, 180, 900, 350),
         "Public Cloud Run",
-        "React + FastAPI orchestrator\nHTTPS · SSE · safe demo quota",
+        "React + FastAPI orchestrator\nTyped router + UI directives\n"
+        "HTTPS · SSE · safe demo quota",
         TEAL,
     )
     box(
         draw,
         (555, 435, 900, 625),
-        "Qi Personal Agent",
-        "Google ADK 2.8.0\ngemini-3.7-flash\nmodel-selected typed tools",
+        "Persistent Qi Personal Agent",
+        "bounded cross-task summaries\nGoogle ADK 2.8.0\ngemini-3.7-flash",
         LIME,
     )
     box(
         draw,
         (1025, 165, 1465, 390),
-        "Intent Registry / Post Network",
-        "public intent posts\nstatus · capacity · expiry · owner\n"
-        "post-scoped negotiation state\nowner-private context stored separately",
+        "Firestore Product + Intent Registry",
+        "tasks · conversations · decisions · rooms\npublic intent posts\n"
+        "status · capacity · expiry · owner\nprivate context stored separately",
         TEAL,
     )
     box(
@@ -181,8 +182,8 @@ def main() -> None:
         "#ffffff",
     )
 
-    arrow(draw, (430, 265), (555, 265), LIME, "describe + review")
-    arrow(draw, (900, 260), (1025, 260), TEAL, "publish / read OPEN")
+    arrow(draw, (430, 265), (555, 265), LIME, "global + task messages")
+    arrow(draw, (900, 260), (1025, 260), TEAL, "project + publish")
     arrow(draw, (725, 350), (725, 435), LIME, "live ADK")
     arrow(draw, (900, 525), (1025, 555), VIOLET, "intent-scoped A2A")
     arrow(draw, (1465, 555), (1570, 555), LIME, "live turns")

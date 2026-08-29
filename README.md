@@ -2,11 +2,12 @@
 
 **An intent marketplace operated by personal agents.**
 
-The user tells their personal agent what they need. The agent drafts and
-publishes a privacy-aware intent post, discovers other current posts,
-communicates with their owners' agents, negotiates a real plan, and closes both
-requests only after exact human-approved commitment. Relationships provide
-durable social context; active intent posts describe what people need now.
+The user works with one persistent Personal Agent. Every need becomes an
+isolated request workspace with its own conversation, privacy-aware intent
+post, candidate assessments, Coordination Rooms, and human decision boundary.
+Qi discovers other current posts, communicates with their owners' agents,
+negotiates a real plan, and closes both requests only after exact human-
+approved commitment.
 
 [Open the public live demo](https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app)
 
@@ -22,6 +23,10 @@ Today's assistants leave the user doing that coordination across messages.
 
 ## Five product layers
 
+- **Personal Agent OS:** one persistent Qi identity, a global conversation,
+  isolated task workspaces, a priority-ordered decision inbox, typed UI
+  directives, and direct routes for requests, rooms, matches, network, memory,
+  and developer proof.
 - **Intent Marketplace:** public `OPEN` posts with owner, lifecycle, capacity,
   expiry, and public constraints—not candidate profiles.
 - **Personal Agents:** Google ADK agents draft, monitor, search, communicate,
@@ -45,18 +50,20 @@ See [the corrected evaluation](docs/INTENT_LAYER_EVAL_REPORT.md) and
 
 ## Product workflow
 
-1. The user tells Qi Agent what they need in natural language.
-2. A live Qi Agent drafts public, agent-only, protected, and provenance fields.
+1. The user tells the persistent Qi Agent what they need in natural language.
+2. Qi creates an isolated task workspace, task conversation, decision item,
+   and a live-model draft with public, agent-only, protected, and provenance fields.
 3. The user reviews/edits the draft and publishes a real `OPEN` intent post.
-4. Qi Agent searches other current `OPEN` posts and inspects Alice relationship
+4. Qi searches other current `OPEN` posts and inspects Alice relationship
    memory for a possible warm introduction.
 5. It contacts model-selected post owners over intent-scoped A2A.
 6. It treats peer claims as reports, not truth, and records dispositions.
 7. A deterministic tool computes that three shared nights add `$62`, below the
    delegated `$70` ceiling.
-8. Qi and Maya agents accept the exact proposal version.
-9. Infrastructure places a 15-minute post-capacity hold and displays the full effect
-   contract.
+8. Each contacted peer is projected into a task-scoped Coordination Room and a
+   current evidence assessment; Qi and Maya agents accept the exact proposal version.
+9. Infrastructure places a 15-minute post-capacity hold, raises a Decision Inbox
+   item, and displays the full effect contract.
 10. Only the human can approve. An expired hold requires explicit revalidation;
     an expired proposal is never revived.
 11. After approval, one atomic Firestore commit creates the match, closes both
@@ -65,7 +72,12 @@ See [the corrected evaluation](docs/INTENT_LAYER_EVAL_REPORT.md) and
 
 ## Agent architecture
 
-- **Qi Agent:** a live Google ADK coordinator with typed, authorized tools.
+- **Qi Personal Agent:** a persistent live Google ADK identity with a typed
+  model router, bounded cross-task summaries, and task-specific conversations.
+- **Product projection:** Firestore-backed task workspaces, conversations,
+  decision items, evidence assessments, Coordination Rooms, room messages, and
+  allowlisted presentation directives.
+- **Qi coordinator:** the existing live model-selected workflow and authorized tools.
 - **Alice Agent:** an independent ADK personal agent with introduction
   authority and its own scoped context.
 - **Maya and Lena Agents:** independent ADK peers that answer minimum-necessary
@@ -89,10 +101,12 @@ speech act, claims, proposal version, and expiry. See
 ## Intent Registry and relational memory
 
 Firestore stores public intent posts separately from owner-only intent context,
-relationships, messages, beliefs, proposals, holds, approvals, matches, and
-memories. Every relationship update includes match/event provenance. Reset
-leaves Qi with no goal/post and reseeds only Maya/Lena `OPEN` posts plus base
-identities, availability, and Alice relationships; it never seeds success.
+relationships, messages, beliefs, proposals, holds, approvals, matches,
+memories, task workspaces, conversations, decision items, assessments, and
+Coordination Rooms. Every relationship update includes match/event provenance.
+Reset leaves Qi with no goal/post and reseeds Maya/Lena live-workflow posts plus
+four clearly synthetic browse-only `OPEN` posts, base identities, availability,
+and Alice relationships; it never seeds success.
 Current post state, capacity, availability, and commitment always come from
 authoritative documents, never semantic memory.
 
@@ -216,7 +230,10 @@ make test-live PROJECT_ID="$GOOGLE_CLOUD_PROJECT"
 make submission-check
 ```
 
-The suite covers structured draft provenance, privacy isolation, dynamic cost
+The suite covers persistent-agent routing contracts, isolated task
+conversations, presentation-directive allowlists, room-channel authorship,
+decision priority, Explore lifecycle filtering, structured draft provenance,
+privacy isolation, dynamic cost
 boundaries, intent-only public search, canonical pair sessions, prompt
 injection, peer claim provenance, hold/revalidation rules, safe release,
 atomic commit, A2A routes, public API redaction, reset protection, and the live
@@ -240,6 +257,9 @@ is in [the intent-layer report](docs/INTENT_LAYER_EVAL_REPORT.md).
   day. Cloud Run is capped at one instance.
 - Synthetic demo identities and availability are not real bookings or identity
   verification.
+- Dynamic temporary workers were not added: the current implementation keeps
+  one persistent Qi principal plus genuine task-scoped peer sessions. It does
+  not fake worker delegation or expose workers as social identities.
 - Cloud Trace and optional managed Memory Bank were not added; they are not
   claimed.
 
@@ -254,7 +274,7 @@ code was reused. The complete disclosure is in [PRIOR_WORK.md](PRIOR_WORK.md).
 packages/schemas/       typed domain and A2A contracts
 services/orchestrator/  Qi ADK agent, workflow, authority, public API
 services/peer_agents/   independent Alice, Maya, Lena ADK/A2A service
-web/                    React/TypeScript intent marketplace UI
+web/                    Routed React/TypeScript Personal Agent OS
 infra/                  bootstrap, seed/reset, build, deploy, verify
 tests/                  unit and live integration evidence
 docs/                   model, cloud, A2A, evaluation, compliance reports

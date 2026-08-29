@@ -1,7 +1,8 @@
 flowchart LR
-    U["PairPilot User App<br/>Intent Composer<br/>My Active Requests<br/>Approval<br/>Live Agent Work<br/>Relationship Network"]
-    O["Public Cloud Run<br/>FastAPI orchestrator + React UI"]
-    Q["Qi Personal Agent<br/>Google ADK 2.8.0<br/>gemini-3.7-flash"]
+    U["PairPilot Personal Agent OS<br/>Global Qi conversation<br/>Task workspaces<br/>Explore · Rooms · Decisions<br/>Matches · Network · Memory"]
+    O["Public Cloud Run<br/>Routed React UI + FastAPI<br/>typed PresentationDirective allowlist"]
+    W[("Product projections<br/>TaskWorkspace<br/>Conversation + messages<br/>Decision Inbox<br/>Assessment + Coordination Room")]
+    Q["Persistent Qi Personal Agent<br/>typed model router<br/>Google ADK 2.8.0<br/>gemini-3.7-flash"]
     I[("Intent Registry / Post Network<br/>public intent posts<br/>status · capacity · expiry · owner<br/>post-scoped negotiation state")]
     P["Private Cloud Run<br/>Alice · Maya · Lena ADK agents<br/>A2A JSON-RPC 1.0"]
     V["Vertex AI global<br/>live model turns<br/>no silent fallback"]
@@ -11,14 +12,17 @@ flowchart LR
     R["Relationship Memory<br/>Qi ↔ Maya relationship<br/>conditional Alice credit<br/>scoped editable inference"]
     G["Cloud Logging<br/>revision · requests · run IDs"]
 
-    U -->|"describe need"| O
-    O -->|"agent drafts + user publishes"| I
-    O --> Q
+    U -->|"global or task conversation"| O
+    O -->|"authoritative views"| W
+    O -->|"typed route + task summaries"| Q
+    Q -->|"create isolated task + draft"| W
+    W -->|"approved publication"| I
     Q -->|"search OPEN posts"| I
     Q <-->|"Google-signed ID token<br/>intent-scoped A2A"| P
     Q <-->|"live turns"| V
     P <-->|"isolated live turns"| V
     Q -->|"versioned proposal"| H
+    Q -->|"room + assessment projections"| W
     U -->|"approve exact effect"| H
     H -->|"revalidate + atomic commit"| F
     F -->|"both posts MATCHED"| I

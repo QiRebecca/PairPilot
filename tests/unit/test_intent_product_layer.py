@@ -76,6 +76,10 @@ def test_reset_seed_has_peer_posts_but_no_qi_request() -> None:
     assert set(intents) == {
         "intent_maya_icml_roommate",
         "intent_lena_icml_roommate",
+        "intent_nora_icml_dinner",
+        "intent_min_icml_workshop",
+        "intent_sam_seoul_explore",
+        "intent_zoe_hackathon_teammate",
     }
     assert all(item["status"] == "OPEN" for item in intents.values())
     assert all(item["owner_agent_id"] != "qi-agent" for item in intents.values())
@@ -324,7 +328,7 @@ def test_draft_publish_and_public_projection(monkeypatch) -> None:
     assert len(published_events) == 1
 
 
-def test_second_active_qi_draft_is_rejected_before_model_call(monkeypatch) -> None:
+def test_multiple_active_qi_drafts_are_allowed_for_isolated_tasks(monkeypatch) -> None:
     store = MemoryStore(
         {
             "intents": {
@@ -353,8 +357,8 @@ def test_second_active_qi_draft_is_rejected_before_model_call(monkeypatch) -> No
             )
         },
     )
-    assert response.status_code == 409
-    assert model_called is False
+    assert response.status_code == 200
+    assert model_called is True
 
 
 def test_run_rejects_missing_published_qi_intent(monkeypatch) -> None:
