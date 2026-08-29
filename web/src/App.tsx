@@ -20,8 +20,10 @@ import {
   Fingerprint,
   GitBranch,
   LockKeyhole,
+  MessageCircle,
   Network,
   Play,
+  Plus,
   RefreshCw,
   RotateCcw,
   Send,
@@ -154,6 +156,12 @@ interface ReviewForm {
   partialOverlap: boolean;
 }
 
+interface PublishResponse {
+  status: string;
+  intent: IntentPost;
+  created: boolean;
+}
+
 const sampleGoal = `Find me a female roommate for ICML in Seoul from July 6 to July 10.
 A quiet overnight environment matters more than getting the lowest price.
 I can accept partial date overlap if the additional cost stays below $70.`;
@@ -267,15 +275,39 @@ function Metric({ value, label }: { value: number | string; label: string }) {
   );
 }
 
+function JourneyStrip() {
+  const steps = [
+    { icon: MessageCircle, label: "Tell Qi", detail: "Describe what you need" },
+    { icon: Send, label: "Publish", detail: "Review what agents can see" },
+    { icon: Users, label: "Agents coordinate", detail: "Compare multiple active posts" },
+    { icon: Fingerprint, label: "You decide", detail: "Approve the exact plan" },
+  ];
+  return (
+    <section className="journey-strip" aria-label="How PairPilot works">
+      {steps.map((step, index) => {
+        const Icon = step.icon;
+        return (
+          <div className="journey-step" key={step.label}>
+            <span className="journey-icon"><Icon size={16} /></span>
+            <div><strong>{step.label}</strong><small>{step.detail}</small></div>
+            {index < steps.length - 1 && <ArrowRight className="journey-arrow" size={14} />}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 function Composer({ busy, onDraft }: { busy: boolean; onDraft: (goal: string) => void }) {
   const [goal, setGoal] = useState("");
   return (
     <section className="composer-stage">
       <div className="eyebrow"><Sparkles size={14} /> Your personal agent is ready</div>
       <h1>What are you looking for?</h1>
-      <p className="hero-copy">Tell your personal agent once. It will publish the request, coordinate with other agents, and bring you back only when a real decision is ready.</p>
+      <p className="hero-copy">Message Qi once. Your agent will turn the request into a privacy-aware post, find other active posts, talk with their agents in parallel, and bring you back only when a real decision is ready.</p>
+      <JourneyStrip />
       <label className="composer-box">
-        <span>Describe the outcome and what matters most</span>
+        <span>Message Qi · describe the outcome and what matters most</span>
         <textarea value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="I’m looking for…" rows={7} />
       </label>
       <div className="composer-actions">
@@ -379,7 +411,7 @@ function ApprovalCard({ state, busy, onApprove, onReject, onRevalidate }: { stat
   );
 }
 
-function MatchedResult({ state }: { state: DemoState }) {
+function MatchedResult({ state, onStartNew }: { state: DemoState; onStartNew: () => void }) {
   const match = state.matches.at(-1);
   if (!match) return null;
   return (
@@ -387,11 +419,12 @@ function MatchedResult({ state }: { state: DemoState }) {
       <div className="match-mark"><CheckCircle2 size={30} /></div><div className="eyebrow">Match committed · refresh-safe</div><h1>You’re matched with Maya</h1><p>Both intent posts are closed to new contacts. The synthetic in-app introduction is now unlocked.</p>
       <div className="result-grid"><div><Check size={15} /><span>Your request</span><strong>MATCHED</strong></div><div><Check size={15} /><span>Maya’s request</span><strong>MATCHED</strong></div><div><Check size={15} /><span>Other negotiations</span><strong>RELEASED</strong></div><div><Check size={15} /><span>Introduction access</span><strong>UNLOCKED</strong></div></div>
       <div className="network-growth"><Network size={22} /><div><strong>Your agent’s network has grown.</strong><p>New Maya relationship · Alice introduction provenance · one editable hotel-sharing inference</p></div></div>
+      <div className="matched-next"><div><strong>Want to try your own request?</strong><span>Restart the guided demo to message Qi, publish a post, and watch multiple personal agents coordinate.</span></div><button className="primary-button" onClick={onStartNew}><Plus size={16} /> Start a new request</button></div>
     </section>
   );
 }
 
-function ActiveOverview({ state, busy, onStart, onApprove, onReject, onRevalidate }: { state: DemoState; busy: boolean; onStart: () => void; onApprove: () => void; onReject: () => void; onRevalidate: () => void }) {
+function ActiveOverview({ state, busy, onStart, onApprove, onReject, onRevalidate, onStartNew }: { state: DemoState; busy: boolean; onStart: () => void; onApprove: () => void; onReject: () => void; onRevalidate: () => void; onStartNew: () => void }) {
   const intent = state.activeIntent;
   if (!intent) return null;
   const contacted = new Set(state.messages.filter((message) => message.toAgentId && message.toAgentId !== "qi-agent").map((message) => message.toAgentId)).size;
@@ -400,10 +433,11 @@ function ActiveOverview({ state, busy, onStart, onApprove, onReject, onRevalidat
   const matched = state.matches.length > 0;
   return (
     <div className="overview-stack">
-      {matched && <MatchedResult state={state} />}
+      {matched && <MatchedResult state={state} onStartNew={onStartNew} />}
       {!matched && <>
         <section className="request-hero"><div><div className="eyebrow"><CircleDot size={14} /> My active request</div><h1>{intent.public_title}</h1><p>{intent.public_summary}</p><div className="request-meta"><StatusPill status={intent.status} /><span>{intent.public_constraints?.location}</span><span>{formatDate(intent.public_constraints?.date_start)}–{formatDate(intent.public_constraints?.date_end)}</span></div></div><div className="request-action">{intent.status === "OPEN" && !state.run ? <button className="primary-button" disabled={busy} onClick={onStart}><Play size={16} /> Start agent monitoring</button> : <div className="agent-working"><span className="pulse-dot" /><div><strong>{intent.status === "AWAITING_APPROVAL" ? "Your decision is ready" : "Qi Agent is handling it"}</strong><span>{state.run?.status || "Intent Registry monitoring"}</span></div></div>}</div></section>
         <section className="metrics-row"><Metric value={state.peerIntents.filter((item) => item.status === "OPEN").length} label="Relevant open posts" /><Metric value={contacted} label="Agents contacted" /><Metric value={warmIntroductions} label="Warm introductions" /><Metric value={activeSessions} label="Active negotiations" /><Metric value={state.proposals.length} label="Promising proposals" /></section>
+        <div className="coordination-note"><Users size={16} /><div><strong>Qi is coordinating across multiple personal agents</strong><span>Each conversation is tied to your request and the other person’s active post—not a static profile.</span></div></div>
         {state.approvalRequests.length > 0 && <ApprovalCard state={state} busy={busy} onApprove={onApprove} onReject={onReject} onRevalidate={onRevalidate} />}
         <section className="candidate-section"><div className="section-heading"><div><span>Live request landscape</span><h2>What your agent is working through</h2></div><small>Posts, not static profiles</small></div><div className="candidate-grid">{state.peerIntents.map((peer) => <CandidateCard key={peer.intent_id} intent={peer} state={state} />)}</div></section>
       </>}
@@ -457,17 +491,31 @@ export default function App() {
 
   const act = async (work: () => Promise<void>) => { setBusy(true); setError(""); try { await work(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Something went wrong"); } finally { setBusy(false); } };
   const draft = (goal: string) => void act(async () => { const result = await api<DraftReview>("/api/intents/draft", { method: "POST", body: JSON.stringify({ raw_goal: goal }) }); setReview(result); await refresh(); });
-  const publish = (form: ReviewForm) => void act(async () => { await api("/api/intents/publish", { method: "POST", body: JSON.stringify({ intent_id: form.intentId, public_title: form.title, public_summary: form.summary, event: form.event, location: form.location, date_start: form.dateStart, date_end: form.dateEnd, roommate_gender_preference: form.gender, public_requirements: form.publicRequirements.split(",").map((item) => item.trim()).filter(Boolean), quiet_overnight_compatibility_importance: form.quietImportance, maximum_additional_cost_usd: form.maximumCost, partial_date_overlap_allowed: form.partialOverlap }) }); setReview(null); await refresh(); });
-  const reset = () => void act(async () => { await api("/api/demo/reset", { method: "POST", body: "{}" }); setReview(null); setTab("overview"); await refresh(); });
-  const start = () => {
-    const intentId = state.activeIntent?.intent_id;
-    if (!intentId) return;
+  const startForIntent = useCallback((intentId: string) => {
     setBusy(true); setError("");
     const stream = new EventSource(`/api/demo/run/stream?intent_id=${encodeURIComponent(intentId)}`);
     stream.addEventListener("snapshot", (event) => setState({ ...emptyState, ...(JSON.parse((event as MessageEvent).data) as DemoState) }));
     stream.addEventListener("complete", () => { stream.close(); setBusy(false); void refresh(); });
     stream.onerror = () => { stream.close(); setBusy(false); setError("The live agent stream ended unexpectedly. Current state is preserved."); void refresh(); };
+  }, [refresh]);
+  const publish = (form: ReviewForm) => {
+    setBusy(true); setError("");
+    void (async () => {
+      try {
+        const result = await api<PublishResponse>("/api/intents/publish", { method: "POST", body: JSON.stringify({ intent_id: form.intentId, public_title: form.title, public_summary: form.summary, event: form.event, location: form.location, date_start: form.dateStart, date_end: form.dateEnd, roommate_gender_preference: form.gender, public_requirements: form.publicRequirements.split(",").map((item) => item.trim()).filter(Boolean), quiet_overnight_compatibility_importance: form.quietImportance, maximum_additional_cost_usd: form.maximumCost, partial_date_overlap_allowed: form.partialOverlap }) });
+        setReview(null); setTab("overview"); await refresh();
+        startForIntent(result.intent.intent_id || form.intentId);
+      } catch (reason) {
+        setBusy(false);
+        setError(reason instanceof Error ? reason.message : "Something went wrong");
+      }
+    })();
   };
+  const reset = () => {
+    if (state.activeIntent && !window.confirm("Start a new guided request? This clears the current shared demo workflow and reseeds the two peer posts.")) return;
+    void act(async () => { await api("/api/demo/reset", { method: "POST", body: "{}" }); setReview(null); setTab("overview"); await refresh(); });
+  };
+  const start = () => { const intentId = state.activeIntent?.intent_id; if (intentId) startForIntent(intentId); };
   const request = state.approvalRequests.at(-1);
   const approvalPayload = request && state.run ? { run_id: state.run.runId, proposal_id: request.proposalId, proposal_version: request.proposalVersion } : null;
   const approve = () => void act(async () => { if (!approvalPayload) return; await api("/api/demo/approve", { method: "POST", body: JSON.stringify({ ...approvalPayload, confirmation: `APPROVE VERSION ${approvalPayload.proposal_version}` }) }); await refresh(); });
@@ -481,11 +529,11 @@ export default function App() {
   else if (tab === "memory") view = <MemoryView state={state} />;
   else if (review) view = <DraftReviewView review={review} busy={busy} onPublish={publish} />;
   else if (!state.activeIntent) view = <Composer busy={busy} onDraft={draft} />;
-  else view = <ActiveOverview state={state} busy={busy} onStart={start} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
+  else view = <ActiveOverview state={state} busy={busy} onStart={start} onApprove={approve} onReject={reject} onRevalidate={revalidate} onStartNew={reset} />;
 
   return (
     <div className="app-shell">
-      <header className="topbar"><button className="brand" onClick={() => setTab("overview")}><span className="brand-mark"><GitBranch size={18} /></span><span><strong>PairPilot</strong><small>Intent marketplace</small></span></button><nav>{tabs.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav><div className="top-actions"><div className="live-badge"><span /><div><strong>LIVE GEMINI + ADK + A2A</strong><small>{state.exactModelId}</small></div></div><button className="icon-button" title="Reset Demo" onClick={reset} disabled={busy}><RotateCcw size={16} /></button></div></header>
+      <header className="topbar"><button className="brand" onClick={() => setTab("overview")}><span className="brand-mark"><GitBranch size={18} /></span><span><strong>PairPilot</strong><small>Intent marketplace</small></span></button><nav>{tabs.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>{item.label}</button>)}</nav><div className="top-actions"><div className="live-badge"><span /><div><strong>LIVE GEMINI + ADK + A2A</strong><small>{state.exactModelId}</small></div></div><button className="new-request-button" title="Start a new guided request" onClick={reset} disabled={busy}>{state.matches.length ? <Plus size={15} /> : <RotateCcw size={15} />}<span>{state.matches.length ? "New request" : "Start over"}</span></button></div></header>
       {error && <div className="error-banner"><X size={15} /> {error}<button onClick={() => setError("")}>Dismiss</button></div>}
       <main>{view}</main>
       <footer><span>Agents choose strategy.</span><span>Infrastructure enforces truth, privacy, and authority.</span></footer>

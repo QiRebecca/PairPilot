@@ -36,8 +36,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .live-badge > span { width: 7px; height: 7px; border-radius: 99px; background: var(--lime); box-shadow: 0 0 12px var(--lime); }
 .live-badge > div { display: grid; }
 .live-badge strong { color: var(--lime); font-size: 9px; letter-spacing: 0.08em; }
-.icon-button { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: #121613; cursor: pointer; }
-.icon-button:hover { border-color: #596359; }
+.new-request-button { min-height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: #121613; color: #d9ddd7; cursor: pointer; font-size: 10px; font-weight: 650; }
+.new-request-button:hover { border-color: #596359; background: #181d19; }
 
 main { width: min(1240px, calc(100% - 40px)); margin: 0 auto; padding: 44px 0 60px; }
 footer { height: 48px; padding: 0 32px; display: flex; justify-content: center; align-items: center; gap: 22px; border-top: 1px solid var(--line); color: #737b74; font-size: 11px; }
@@ -50,6 +50,14 @@ footer span + span::before { content: "•"; margin-right: 22px; color: #3f4840;
 h1, h2, p { margin-top: 0; }
 .composer-stage h1, .review-stage h1, .matched-stage h1 { margin: 20px 0 13px; font-size: clamp(38px, 5vw, 62px); line-height: 1; letter-spacing: -0.055em; font-weight: 560; }
 .hero-copy { max-width: 680px; margin: 0 auto 31px; color: #aeb5ae; font-size: 17px; line-height: 1.6; }
+.journey-strip { margin: 0 auto 18px; display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #2d352f; border-radius: 14px; background: rgba(14, 18, 15, 0.76); overflow: hidden; }
+.journey-step { position: relative; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 13px 14px; text-align: left; border-right: 1px solid #2d352f; }
+.journey-step:last-child { border-right: 0; }
+.journey-icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid #3b4939; border-radius: 9px; background: #162016; color: var(--lime); }
+.journey-step > div { min-width: 0; display: grid; gap: 3px; }
+.journey-step strong { font-size: 10px; }
+.journey-step small { color: #737c74; font-size: 8px; line-height: 1.35; }
+.journey-arrow { position: absolute; right: -8px; z-index: 1; padding: 2px; border-radius: 99px; background: #101411; color: #59635a; }
 .composer-box { display: block; padding: 16px 18px 18px; text-align: left; border: 1px solid #3a443a; border-radius: 18px; background: linear-gradient(160deg, rgba(24, 30, 25, 0.98), rgba(13, 16, 14, 0.98)); box-shadow: 0 28px 70px rgba(0, 0, 0, 0.36), inset 0 1px rgba(255, 255, 255, 0.025); }
 .composer-box > span { color: var(--muted); font-size: 11px; }
 .composer-box textarea { display: block; width: 100%; min-height: 180px; margin-top: 12px; padding: 0; resize: vertical; border: 0; background: transparent; color: #f3f5ee; font-size: 19px; line-height: 1.55; }
@@ -102,6 +110,10 @@ button:disabled { opacity: 0.48; cursor: not-allowed; }
 .metric { padding: 14px 15px; }
 .metric strong { display: block; font-size: 22px; font-weight: 550; }
 .metric span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
+.coordination-note { display: flex; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid #31403b; border-radius: 11px; background: #101817; color: var(--teal); }
+.coordination-note > div { display: grid; gap: 3px; }
+.coordination-note strong { font-size: 10px; }
+.coordination-note span { color: #7e918b; font-size: 9px; }
 .candidate-section { padding-top: 8px; }
 .section-heading { margin-bottom: 15px; }
 .section-heading > div > span { color: var(--lime); text-transform: uppercase; letter-spacing: 0.12em; font-size: 9px; }
@@ -153,6 +165,10 @@ button:disabled { opacity: 0.48; cursor: not-allowed; }
 .network-growth { max-width: 720px; margin: 18px auto 0; display: flex; align-items: center; gap: 14px; padding: 15px 18px; text-align: left; border: 1px solid #424151; border-radius: 11px; background: #17151e; color: var(--violet); }
 .network-growth div { display: grid; gap: 4px; }
 .network-growth p { margin: 0; color: #9994aa; font-size: 10px; }
+.matched-next { max-width: 850px; margin: 18px auto 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 18px; text-align: left; border: 1px solid #3d493a; border-radius: 11px; background: #121812; }
+.matched-next > div { display: grid; gap: 4px; }
+.matched-next strong { font-size: 11px; }
+.matched-next span { color: #858e86; font-size: 9px; line-height: 1.45; }
 
 .content-panel, .network-panel { min-height: 630px; padding: 25px; }
 .timeline { display: grid; gap: 8px; }
@@ -211,15 +227,19 @@ button:disabled { opacity: 0.48; cursor: not-allowed; }
   .contract-grid > div:nth-child(2n) { border-right: 0; }
   .result-grid { grid-template-columns: 1fr 1fr; }
   .result-grid > div:nth-child(2n) { border-right: 0; }
+  .journey-strip { grid-template-columns: 1fr 1fr; }
+  .journey-step:nth-child(2) { border-right: 0; }
+  .journey-step:nth-child(-n+2) { border-bottom: 1px solid #2d352f; }
+  .journey-step:nth-child(2) .journey-arrow { display: none; }
 }
 
 @media (max-width: 680px) {
   main { width: min(100% - 24px, 1240px); padding-top: 28px; }
   .topbar { height: 64px; }
-  .brand small, .live-badge small { display: none; }
+  .brand small, .live-badge small, .new-request-button span { display: none; }
   .composer-stage { margin-top: 2vh; }
   .composer-stage h1, .matched-stage h1 { font-size: 39px; }
-  .composer-actions, .publish-row, .promise-row { flex-direction: column; align-items: stretch; }
+  .composer-actions, .publish-row, .promise-row, .matched-next { flex-direction: column; align-items: stretch; }
   .promise-row { gap: 9px; text-align: left; }
   .field-row, .candidate-grid, .metrics-row, .memory-grid, .contract-grid { grid-template-columns: 1fr; }
   .contract-grid > div { border-right: 0 !important; }
@@ -227,6 +247,10 @@ button:disabled { opacity: 0.48; cursor: not-allowed; }
   .request-meta { flex-wrap: wrap; }
   .result-grid { grid-template-columns: 1fr; }
   .result-grid > div { border-right: 0; border-bottom: 1px solid #344134; }
+  .journey-strip { grid-template-columns: 1fr; }
+  .journey-step { border-right: 0; border-bottom: 1px solid #2d352f; }
+  .journey-step:last-child { border-bottom: 0; }
+  .journey-arrow { display: none; }
   footer { height: auto; padding: 16px; flex-direction: column; gap: 5px; }
   footer span + span::before { content: none; }
 }
