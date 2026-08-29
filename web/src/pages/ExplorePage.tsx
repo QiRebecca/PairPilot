@@ -28,7 +28,8 @@ export function ExplorePage({ data, onNavigate, onEvaluate }: { data: OSBootstra
   const myPosts = data.demoState.intentRegistry.filter((post) => post.owner_agent_id === "qi-agent");
   const networkPosts = data.explorePosts.filter((post) => ["maya-agent", "alice-agent"].includes(post.owner_agent_id || ""));
   const relevantTask = data.tasks.find((task) => !["COMPLETED", "CANCELLED"].includes(task.status));
-  const source = tab === "MINE" ? myPosts : tab === "NETWORK" ? networkPosts : data.explorePosts;
+  const peerPosts = data.explorePosts.filter((post) => post.owner_agent_id !== "qi-agent");
+  const source = tab === "MINE" ? myPosts : tab === "NETWORK" ? networkPosts : tab === "FOR_YOU" ? peerPosts : data.explorePosts;
   const posts = useMemo(() => source.filter((post) => post.status === "OPEN" && `${post.public_title} ${post.public_summary} ${post.public_constraints?.location}`.toLowerCase().includes(query.toLowerCase())), [source, query]);
   return <div className="standard-page"><PageHeading eyebrow="Intent post network" title="Explore active needs" copy="Discover current requests—not static profiles. Qi can evaluate or contact their Personal Agents for one of your open tasks." />
     <div className="explore-toolbar"><nav>{[["FOR_YOU", "For You"], ["NETWORK", "From My Network"], ["LATEST", "Latest"], ["MINE", "My Posts"]].map(([id, label]) => <button className={tab === id ? "active" : ""} key={id} onClick={() => setTab(id as FeedTab)}>{label}</button>)}</nav><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search open posts" /></label></div>

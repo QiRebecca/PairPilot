@@ -157,7 +157,8 @@ async def test_bootstrap_prioritizes_decisions_and_filters_explore_to_open() -> 
         "intentRegistry": [
             {"intent_id": "open", "status": "OPEN"},
             {"intent_id": "closed", "status": "MATCHED"},
-        ]
+        ],
+        "activeIntent": {"intent_id": "mine", "status": "OPEN"},
     }
     result = await build_os_bootstrap(
         store,  # type: ignore[arg-type]
@@ -167,7 +168,10 @@ async def test_bootstrap_prioritizes_decisions_and_filters_explore_to_open() -> 
         "task_decision",
         "task_search",
     ]
-    assert [post["intent_id"] for post in result["explorePosts"]] == ["open"]
+    assert [post["intent_id"] for post in result["explorePosts"]] == [
+        "open",
+        "mine",
+    ]
     assert result["personalAgent"]["agentId"] == "qi-agent"
 
 

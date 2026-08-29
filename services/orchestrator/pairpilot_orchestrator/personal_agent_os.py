@@ -259,7 +259,12 @@ async def update_task_after_publish(
     if intent is not None:
         intent.pop("_updateTime", None)
         authorship = dict(intent.get("authorship", {}))
-        authorship.update(approved_by_owner=True, approved_at=now.isoformat())
+        authorship.update(
+            drafted_by_agent_id="qi-agent",
+            approved_by_owner=True,
+            approved_at=now.isoformat(),
+        )
+        intent["task_id"] = str(task["task_id"])
         intent["authorship"] = authorship
         await store.upsert("intents", intent_id, intent)
 
@@ -551,9 +556,16 @@ async def build_os_bootstrap(
             str(task.get("updated_at", "")),
         ),
     )
+    post_candidates = list(demo_state.get("intentRegistry", []))
+    active_intent = demo_state.get("activeIntent")
+    if active_intent and not any(
+        item.get("intent_id") == active_intent.get("intent_id")
+        for item in post_candidates
+    ):
+        post_candidates.append(active_intent)
     latest_posts = [
         post
-        for post in demo_state.get("intentRegistry", [])
+        for post in post_candidates
         if post.get("status") == "OPEN"
     ]
     return {

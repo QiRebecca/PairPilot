@@ -937,7 +937,13 @@ async def publish_intent(body: PublishIntentBody) -> dict[str, Any]:
     ):
         raise HTTPException(404, "Qi intent draft was not found.")
     if current.get("status") == IntentStatus.OPEN.value:
-        return {"status": "OPEN", "intent": _public_intent(current), "created": False}
+        await update_task_after_publish(store, intent_id=body.intent_id)
+        refreshed = await store.get("intents", body.intent_id)
+        return {
+            "status": "OPEN",
+            "intent": _public_intent(refreshed or current),
+            "created": False,
+        }
     if current.get("status") not in {
         IntentStatus.DRAFT.value,
         IntentStatus.READY_FOR_REVIEW.value,
@@ -1046,9 +1052,10 @@ async def publish_intent(body: PublishIntentBody) -> dict[str, Any]:
         idempotency_key=f"intent.published:{body.intent_id}",
     )
     await update_task_after_publish(store, intent_id=body.intent_id)
+    published = await store.get("intents", body.intent_id)
     return {
         "status": "OPEN",
-        "intent": _public_intent(post.model_dump(mode="json")),
+        "intent": _public_intent(published or post.model_dump(mode="json")),
         "created": event["created"],
     }
 
