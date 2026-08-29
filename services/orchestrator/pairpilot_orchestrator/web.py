@@ -1247,6 +1247,13 @@ async def revalidate_offer(body: RevalidateBody) -> dict[str, Any]:
         },
         idempotency_key=hold_key,
     )
+    task_workspace = await find_task_by_intent(store, source_intent_id)
+    if task_workspace is not None:
+        await materialize_task_run(
+            store,
+            task=task_workspace,
+            state=await public_state(body.run_id),
+        )
     return {
         "status": "REVALIDATED",
         "holdId": hold_id,

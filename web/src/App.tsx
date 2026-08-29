@@ -119,6 +119,7 @@ export default function App() {
   }, [data]);
   const approve = useCallback(() => { void act(async () => { if (!approvalPayload) return; await post("/api/demo/approve", { ...approvalPayload, confirmation: `APPROVE VERSION ${approvalPayload.proposal_version}` }); await refresh(); }); }, [act, approvalPayload, refresh]);
   const reject = useCallback(() => { void act(async () => { if (!approvalPayload) return; await post("/api/demo/reject", approvalPayload); await refresh(); }); }, [act, approvalPayload, refresh]);
+  const revalidate = useCallback(() => { void act(async () => { if (!approvalPayload) return; await post("/api/demo/revalidate", approvalPayload); await refresh(); }); }, [act, approvalPayload, refresh]);
 
   const roomId = path.startsWith("/rooms/") ? path.split("/")[2] : "";
   const currentRoom = data?.rooms.find((room) => room.room_id === roomId);
@@ -141,9 +142,9 @@ export default function App() {
 
   let page = <div className="loading-page"><LoaderCircle className="spin" size={25} /><span>Loading your Personal Agent…</span></div>;
   if (data) {
-    if (path === "/agent" || path === "/") page = <AgentHomePage data={data} busy={busy} onSend={(content) => sendMessage(content)} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} />;
+    if (path === "/agent" || path === "/") page = <AgentHomePage data={data} busy={busy} onSend={(content) => sendMessage(content)} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
     else if (path === "/requests") page = <RequestsPage data={data} onNavigate={navigate} />;
-    else if (currentTask) page = <RequestWorkspacePage data={data} task={currentTask} review={reviewTaskId === currentTask.task_id ? review : null} busy={busy} onSend={(content) => sendMessage(content, currentTask.task_id)} onPublish={publish} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} />;
+    else if (currentTask) page = <RequestWorkspacePage data={data} task={currentTask} review={reviewTaskId === currentTask.task_id ? review : null} busy={busy} onSend={(content) => sendMessage(content, currentTask.task_id)} onPublish={publish} onNavigate={navigate} onDirective={handleDirective} onApprove={approve} onReject={reject} onRevalidate={revalidate} />;
     else if (path === "/explore") page = <ExplorePage data={data} onNavigate={navigate} onEvaluate={evaluate} />;
     else if (path === "/rooms") page = <RoomsPage data={data} onNavigate={navigate} />;
     else if (currentRoom) page = <CoordinationRoomPage data={data} room={currentRoom} busy={busy} onNavigate={navigate} onMode={roomMode} onSend={roomSend} />;

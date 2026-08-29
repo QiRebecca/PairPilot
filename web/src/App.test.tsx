@@ -78,4 +78,25 @@ describe("PairPilot Personal Agent OS", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve post & publish" }));
     await waitFor(() => expect(MockEventSource.latestUrl).toBe("/api/demo/run/stream?intent_id=intent-icml"));
   });
+
+  it("requires an expired capacity hold to be revalidated before exact approval", async () => {
+    window.history.replaceState({}, "", "/requests/task-icml");
+    const task = { task_id: "task-icml", title: "ICML roommate", task_type: "conference_room_share", goal: "Find a roommate", status: "NEEDS_DECISION", conversation_id: "conversation-icml", intent_id: "intent-icml" };
+    const data = bootstrap({
+      tasks: [task],
+      decisions: [{ decision_id: "decision-1", task_id: "task-icml", type: "APPROVE_PROPOSAL", status: "OPEN", title: "Maya's Agent accepted a proposal", summary: "Review the exact effect.", authoritative_entity_ids: ["proposal-1"], expires_at: "2020-01-01T00:00:00Z" }],
+      demoState: {
+        ...bootstrap().demoState,
+        run: { runId: "run-1", status: "WAITING_FOR_HUMAN_APPROVAL" },
+        approvalRequests: [{ runId: "run-1", proposalId: "proposal-1", proposalVersion: 1, candidateIdentitySummary: "Maya", sharedDates: { start: "2026-07-06", end: "2026-07-09" }, costDifferenceUsd: 62, delegatedMaximumUsd: 70, holdExpiresAt: "2020-01-01T00:00:00Z" }],
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => data });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+    expect(await screen.findByText("HOLD EXPIRED")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve exact effect" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revalidate offer" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/demo/revalidate", expect.objectContaining({ method: "POST" })));
+  });
 });

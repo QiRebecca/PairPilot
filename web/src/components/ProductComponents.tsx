@@ -10,7 +10,7 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   ApprovalRequest,
   ConversationMessage,
@@ -105,9 +105,24 @@ export function DraftReviewCard({ review, busy, onPublish }: { review: DraftRevi
   </section>;
 }
 
-export function DecisionCard({ decision, approval, busy, onApprove, onReject, onOpen }: { decision: Decision; approval?: ApprovalRequest; busy: boolean; onApprove: () => void; onReject: () => void; onOpen: () => void }) {
+export function DecisionCard({ decision, approval, busy, onApprove, onReject, onRevalidate, onOpen }: { decision: Decision; approval?: ApprovalRequest; busy: boolean; onApprove: () => void; onReject: () => void; onRevalidate: () => void; onOpen: () => void }) {
   const isApproval = decision.type === "APPROVE_PROPOSAL" && approval;
-  return <article className="decision-card"><header><span><Fingerprint size={15} /> Needs your decision</span><StatusPill status={decision.status} /></header><h3>{decision.title}</h3><p>{decision.summary}</p>{isApproval ? <div className="decision-contract"><div><span>Candidate</span><strong>{approval.candidateIdentitySummary}</strong></div><div><span>Shared dates</span><strong>{approval.sharedDates?.start} → {approval.sharedDates?.end}</strong></div><div><span>Additional cost</span><strong>${approval.costDifferenceUsd} / ${approval.delegatedMaximumUsd} max</strong></div><div><span>Proposal</span><strong>Version {approval.proposalVersion}</strong></div></div> : null}<footer>{isApproval ? <><button className="quiet-button" onClick={onReject} disabled={busy}>Reject</button><button className="primary-action" onClick={onApprove} disabled={busy}><Check size={15} /> Approve exact effect</button></> : <button className="primary-action" onClick={onOpen}>Review now <ArrowRight size={14} /></button>}</footer></article>;
+  const holdExpiry = approval?.holdExpiresAt || decision.expires_at;
+  const [holdExpired, setHoldExpired] = useState(Boolean(isApproval));
+  useEffect(() => {
+    if (!isApproval || !holdExpiry) {
+      setHoldExpired(Boolean(isApproval));
+      return;
+    }
+    const expiryTime = new Date(holdExpiry).getTime();
+    const updateExpiry = () => setHoldExpired(expiryTime <= Date.now());
+    updateExpiry();
+    const remainingMs = expiryTime - Date.now();
+    if (remainingMs <= 0) return;
+    const timer = window.setTimeout(updateExpiry, Math.min(remainingMs + 50, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [holdExpiry, isApproval]);
+  return <article className="decision-card"><header><span><Fingerprint size={15} /> Needs your decision</span><StatusPill status={holdExpired ? "HOLD_EXPIRED" : decision.status} /></header><h3>{decision.title}</h3><p>{decision.summary}</p>{isApproval ? <><div className="decision-contract"><div><span>Candidate</span><strong>{approval.candidateIdentitySummary}</strong></div><div><span>Shared dates</span><strong>{approval.sharedDates?.start} → {approval.sharedDates?.end}</strong></div><div><span>Additional cost</span><strong>${approval.costDifferenceUsd} / ${approval.delegatedMaximumUsd} max</strong></div><div><span>Proposal</span><strong>Version {approval.proposalVersion}</strong></div></div><p className={`hold-expiry ${holdExpired ? "expired" : ""}`}>{holdExpired ? "The temporary capacity hold expired. Revalidate it before approving." : `Capacity held until ${new Date(holdExpiry || "").toLocaleString()}.`}</p></> : null}<footer>{isApproval ? <><button className="quiet-button" onClick={onReject} disabled={busy}>Reject</button>{holdExpired ? <button className="primary-action" onClick={onRevalidate} disabled={busy}>Revalidate offer</button> : <button className="primary-action" onClick={onApprove} disabled={busy}><Check size={15} /> Approve exact effect</button>}</> : <button className="primary-action" onClick={onOpen}>Review now <ArrowRight size={14} /></button>}</footer></article>;
 }
 
 export function TrustLegend() {

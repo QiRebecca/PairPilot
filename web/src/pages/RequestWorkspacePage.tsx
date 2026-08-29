@@ -17,7 +17,7 @@ function CandidateAssessmentCard({ assessment, onRoom }: { assessment: Assessmen
   </article>;
 }
 
-function TaskOverview({ data, task, onNavigate, busy, onApprove, onReject }: { data: OSBootstrap; task: TaskWorkspace; onNavigate: (path: string) => void; busy: boolean; onApprove: () => void; onReject: () => void }) {
+function TaskOverview({ data, task, onNavigate, busy, onApprove, onReject, onRevalidate }: { data: OSBootstrap; task: TaskWorkspace; onNavigate: (path: string) => void; busy: boolean; onApprove: () => void; onReject: () => void; onRevalidate: () => void }) {
   const assessments = data.candidateAssessments.filter((item) => item.task_id === task.task_id);
   const decisions = data.decisions.filter((item) => item.task_id === task.task_id && item.status === "OPEN");
   const rooms = data.rooms.filter((item) => item.task_id === task.task_id);
@@ -25,7 +25,7 @@ function TaskOverview({ data, task, onNavigate, busy, onApprove, onReject }: { d
   return <div className="task-overview">
     <section className="task-summary-card"><div><span>Current goal</span><h2>{task.title}</h2><p>{task.goal}</p></div><StatusPill status={task.status} /></section>
     <section className="task-metrics"><div><strong>{data.explorePosts.filter((post) => post.status === "OPEN").length}</strong><span>relevant open posts</span></div><div><strong>{rooms.length}</strong><span>agent conversations</span></div><div><strong>{assessments.filter((item) => item.priority_band === "RECOMMENDED").length}</strong><span>recommended</span></div><div><strong>{decisions.length}</strong><span>needs your decision</span></div></section>
-    {decisions.map((decision) => <DecisionCard key={decision.decision_id} decision={decision} approval={decision.type === "APPROVE_PROPOSAL" ? approval : undefined} busy={busy} onApprove={onApprove} onReject={onReject} onOpen={() => undefined} />)}
+    {decisions.map((decision) => <DecisionCard key={decision.decision_id} decision={decision} approval={decision.type === "APPROVE_PROPOSAL" ? approval : undefined} busy={busy} onApprove={onApprove} onReject={onReject} onRevalidate={onRevalidate} onOpen={() => undefined} />)}
     <section><div className="section-title"><div><span>Candidate posts</span><h2>Qi’s current assessment</h2></div><TrustLegend /></div>{assessments.length ? <div className="assessment-grid">{assessments.map((assessment) => <CandidateAssessmentCard key={assessment.assessment_id} assessment={assessment} onRoom={() => onNavigate(`/rooms/${assessment.active_room_id}`)} />)}</div> : <EmptyState title="Qi is preparing the landscape" body="Publish the post to let Qi search active needs and communicate with multiple agents." />}</section>
   </div>;
 }
@@ -37,14 +37,15 @@ function PostView({ data, task, review, busy, onPublish }: { data: OSBootstrap; 
   return <article className="published-post"><header><span><FileText size={14} /> Your intent post</span><StatusPill status={post.status} /></header><h2>{post.public_title}</h2><p>{post.public_summary}</p><div className="post-facts"><div><span>Event</span><strong>{post.public_constraints?.event}</strong></div><div><span>Location</span><strong>{post.public_constraints?.location}</strong></div><div><span>Dates</span><strong>{formatDate(post.public_constraints?.date_start)}–{formatDate(post.public_constraints?.date_end)}</strong></div><div><span>Capacity</span><strong>{post.capacity_remaining} remaining</strong></div></div><section><span>Public requirements</span><p>{post.public_requirements?.join(" · ")}</p></section><section className="authorship-block"><Bot size={17} /><div><strong>Drafted by Qi Agent</strong><small>{post.authorship?.approved_by_owner ? "Approved and published by you" : "Awaiting your approval"}</small></div></section></article>;
 }
 
-export function RequestWorkspacePage({ data, task, review, busy, onSend, onPublish, onNavigate, onDirective, onApprove, onReject }: {
+export function RequestWorkspacePage({ data, task, review, busy, onSend, onPublish, onNavigate, onDirective, onApprove, onReject, onRevalidate }: {
   data: OSBootstrap; task: TaskWorkspace; review: DraftReview | null; busy: boolean;
   onSend: (content: string) => void; onPublish: (form: ReviewForm) => void;
   onNavigate: (path: string) => void; onDirective: (directive: PresentationDirective) => void;
-  onApprove: () => void; onReject: () => void;
+  onApprove: () => void; onReject: () => void; onRevalidate: () => void;
 }) {
-  const [tab, setTab] = useState<TaskTab>(task.status === "DRAFT" ? "post" : "conversation");
-  useEffect(() => setTab(task.status === "DRAFT" ? "post" : "conversation"), [task.task_id, task.status]);
+  const defaultTab = task.status === "DRAFT" ? "post" : task.status === "NEEDS_DECISION" ? "overview" : "conversation";
+  const [tab, setTab] = useState<TaskTab>(defaultTab);
+  useEffect(() => setTab(defaultTab), [defaultTab, task.task_id]);
   const messages = data.conversationMessages.filter((item) => item.conversation_id === task.conversation_id);
   const taskTurns = data.demoState.turns;
   const tabs: { id: TaskTab; label: string; icon: typeof Bot }[] = [
@@ -57,7 +58,7 @@ export function RequestWorkspacePage({ data, task, review, busy, onSend, onPubli
     <PageHeading eyebrow="Request workspace" title={task.title} copy="This conversation and every agent room are isolated to this request." action={<StatusPill status={task.status} />} />
     <nav className="workspace-tabs">{tabs.map(({ id, label, icon: Icon }) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}><Icon size={15} /> {label}{id === "overview" && task.status === "NEEDS_DECISION" ? <b>1</b> : null}</button>)}</nav>
     {tab === "conversation" ? <Conversation title="Qi Agent · task conversation" subtitle={`Scoped to ${task.title}`} messages={messages} directives={data.presentationDirectives.filter((item) => item.task_id === task.task_id)} busy={busy} placeholder="Ask Qi about this request, compare candidates, or change the boundaries…" onSend={onSend} onDirective={onDirective} /> : null}
-    {tab === "overview" ? <TaskOverview data={data} task={task} busy={busy} onNavigate={onNavigate} onApprove={onApprove} onReject={onReject} /> : null}
+    {tab === "overview" ? <TaskOverview data={data} task={task} busy={busy} onNavigate={onNavigate} onApprove={onApprove} onReject={onReject} onRevalidate={onRevalidate} /> : null}
     {tab === "post" ? <PostView data={data} task={task} review={review} busy={busy} onPublish={onPublish} /> : null}
     {tab === "activity" ? <section className="activity-timeline">{taskTurns.length ? taskTurns.map((turn, index) => <article key={String(turn.turnId || index)}><span>{index + 1}</span><div><strong>{String(turn.selectedTool || "Agent action").replaceAll("_", " ")}</strong><p>{String(turn.stateTransition || "Completed")}</p></div><small><Clock3 size={12} /> {String(turn.latencyMs || 0)} ms</small></article>) : <EmptyState title="No agent actions yet" body="Actions will appear after the post is published." />}</section> : null}
     <div className="scope-proof"><Scale size={14} /> Task context: <code>{task.task_id}</code><span>•</span><UsersRound size={14} /> {data.rooms.filter((room) => room.task_id === task.task_id).length} isolated rooms</div>
