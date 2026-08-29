@@ -121,9 +121,7 @@ async def approve_multi_user_proposal(
     decision_clean = _clean(decision)
     decision_clean.update(status="RESOLVED", resolved_at=timestamp)
     await store.upsert("decisions", decision_id, decision_clean)
-    participant_uids = [
-        str(item) for item in proposal.get("participant_uids", [])
-    ]
+    participant_uids = [str(item) for item in proposal.get("participant_uids", [])]
     approvals = await asyncio.gather(
         *(
             store.get(
@@ -181,9 +179,7 @@ async def commit_dual_approved_match(
         raise MultiUserCommitError("proposal is not current")
     if _timestamp(proposal.get("expires_at")) <= timestamp:
         raise MultiUserCommitError("proposal expired")
-    participant_uids = [
-        str(item) for item in proposal.get("participant_uids", [])
-    ]
+    participant_uids = [str(item) for item in proposal.get("participant_uids", [])]
     participant_agent_ids = [
         str(item) for item in proposal.get("participant_agent_ids", [])
     ]
@@ -434,11 +430,27 @@ async def commit_dual_approved_match(
             "created_at": timestamp,
             "updated_at": timestamp,
         }
-        writes.append(
-            _create_write(
-                store, "relationships", relationship_id, relationship
+        existing_relationship = await store.get("relationships", relationship_id)
+        if existing_relationship is None:
+            writes.append(
+                _create_write(store, "relationships", relationship_id, relationship)
             )
-        )
+        else:
+            relationship.update(
+                successful_plans=(
+                    int(existing_relationship.get("successful_plans", 0)) + 1
+                ),
+                created_at=existing_relationship.get("created_at", timestamp),
+            )
+            writes.append(
+                _update_write(
+                    store,
+                    "relationships",
+                    relationship_id,
+                    relationship,
+                    update_time=str(existing_relationship["_updateTime"]),
+                )
+            )
         memory_id = stable_id("memory", proposal_id, uid)
         memory = {
             "schema_version": SCHEMA_VERSION,
@@ -512,4 +524,3 @@ async def commit_dual_approved_match(
         idempotency_key=f"v2:{proposal_id}:v{version}:match-committed",
     )
     return match
-

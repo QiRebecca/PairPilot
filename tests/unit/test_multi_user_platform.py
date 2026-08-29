@@ -491,6 +491,43 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     assert duplicate["status"] == "MATCH_COMMITTED"
     assert len(store.collections["matches"]) == 1
 
+    second_task_a = await create_user_task(
+        store, user_a, task_input("Alex second live post")
+    )
+    second_task_b = await create_user_task(
+        store, user_b, task_input("Blair second live post")
+    )
+    for user, task, title in (
+        (user_a, second_task_a, "Alex second public post"),
+        (user_b, second_task_b, "Blair second public post"),
+    ):
+        await publish_user_post(
+            store,
+            user,
+            task_id=str(task["task_id"]),
+            public_title=title,
+            public_summary="A second compatible ICML room share.",
+            public_requirements=["Adult ICML attendee"],
+        )
+    second_proposal = await process_published_intent(
+        store, str(second_task_a["intent_id"])
+    )
+    second_proposal_id = str(second_proposal["proposal_id"])
+    for user in (user_a, user_b):
+        result = await approve_multi_user_proposal(
+            store,
+            user,
+            proposal_id=second_proposal_id,
+            proposal_version=1,
+            confirmation="APPROVE VERSION 1",
+        )
+    assert result["status"] == "MATCH_COMMITTED"
+    assert len(store.collections["matches"]) == 2
+    assert len(store.collections["relationships"]) == 2
+    assert {
+        item["successful_plans"] for item in store.collections["relationships"].values()
+    } == {2}
+
 
 @pytest.mark.asyncio
 async def test_material_proposal_version_change_invalidates_old_approvals() -> None:
