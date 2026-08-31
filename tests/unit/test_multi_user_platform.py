@@ -32,6 +32,10 @@ from pairpilot_orchestrator.multi_user_platform import (
     provision_user,
     publish_user_post,
 )
+from pairpilot_orchestrator.personal_agent_chat import (
+    _build_tools,
+    resolve_task_intent_type,
+)
 from pairpilot_orchestrator.v1_candidate_pool import (
     record_candidate_exchange,
     set_candidate_state,
@@ -212,6 +216,52 @@ def _agent_messages_for_test() -> dict[str, str]:
         agent_id_for_uid("uid-a"): "I accept a reversible introduction.",
         agent_id_for_uid("uid-b"): "I also accept a reversible introduction.",
     }
+
+
+@pytest.mark.parametrize(
+    ("requested", "event", "goal", "expected"),
+    [
+        ("EVENT_BUDDY", "Hong Kong Disneyland", "Find a photo buddy", "EVENT_BUDDY"),
+        ("peer_coordination", "香港迪士尼", "找女生一起拍照游玩", "EVENT_BUDDY"),
+        ("", "ICML hotel", "Find a quiet roommate", "ROOM_SHARE"),
+        ("", "Conference dinner", "Find a dinner companion", "MEAL_COMPANION"),
+        ("", "Coffee", "Meet for a coffee chat", "COFFEE_CHAT"),
+        ("", "OpenAI Build Week", "找黑客松队友组队", "HACKATHON_TEAMMATE"),
+    ],
+)
+def test_personal_agent_resolves_all_v1_intent_types(
+    requested: str, event: str, goal: str, expected: str
+) -> None:
+    assert (
+        resolve_task_intent_type(requested, event=event, goal=goal) == expected
+    )
+
+
+@pytest.mark.asyncio
+async def test_personal_agent_task_tool_no_longer_uses_legacy_type() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-event")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Event User"))
+    conversation = await store.get("conversations", "user:uid-event:global")
+    assert conversation is not None
+    tool = _build_tools(
+        store,
+        user,
+        conversation,
+        authorizing_user_content="I want a photo buddy for Disneyland on September 10.",
+    )[0]
+    result = await tool(
+        title="Disney photo buddy",
+        goal="Find an adult companion for Disneyland photos and rides.",
+        event="Hong Kong Disneyland",
+        location="Hong Kong",
+        date_start="2026-09-10",
+        date_end="2026-09-10",
+        public_requirements=["Adult", "Enjoys photos"],
+    )
+    created = store.collections["task_workspaces"][str(result["task_id"])]
+    assert created["task_type"] == "EVENT_BUDDY"
 
 
 @pytest.mark.asyncio

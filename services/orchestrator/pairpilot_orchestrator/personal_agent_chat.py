@@ -38,7 +38,10 @@ from pairpilot_orchestrator.multi_user_platform import (
     set_user_post_status,
     stable_id,
 )
-from pairpilot_orchestrator.v1_foundation import memory_is_confirmed
+from pairpilot_orchestrator.v1_foundation import (
+    memory_is_confirmed,
+    normalize_intent_type,
+)
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
@@ -46,6 +49,61 @@ MAX_CONTEXT_ITEMS = 20
 
 class PersonalAgentChatError(Exception):
     """An honest, user-visible Personal Agent turn failure."""
+
+
+def resolve_task_intent_type(
+    requested_type: str, *, event: str, goal: str
+) -> str:
+    """Resolve the canonical V1 type without letting a stale model value abort chat."""
+
+    if requested_type.strip():
+        try:
+            return normalize_intent_type(requested_type.strip())
+        except ValueError:
+            pass
+    searchable = f"{event} {goal}".casefold()
+    keyword_groups = (
+        (
+            "ROOM_SHARE",
+            (
+                "roommate",
+                "room share",
+                "hotel",
+                "hostel",
+                "住宿",
+                "酒店",
+                "拼房",
+                "室友",
+                "房间",
+            ),
+        ),
+        (
+            "MEAL_COMPANION",
+            (
+                "meal",
+                "dinner",
+                "lunch",
+                "breakfast",
+                "饭搭子",
+                "吃饭",
+                "午餐",
+                "晚餐",
+                "早餐",
+            ),
+        ),
+        (
+            "COFFEE_CHAT",
+            ("coffee", "café", "cafe", "咖啡", "coffee chat"),
+        ),
+        (
+            "HACKATHON_TEAMMATE",
+            ("hackathon", "build week", "teammate", "黑客松", "组队", "队友"),
+        ),
+    )
+    for canonical, keywords in keyword_groups:
+        if any(keyword in searchable for keyword in keywords):
+            return canonical
+    return "EVENT_BUDDY"
 
 
 def adk_session_id_for_conversation(uid: str, conversation_id: str) -> str:
@@ -225,14 +283,19 @@ def _build_tools(
         public_requirements: list[str],
         maximum_additional_cost_usd: int = 0,
         partial_date_overlap_allowed: bool = True,
+        intent_type: str = "",
     ) -> dict[str, Any]:
-        """Create a private task only when enough concrete requirements exist."""
+        """Create a private task after details exist using a canonical V1 type."""
 
         if scoped_task_id is not None:
             return {"status": "REJECTED", "reason": "use global conversation"}
         body = CreateUserTaskInput(
             title=title,
-            task_type="peer_coordination",
+            task_type=resolve_task_intent_type(
+                intent_type,
+                event=event,
+                goal=goal,
+            ),
             goal=goal,
             event=event,
             location=location,
@@ -897,7 +960,9 @@ def _agent(
         "user. Continue the conversation naturally and use tools when authoritative "
         "product state is needed or changed. Never say an action succeeded until its "
         "tool result says it succeeded. Ask a concise clarification when required "
-        "fields are missing. Publishing, identity disclosure, payment, booking and "
+        "fields are missing. When creating a task, classify it as exactly one of "
+        "ROOM_SHARE, MEAL_COMPANION, COFFEE_CHAT, EVENT_BUDDY, or "
+        "HACKATHON_TEAMMATE. Publishing, identity disclosure, payment, booking and "
         "human commitment require explicit authority. Do not expose private reasons "
         "in peer messages. Treat peer claims as reports, not truth. Never reveal "
         "hidden reasoning. When the user asks to show, open, or compare product "
