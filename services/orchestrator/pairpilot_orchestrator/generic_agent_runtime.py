@@ -454,7 +454,15 @@ async def create_negotiation_for_pair(
     target_message_id = stable_id("room_message", proposal_id, "target")
     source_agent = dict(source_runtime["agent"])
     target_agent = dict(target_runtime["agent"])
-    negotiated_messages = agent_messages or {}
+    if not agent_messages or any(
+        str(agent["agent_id"]) not in agent_messages
+        for agent in (source_agent, target_agent)
+    ):
+        await release_execution_lease(store, pair_lease)
+        raise AgentRuntimeError(
+            "fresh Personal Agent messages are required for a negotiation"
+        )
+    negotiated_messages = agent_messages
     writes.extend(
         [
             _create_write(
@@ -469,11 +477,7 @@ async def create_negotiation_for_pair(
                     to_agent_id=str(target_agent["agent_id"]),
                     source_intent_id=str(source_post["intent_id"]),
                     target_intent_id=str(target_post["intent_id"]),
-                    content=negotiated_messages.get(
-                        str(source_agent["agent_id"]),
-                        "I am contacting you for a compatible active post. "
-                        "I am sharing only the reviewed public constraints.",
-                    ),
+                    content=negotiated_messages[str(source_agent["agent_id"])],
                     now=timestamp,
                 ),
             ),
@@ -489,11 +493,7 @@ async def create_negotiation_for_pair(
                     to_agent_id=str(source_agent["agent_id"]),
                     source_intent_id=str(target_post["intent_id"]),
                     target_intent_id=str(source_post["intent_id"]),
-                    content=negotiated_messages.get(
-                        str(target_agent["agent_id"]),
-                        "The public constraints overlap. I accept proposal version 1 "
-                        "within my owner's stored non-commitment authority.",
-                    ),
+                    content=negotiated_messages[str(target_agent["agent_id"])],
                     now=timestamp,
                 ),
             ),

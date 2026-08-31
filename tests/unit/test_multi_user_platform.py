@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pairpilot_orchestrator import web
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
+from pairpilot_orchestrator.firestore_session_service import FirestoreSessionService
 from pairpilot_orchestrator.generic_agent_runtime import (
     AgentRuntimeError,
     consume_daily_agent_turns,
@@ -182,6 +183,13 @@ def task_input(title: str) -> CreateUserTaskInput:
         maximum_additional_cost_usd=70,
         partial_date_overlap_allowed=True,
     )
+
+
+def _agent_messages_for_test() -> dict[str, str]:
+    return {
+        agent_id_for_uid("uid-a"): "I accept a reversible introduction.",
+        agent_id_for_uid("uid-b"): "I also accept a reversible introduction.",
+    }
 
 
 @pytest.mark.asyncio
@@ -426,7 +434,9 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
             public_requirements=["Adult ICML attendee"],
         )
 
-    proposal = await process_published_intent(store, str(task_a["intent_id"]))
+    proposal = await process_published_intent(
+        store, str(task_a["intent_id"]), agent_messages=_agent_messages_for_test()
+    )
     proposal_id = str(proposal["proposal_id"])
     assert proposal["participant_agent_ids"] == [
         agent_id_for_uid("uid-a"),
@@ -510,7 +520,9 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
             public_requirements=["Adult ICML attendee"],
         )
     second_proposal = await process_published_intent(
-        store, str(second_task_a["intent_id"])
+        store,
+        str(second_task_a["intent_id"]),
+        agent_messages=_agent_messages_for_test(),
     )
     second_proposal_id = str(second_proposal["proposal_id"])
     for user in (user_a, user_b):
@@ -527,6 +539,167 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     assert {
         item["successful_plans"] for item in store.collections["relationships"].values()
     } == {2}
+
+
+@pytest.mark.asyncio
+async def test_firestore_adk_session_service_persists_owner_scoped_session() -> None:
+    store = MemoryMultiUserStore()
+    first = FirestoreSessionService(store)
+    created = await first.create_session(
+        app_name="pairpilot_real_personal_agent",
+        user_id="uid-a",
+        session_id="session-a",
+        state={"conversation_id": "user:uid-a:global"},
+    )
+    second = FirestoreSessionService(store)
+    loaded = await second.get_session(
+        app_name="pairpilot_real_personal_agent",
+        user_id="uid-a",
+        session_id="session-a",
+    )
+    cross_user = await second.get_session(
+        app_name="pairpilot_real_personal_agent",
+        user_id="uid-b",
+        session_id="session-a",
+    )
+    assert loaded is not None
+    assert loaded.id == created.id
+    assert loaded.state["conversation_id"] == "user:uid-a:global"
+    assert cross_user is None
+
+
+def test_real_personal_agent_stream_is_authenticated_idempotent_and_replayable(
+    monkeypatch,
+) -> None:
+    store = MemoryMultiUserStore()
+    calls = 0
+
+    async def fake_turn(
+        runtime_store,
+        runtime_principal,
+        *,
+        conversation,
+        content,
+        client_message_id,
+        invocation_id,
+    ):
+        nonlocal calls
+        calls += 1
+        assert runtime_store is store
+        assert runtime_principal.uid == "uid-a"
+        assert conversation["conversation_id"] == "user:uid-a:global"
+        assert content == "Help me find an ICML roommate."
+        yield {
+            "type": "message.accepted",
+            "invocation_id": invocation_id,
+            "client_message_id": client_message_id,
+        }
+        yield {
+            "type": "agent.started",
+            "invocation_id": invocation_id,
+            "model_id": "test-live-model",
+            "execution_mode": "LIVE",
+        }
+        yield {
+            "type": "agent.text.delta",
+            "invocation_id": invocation_id,
+            "delta": "What dates should I use?",
+        }
+        yield {
+            "type": "agent.completed",
+            "invocation_id": invocation_id,
+            "assistant_message_id": "assistant-a",
+            "message": {"content": "What dates should I use?"},
+        }
+
+    monkeypatch.setattr(web, "_store", lambda: store)
+    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "personal_agent_turn_runner", fake_turn, raising=False
+    )
+    client = TestClient(web.app)
+    headers_a = {"Authorization": "Bearer user-a"}
+    headers_b = {"Authorization": "Bearer user-b"}
+    assert client.post("/api/app/provision", headers=headers_a).status_code == 200
+    assert client.post("/api/app/provision", headers=headers_b).status_code == 200
+    body = {
+        "content": "Help me find an ICML roommate.",
+        "client_message_id": "client-message-0001",
+        "task_id": None,
+    }
+    first = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers_a,
+        json=body,
+    )
+    replay = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers_a,
+        json=body,
+    )
+    denied = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers_b,
+        json={**body, "client_message_id": "client-message-0002"},
+    )
+    assert first.status_code == 200
+    assert "event: agent.text.delta" in first.text
+    assert "event: agent.completed" in first.text
+    assert replay.status_code == 200
+    assert replay.text == first.text
+    assert denied.status_code == 403
+    assert calls == 1
+    user_messages = [
+        item
+        for item in store.collections["conversation_messages"].values()
+        if item.get("role") == "USER"
+        and item.get("client_message_id") == "client-message-0001"
+    ]
+    assert len(user_messages) == 1
+
+
+def test_model_failure_stream_is_honest_and_saves_no_assistant(monkeypatch) -> None:
+    store = MemoryMultiUserStore()
+
+    async def failing_turn(
+        _store,
+        _principal,
+        *,
+        conversation,
+        content,
+        client_message_id,
+        invocation_id,
+    ):
+        del conversation, content, client_message_id
+        yield {
+            "type": "message.accepted",
+            "invocation_id": invocation_id,
+        }
+        raise RuntimeError("simulated Vertex failure")
+
+    monkeypatch.setattr(web, "_store", lambda: store)
+    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "personal_agent_turn_runner", failing_turn, raising=False
+    )
+    client = TestClient(web.app)
+    headers = {"Authorization": "Bearer user-a"}
+    assert client.post("/api/app/provision", headers=headers).status_code == 200
+    response = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers,
+        json={
+            "content": "This turn should fail honestly.",
+            "client_message_id": "failure-message-0001",
+        },
+    )
+    assert response.status_code == 200
+    assert "event: agent.error" in response.text
+    assert "simulated Vertex failure" not in response.text
+    assert not any(
+        item.get("role") == "PERSONAL_AGENT"
+        for item in store.collections["conversation_messages"].values()
+    )
 
 
 @pytest.mark.asyncio
@@ -550,7 +723,9 @@ async def test_material_proposal_version_change_invalidates_old_approvals() -> N
             public_summary="Compatible ICML room share.",
             public_requirements=[],
         )
-    proposal = await process_published_intent(store, str(task_a["intent_id"]))
+    proposal = await process_published_intent(
+        store, str(task_a["intent_id"]), agent_messages=_agent_messages_for_test()
+    )
     proposal_id = str(proposal["proposal_id"])
     await approve_multi_user_proposal(
         store,

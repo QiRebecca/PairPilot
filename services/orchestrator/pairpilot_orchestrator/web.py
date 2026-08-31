@@ -83,6 +83,7 @@ from pairpilot_orchestrator.multi_user_commit import (
 )
 from pairpilot_orchestrator.multi_user_platform import (
     MAX_NEW_CONTACTS_PER_TASK,
+    PRODUCTION_NAMESPACE,
     block_agent_owner,
     build_user_bootstrap,
     complete_onboarding,
@@ -96,8 +97,10 @@ from pairpilot_orchestrator.multi_user_platform import (
     schedule_account_deletion,
     send_user_room_message,
     set_user_post_status,
+    stable_id,
     update_account_settings,
 )
+from pairpilot_orchestrator.personal_agent_chat import stream_personal_agent_turn
 from pairpilot_orchestrator.personal_agent_os import (
     GLOBAL_CONVERSATION_ID,
     build_os_bootstrap,
@@ -252,6 +255,17 @@ class MemoryActionBody(BaseModel):
     action: Literal["CONFIRM", "CORRECT", "ARCHIVE", "DELETE", "RESTRICT_SCOPE"]
     content: str | None = Field(default=None, max_length=1_000)
     scope: str | None = Field(default=None, max_length=120)
+
+
+class ConversationMessageBody(BaseModel):
+    """One idempotent user turn sent to a persistent Personal Agent session."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=4_000)
+    client_message_id: str = Field(min_length=8, max_length=100)
+    task_id: str | None = Field(default=None, min_length=1, max_length=160)
+    retry_of: str | None = Field(default=None, min_length=8, max_length=100)
 
 
 def _store() -> GoogleCloudStore:
@@ -442,7 +456,229 @@ async def _check_run_quota() -> None:
 
 
 def _sse(event: str, payload: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+    encoded = json.dumps(payload, default=str, separators=(",", ":"))
+    return f"event: {event}\ndata: {encoded}\n\n"
+
+
+async def _owned_conversation(
+    conversation_id: str, principal: AuthenticatedPrincipal
+) -> dict[str, Any]:
+    conversation = await _store().get("conversations", conversation_id)
+    if conversation is None or conversation.get("namespace") != PRODUCTION_NAMESPACE:
+        raise HTTPException(404, "Conversation was not found.")
+    if conversation.get("owner_uid") != principal.uid:
+        raise HTTPException(403, "Conversation belongs to another user.")
+    return conversation
+
+
+async def _persist_chat_event(
+    store: Any,
+    *,
+    request_id: str,
+    invocation_id: str,
+    owner_uid: str,
+    conversation_id: str,
+    sequence: int,
+    event: dict[str, Any],
+) -> None:
+    event_type = str(event["type"])
+    await store.create(
+        "chat_stream_events",
+        stable_id("chat_event", invocation_id, str(sequence)),
+        {
+            "namespace": PRODUCTION_NAMESPACE,
+            "request_id": request_id,
+            "invocation_id": invocation_id,
+            "owner_uid": owner_uid,
+            "conversation_id": conversation_id,
+            "sequence": sequence,
+            "event_type": event_type,
+            "payload": event,
+            "created_at": datetime.now(UTC),
+        },
+    )
+    if event_type == "tool.started":
+        tool_call_id = str(event["tool_call_id"])
+        await store.create(
+            "agent_tool_calls",
+            tool_call_id,
+            {
+                "namespace": PRODUCTION_NAMESPACE,
+                "tool_call_id": tool_call_id,
+                "owner_uid": owner_uid,
+                "conversation_id": conversation_id,
+                "invocation_id": invocation_id,
+                "tool_name": event.get("tool_name"),
+                "arguments": event.get("arguments", {}),
+                "status": "RUNNING",
+                "started_at": datetime.now(UTC),
+            },
+        )
+    elif event_type == "tool.completed":
+        tool_call_id = str(event["tool_call_id"])
+        existing = await store.get("agent_tool_calls", tool_call_id) or {}
+        await store.upsert(
+            "agent_tool_calls",
+            tool_call_id,
+            {
+                **_clean(existing),
+                "namespace": PRODUCTION_NAMESPACE,
+                "tool_call_id": tool_call_id,
+                "owner_uid": owner_uid,
+                "conversation_id": conversation_id,
+                "invocation_id": invocation_id,
+                "tool_name": event.get("tool_name"),
+                "result": event.get("result"),
+                "status": "COMPLETED",
+                "completed_at": datetime.now(UTC),
+            },
+        )
+
+
+async def _execute_personal_agent_request(
+    *,
+    request_id: str,
+    invocation_id: str,
+    principal: AuthenticatedPrincipal,
+    conversation: dict[str, Any],
+    body: ConversationMessageBody,
+) -> None:
+    """Run independently of the HTTP stream so reconnects can replay progress."""
+
+    store = _store()
+    sequence = 0
+    terminal = False
+    runner = getattr(app.state, "personal_agent_turn_runner", None)
+    runner = runner or stream_personal_agent_turn
+    stream = runner(
+        store,
+        principal,
+        conversation=conversation,
+        content=body.content,
+        client_message_id=body.client_message_id,
+        invocation_id=invocation_id,
+    )
+    try:
+        async for event in stream:
+            current = await store.get("chat_message_requests", request_id)
+            if current and current.get("cancellation_requested") is True:
+                await stream.aclose()
+                event = {
+                    "type": "agent.error",
+                    "invocation_id": invocation_id,
+                    "error": "This Agent turn was stopped by the user.",
+                    "error_type": "AgentTurnCancelled",
+                }
+            sequence += 1
+            await _persist_chat_event(
+                store,
+                request_id=request_id,
+                invocation_id=invocation_id,
+                owner_uid=principal.uid,
+                conversation_id=str(conversation["conversation_id"]),
+                sequence=sequence,
+                event=event,
+            )
+            if event["type"] in {"agent.completed", "agent.error"}:
+                terminal = True
+                await store.upsert(
+                    "chat_message_requests",
+                    request_id,
+                    {
+                        **_clean(current or {}),
+                        "namespace": PRODUCTION_NAMESPACE,
+                        "request_id": request_id,
+                        "invocation_id": invocation_id,
+                        "owner_uid": principal.uid,
+                        "conversation_id": conversation["conversation_id"],
+                        "client_message_id": body.client_message_id,
+                        "status": (
+                            "COMPLETED"
+                            if event["type"] == "agent.completed"
+                            else "FAILED"
+                        ),
+                        "terminal_event_type": event["type"],
+                        "updated_at": datetime.now(UTC),
+                    },
+                )
+                break
+    except Exception as exc:
+        sequence += 1
+        event = {
+            "type": "agent.error",
+            "invocation_id": invocation_id,
+            "error": "The live Personal Agent turn failed. Retry when ready.",
+            "error_type": type(exc).__name__,
+        }
+        await _persist_chat_event(
+            store,
+            request_id=request_id,
+            invocation_id=invocation_id,
+            owner_uid=principal.uid,
+            conversation_id=str(conversation["conversation_id"]),
+            sequence=sequence,
+            event=event,
+        )
+    finally:
+        if not terminal:
+            current = await store.get("chat_message_requests", request_id) or {}
+            await store.upsert(
+                "chat_message_requests",
+                request_id,
+                {
+                    **_clean(current),
+                    "namespace": PRODUCTION_NAMESPACE,
+                    "request_id": request_id,
+                    "invocation_id": invocation_id,
+                    "owner_uid": principal.uid,
+                    "conversation_id": conversation["conversation_id"],
+                    "client_message_id": body.client_message_id,
+                    "status": "FAILED",
+                    "terminal_event_type": "agent.error",
+                    "updated_at": datetime.now(UTC),
+                },
+            )
+
+
+def _track_personal_agent_task(task: asyncio.Task[None]) -> None:
+    tasks = getattr(app.state, "personal_agent_tasks", None)
+    if tasks is None:
+        tasks = set()
+        app.state.personal_agent_tasks = tasks
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)
+
+
+async def _tail_personal_agent_events(
+    *,
+    request_id: str,
+    invocation_id: str,
+    owner_uid: str,
+    after: int = 0,
+) -> AsyncIterator[str]:
+    next_sequence = after + 1
+    deadline = monotonic() + 300
+    while monotonic() < deadline:
+        store = _store()
+        events = await store.query_documents(
+            "chat_stream_events",
+            filters=[("invocation_id", "EQUAL", invocation_id)],
+            limit=100,
+        )
+        for event in sorted(events, key=lambda item: int(item.get("sequence", 0))):
+            sequence = int(event.get("sequence", 0))
+            if sequence < next_sequence or event.get("owner_uid") != owner_uid:
+                continue
+            payload = dict(event.get("payload", {}))
+            yield f"id: {sequence}\n" + _sse(str(event["event_type"]), payload)
+            next_sequence = sequence + 1
+        request = await store.get("chat_message_requests", request_id)
+        if request is None or request.get("owner_uid") != owner_uid:
+            return
+        if request.get("status") in {"COMPLETED", "FAILED"}:
+            return
+        yield ": keep-alive\n\n"
+        await asyncio.sleep(0.35)
 
 
 async def _run_stream(run_id: UUID, source_intent_id: str) -> AsyncIterator[str]:
@@ -531,6 +767,199 @@ async def app_provision(principal: AuthenticatedUser) -> dict[str, Any]:
 @app.get("/api/app/bootstrap")
 async def app_bootstrap(principal: AuthenticatedUser) -> dict[str, Any]:
     return await build_user_bootstrap(_store(), principal)
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages")
+async def send_personal_agent_message(
+    conversation_id: str,
+    body: ConversationMessageBody,
+    principal: AuthenticatedUser,
+) -> StreamingResponse:
+    """Accept one user turn and stream its durable Personal Agent execution."""
+
+    conversation = await _owned_conversation(conversation_id, principal)
+    conversation_task_id = str(conversation.get("task_id", "")) or None
+    if body.task_id is not None and body.task_id != conversation_task_id:
+        raise HTTPException(409, "The message task does not match this conversation.")
+    request_id = stable_id(
+        "chat_request", principal.uid, conversation_id, body.client_message_id
+    )
+    invocation_id = stable_id("invocation", request_id)
+    store = _store()
+    now = datetime.now(UTC)
+    created = await store.create(
+        "chat_message_requests",
+        request_id,
+        {
+            "namespace": PRODUCTION_NAMESPACE,
+            "request_id": request_id,
+            "invocation_id": invocation_id,
+            "owner_uid": principal.uid,
+            "conversation_id": conversation_id,
+            "task_id": conversation_task_id,
+            "client_message_id": body.client_message_id,
+            "retry_of": body.retry_of,
+            "status": "ACCEPTED",
+            "cancellation_requested": False,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+    if created:
+        user_message_id = stable_id("user_message", request_id)
+        await store.create(
+            "conversation_messages",
+            user_message_id,
+            {
+                "schema_version": 2,
+                "namespace": PRODUCTION_NAMESPACE,
+                "message_id": user_message_id,
+                "owner_uid": principal.uid,
+                "personal_agent_id": conversation.get("principal_agent_id"),
+                "conversation_id": conversation_id,
+                "task_id": conversation_task_id,
+                "role": "USER",
+                "author_id": principal.uid,
+                "content": body.content,
+                "visibility": "PRIVATE_USER_AGENT",
+                "message_classification": "MANUALLY_ENTERED_USER_CONTENT",
+                "client_message_id": body.client_message_id,
+                "retry_of": body.retry_of,
+                "created_at": now,
+            },
+        )
+        task = asyncio.create_task(
+            _execute_personal_agent_request(
+                request_id=request_id,
+                invocation_id=invocation_id,
+                principal=principal,
+                conversation=conversation,
+                body=body,
+            )
+        )
+        _track_personal_agent_task(task)
+    return StreamingResponse(
+        _tail_personal_agent_events(
+            request_id=request_id,
+            invocation_id=invocation_id,
+            owner_uid=principal.uid,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "X-PairPilot-Invocation-Id": invocation_id,
+        },
+    )
+
+
+@app.get("/api/v1/conversations/{conversation_id}/events")
+async def replay_personal_agent_events(
+    conversation_id: str,
+    invocation_id: str,
+    principal: AuthenticatedUser,
+    after: int = 0,
+) -> StreamingResponse:
+    await _owned_conversation(conversation_id, principal)
+    requests = await _store().query_documents(
+        "chat_message_requests",
+        filters=[("invocation_id", "EQUAL", invocation_id)],
+        limit=2,
+    )
+    matching = next(
+        (
+            item
+            for item in requests
+            if item.get("owner_uid") == principal.uid
+            and item.get("conversation_id") == conversation_id
+        ),
+        None,
+    )
+    if matching is None:
+        raise HTTPException(404, "Agent invocation was not found.")
+    request_id = str(matching["request_id"])
+    return StreamingResponse(
+        _tail_personal_agent_events(
+            request_id=request_id,
+            invocation_id=invocation_id,
+            owner_uid=principal.uid,
+            after=max(after, 0),
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform"},
+    )
+
+
+@app.post("/api/v1/invocations/{invocation_id}/stop")
+async def stop_personal_agent_invocation(
+    invocation_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    requests = await _store().query_documents(
+        "chat_message_requests",
+        filters=[("invocation_id", "EQUAL", invocation_id)],
+        limit=2,
+    )
+    request = next(
+        (item for item in requests if item.get("owner_uid") == principal.uid), None
+    )
+    if request is None:
+        raise HTTPException(404, "Agent invocation was not found.")
+    if request.get("status") in {"COMPLETED", "FAILED"}:
+        return {"status": request["status"], "invocationId": invocation_id}
+    await _store().upsert(
+        "chat_message_requests",
+        str(request["request_id"]),
+        {
+            **_clean(request),
+            "cancellation_requested": True,
+            "updated_at": datetime.now(UTC),
+        },
+    )
+    return {"status": "STOPPING", "invocationId": invocation_id}
+
+
+@app.get("/api/v1/conversations/{conversation_id}/audit")
+async def personal_agent_conversation_audit(
+    conversation_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    """Return owner-visible provenance without hidden model reasoning."""
+
+    conversation = await _owned_conversation(conversation_id, principal)
+    store = _store()
+    collections = {
+        "messages": "conversation_messages",
+        "invocations": "agent_invocations",
+        "toolCalls": "agent_tool_calls",
+        "directives": "presentation_directives",
+    }
+    result: dict[str, Any] = {}
+    for response_key, collection in collections.items():
+        items = await store.query_documents(
+            collection,
+            filters=[("conversation_id", "EQUAL", conversation_id)],
+            limit=100,
+        )
+        result[response_key] = [
+            _clean(item) for item in items if item.get("owner_uid") == principal.uid
+        ]
+    task_id = str(conversation.get("task_id", ""))
+    task = await store.get("task_workspaces", task_id) if task_id else None
+    if task is not None:
+        a2a_turns = await store.query_documents(
+            "a2a_agent_turns",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+            limit=100,
+        )
+        result["a2aTurns"] = [
+            _clean(item)
+            for item in a2a_turns
+            if item.get("own_intent_id") == task.get("intent_id")
+        ]
+    else:
+        result["a2aTurns"] = []
+    return result
 
 
 @app.put("/api/app/onboarding")
@@ -780,10 +1209,18 @@ async def internal_event_worker(
         event = json.loads(base64.b64decode(body.message.data).decode())
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(400, "Invalid Pub/Sub event payload.") from exc
-    if event.get("eventType") != "intent.published.v2":
+    event_type = str(event.get("eventType", ""))
+    if event_type not in {
+        "intent.published.v2",
+        "agent.contact.requested.v3",
+        "proposal.evaluation.requested.v3",
+    }:
         return {"status": "IGNORED"}
     event_payload = dict(event.get("payload", {}))
-    intent_id = str(event_payload.get("intentId", ""))
+    intent_id = str(
+        event_payload.get("intentId") or event_payload.get("sourceIntentId") or ""
+    )
+    requested_target_id = str(event_payload.get("targetIntentId", ""))
     if not intent_id:
         raise HTTPException(400, "Published intent event is missing intentId.")
     try:
@@ -791,9 +1228,13 @@ async def internal_event_worker(
         source = await store.get("intent_posts", intent_id)
         if source is None:
             raise AgentRuntimeError("source post is unavailable")
-        open_posts = await store.query_documents(
-            "intent_posts", filters=[("status", "EQUAL", "OPEN")]
-        )
+        if requested_target_id:
+            requested_target = await store.get("intent_posts", requested_target_id)
+            open_posts = [requested_target] if requested_target is not None else []
+        else:
+            open_posts = await store.query_documents(
+                "intent_posts", filters=[("status", "EQUAL", "OPEN")]
+            )
         target = None
         source_task = await store.get("task_workspaces", str(source["task_id"]))
         if source_task is None:
@@ -832,6 +1273,7 @@ async def internal_event_worker(
             )
             try:
                 agent_messages = await negotiate_pair_with_adk(
+                    store=store,
                     source_runtime=source_runtime,
                     target_runtime=target_runtime,
                     source_post=source,

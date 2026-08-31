@@ -76,7 +76,11 @@ def agent_id_for_uid(uid: str) -> str:
 
 
 def global_conversation_id_for_uid(uid: str) -> str:
-    return stable_id("conversation_global", uid)
+    return f"user:{uid}:global"
+
+
+def task_conversation_id_for_uid(uid: str, task_id: str) -> str:
+    return f"user:{uid}:task:{task_id}"
 
 
 def _clean(document: Mapping[str, Any]) -> dict[str, Any]:
@@ -447,6 +451,14 @@ async def build_user_bootstrap(
         store.query_documents(
             "blocks", filters=[("blocked_uid", "EQUAL", principal.uid)]
         ),
+        store.query_documents(
+            "presentation_directives",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+        ),
+        store.query_documents(
+            "intent_private_data",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+        ),
     )
     profile = cast(dict[str, Any] | None, results[0])
     agent = cast(dict[str, Any] | None, results[1])
@@ -465,6 +477,8 @@ async def build_user_bootstrap(
     open_posts = cast(list[dict[str, Any]], results[14])
     outgoing_blocks = cast(list[dict[str, Any]], results[15])
     incoming_blocks = cast(list[dict[str, Any]], results[16])
+    presentation_directives = cast(list[dict[str, Any]], results[17])
+    private_intents = cast(list[dict[str, Any]], results[18])
     blocked_uids = {str(item.get("blocked_uid")) for item in outgoing_blocks} | {
         str(item.get("blocker_uid")) for item in incoming_blocks
     }
@@ -481,6 +495,13 @@ async def build_user_bootstrap(
         clean_room.pop("participant_uids", None)
         clean_room.pop("revoked_participant_uids", None)
         safe_rooms.append(clean_room)
+    canonical_global_conversation_id = global_conversation_id_for_uid(principal.uid)
+    canonical_conversations = [
+        item
+        for item in conversations
+        if item.get("kind") != "GLOBAL_PERSONAL_AGENT"
+        or item.get("conversation_id") == canonical_global_conversation_id
+    ]
     return {
         "schemaVersion": SCHEMA_VERSION,
         "profile": _clean(profile or {}),
@@ -488,9 +509,23 @@ async def build_user_bootstrap(
         "privacy": _clean(privacy or {}),
         "autonomy": _clean(autonomy or {}),
         "quota": _clean(quota or {}),
-        "tasks": [_clean(item) for item in tasks],
-        "conversations": [_clean(item) for item in conversations],
+        "tasks": [
+            {
+                **_clean(item),
+                "agent_public_draft": next(
+                    (
+                        dict(private.get("public_draft", {}))
+                        for private in private_intents
+                        if private.get("intent_id") == item.get("intent_id")
+                    ),
+                    {},
+                ),
+            }
+            for item in tasks
+        ],
+        "conversations": [_clean(item) for item in canonical_conversations],
         "conversationMessages": [_clean(item) for item in messages],
+        "presentationDirectives": [_clean(item) for item in presentation_directives],
         "decisions": [_clean(item) for item in decisions],
         "memories": [_clean(item) for item in memories],
         "relationships": [_clean(item) for item in relationships],
@@ -531,9 +566,8 @@ async def create_user_task(
     agent_id = agent_id_for_uid(principal.uid)
     task_id = f"task_{uuid4().hex}"
     intent_id = f"intent_{uuid4().hex}"
-    conversation_id = stable_id("conversation_task", task_id)
+    conversation_id = task_conversation_id_for_uid(principal.uid, task_id)
     user_message_id = f"message_{uuid4().hex}"
-    agent_message_id = f"message_{uuid4().hex}"
     review_decision_id = stable_id("decision_review", task_id)
     task = {
         "schema_version": SCHEMA_VERSION,
@@ -603,22 +637,7 @@ async def create_user_task(
         "author_id": principal.uid,
         "content": body.goal,
         "visibility": "PRIVATE_USER_AGENT",
-        "created_at": timestamp,
-    }
-    agent_message = {
-        "schema_version": SCHEMA_VERSION,
-        "namespace": PRODUCTION_NAMESPACE,
-        "message_id": agent_message_id,
-        "conversation_id": conversation_id,
-        "task_id": task_id,
-        "owner_uid": principal.uid,
-        "role": "PERSONAL_AGENT",
-        "author_id": agent_id,
-        "content": (
-            "I created an isolated request and a private post draft. "
-            "Review the public projection before I publish it."
-        ),
-        "visibility": "PRIVATE_USER_AGENT",
+        "message_classification": "MANUALLY_ENTERED_USER_CONTENT",
         "created_at": timestamp,
     }
     review_decision = {
@@ -639,7 +658,6 @@ async def create_user_task(
         ("intent_private_data", intent_id, private_intent),
         ("conversations", conversation_id, conversation),
         ("conversation_messages", user_message_id, user_message),
-        ("conversation_messages", agent_message_id, agent_message),
         ("decisions", review_decision_id, review_decision),
     ]
     await store.commit_writes(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -11,10 +13,11 @@ from google import genai
 from google.adk.agents import Agent
 from google.adk.models import Gemini
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from pydantic import BaseModel, ConfigDict, Field
 
 from pairpilot_orchestrator.config import Settings
+from pairpilot_orchestrator.firestore_session_service import FirestoreSessionService
+from pairpilot_orchestrator.multi_user_platform import MultiUserStore, stable_id
 
 PUBLIC_AGENT_POST_FIELDS = {
     "schema_version",
@@ -106,19 +109,37 @@ def _agent(settings: Settings) -> Agent:
 
 async def run_personal_agent_turn(
     *,
+    store: MultiUserStore,
     runtime: dict[str, Any],
     own_public_post: dict[str, Any],
     peer_public_post: dict[str, Any],
 ) -> BoundedNegotiationDecision:
     settings = Settings.from_environment()
-    session_id = str(uuid4())
     owner_uid = str(dict(runtime["owner"])["uid"])
-    sessions = InMemorySessionService()
-    await sessions.create_session(
+    agent_id = str(dict(runtime["agent"])["agent_id"])
+    own_intent_id = str(own_public_post["intent_id"])
+    peer_intent_id = str(peer_public_post["intent_id"])
+    session_id = stable_id("a2a_adk_session", agent_id, own_intent_id, peer_intent_id)
+    invocation_id = f"a2a_invocation_{uuid4().hex}"
+    started_at = datetime.now(UTC)
+    started_clock = time.monotonic()
+    sessions = FirestoreSessionService(store)
+    existing = await sessions.get_session(
         app_name="pairpilot_multi_user_negotiation",
         user_id=owner_uid,
         session_id=session_id,
     )
+    if existing is None:
+        await sessions.create_session(
+            app_name="pairpilot_multi_user_negotiation",
+            user_id=owner_uid,
+            session_id=session_id,
+            state={
+                "owner_agent_id": agent_id,
+                "own_intent_id": own_intent_id,
+                "peer_intent_id": peer_intent_id,
+            },
+        )
     runner = Runner(
         app_name="pairpilot_multi_user_negotiation",
         agent=_agent(settings),
@@ -138,23 +159,87 @@ async def run_personal_agent_turn(
         },
     }
     fragments: list[str] = []
-    async for event in runner.run_async(
-        user_id=owner_uid,
-        session_id=session_id,
-        new_message=genai.types.Content(
-            role="user",
-            parts=[genai.types.Part(text=json.dumps(prompt, default=str))],
-        ),
-    ):
-        if event.content:
-            fragments.extend(
-                part.text for part in event.content.parts or [] if part.text
-            )
-    return BoundedNegotiationDecision.model_validate_json("".join(fragments).strip())
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    turn_id = stable_id("a2a_turn", session_id, invocation_id)
+    try:
+        async for event in runner.run_async(
+            user_id=owner_uid,
+            session_id=session_id,
+            invocation_id=invocation_id,
+            new_message=genai.types.Content(
+                role="user",
+                parts=[genai.types.Part(text=json.dumps(prompt, default=str))],
+            ),
+        ):
+            if event.usage_metadata:
+                prompt_count = getattr(event.usage_metadata, "prompt_token_count", None)
+                candidate_count = getattr(
+                    event.usage_metadata, "candidates_token_count", None
+                )
+                if prompt_count is not None:
+                    input_tokens = max(input_tokens or 0, prompt_count)
+                if candidate_count is not None:
+                    output_tokens = max(output_tokens or 0, candidate_count)
+            if event.content:
+                fragments.extend(
+                    part.text for part in event.content.parts or [] if part.text
+                )
+        decision = BoundedNegotiationDecision.model_validate_json(
+            "".join(fragments).strip()
+        )
+        await store.upsert(
+            "a2a_agent_turns",
+            turn_id,
+            {
+                "namespace": "production",
+                "turn_id": turn_id,
+                "owner_uid": owner_uid,
+                "owner_agent_id": agent_id,
+                "own_intent_id": own_intent_id,
+                "peer_intent_id": peer_intent_id,
+                "adk_session_id": session_id,
+                "adk_invocation_id": invocation_id,
+                "model_id": settings.model_id,
+                "execution_mode": settings.execution_mode,
+                "status": "COMPLETED",
+                "started_at": started_at,
+                "completed_at": datetime.now(UTC),
+                "latency_ms": int((time.monotonic() - started_clock) * 1000),
+                "input_token_count": input_tokens,
+                "output_token_count": output_tokens,
+                "observable_result": decision.model_dump(),
+            },
+        )
+        return decision
+    except Exception as exc:
+        await store.upsert(
+            "a2a_agent_turns",
+            turn_id,
+            {
+                "namespace": "production",
+                "turn_id": turn_id,
+                "owner_uid": owner_uid,
+                "owner_agent_id": agent_id,
+                "own_intent_id": own_intent_id,
+                "peer_intent_id": peer_intent_id,
+                "adk_session_id": session_id,
+                "adk_invocation_id": invocation_id,
+                "model_id": settings.model_id,
+                "execution_mode": settings.execution_mode,
+                "status": "FAILED",
+                "started_at": started_at,
+                "completed_at": datetime.now(UTC),
+                "latency_ms": int((time.monotonic() - started_clock) * 1000),
+                "error_status": type(exc).__name__,
+            },
+        )
+        raise
 
 
 async def negotiate_pair_with_adk(
     *,
+    store: MultiUserStore,
     source_runtime: dict[str, Any],
     target_runtime: dict[str, Any],
     source_post: dict[str, Any],
@@ -164,11 +249,13 @@ async def negotiate_pair_with_adk(
 
     source_decision, target_decision = await asyncio.gather(
         run_personal_agent_turn(
+            store=store,
             runtime=source_runtime,
             own_public_post=source_post,
             peer_public_post=target_post,
         ),
         run_personal_agent_turn(
+            store=store,
             runtime=target_runtime,
             own_public_post=target_post,
             peer_public_post=source_post,

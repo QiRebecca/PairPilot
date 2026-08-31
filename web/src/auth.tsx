@@ -39,6 +39,7 @@ interface AuthContextValue {
   verifyEmailCode: (code: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
+  streamRequest: (path: string, init?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -136,10 +137,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authenticatedApi<T>(path, token, init);
   }, [requireAuth]);
 
+  const streamRequest = useCallback(async (path: string, init?: RequestInit) => {
+    const current = requireAuth().currentUser;
+    if (!current) throw new Error("Your session ended. Sign in again.");
+    const token = await current.getIdToken(true);
+    const response = await fetch(path, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        Authorization: `Bearer ${token}`,
+        ...init?.headers,
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { detail?: string };
+      throw new Error(body.detail || `Request failed (${response.status})`);
+    }
+    return response;
+  }, [requireAuth]);
+
   const value = useMemo(() => ({
     user, loading, configured, error, signUp, signIn, signOutUser,
     resetPassword, resendVerification, verifyEmailCode, refreshUser, request,
-  }), [configured, error, loading, refreshUser, request, resendVerification, resetPassword, signIn, signOutUser, signUp, user, verifyEmailCode]);
+    streamRequest,
+  }), [configured, error, loading, refreshUser, request, resendVerification, resetPassword, signIn, signOutUser, signUp, streamRequest, user, verifyEmailCode]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
