@@ -130,7 +130,7 @@ async def reconcile_stale_holds(store: MultiUserStore, *, now: datetime) -> int:
 
 async def reconcile_open_posts(store: MultiUserStore) -> dict[str, int]:
     posts = await store.query_documents(
-        "intent_posts", filters=[("status", "EQUAL", "OPEN")], limit=200
+        "intent_posts", filters=[("status", "EQUAL", "OPEN")], limit=100
     )
     eligible: list[tuple[float, float, dict[str, Any]]] = []
     for post in posts:

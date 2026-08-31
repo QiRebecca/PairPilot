@@ -267,7 +267,14 @@ async def test_personal_agent_task_tool_no_longer_uses_legacy_type() -> None:
 
 @pytest.mark.asyncio
 async def test_reconciliation_rotates_fairly_across_open_posts(monkeypatch) -> None:
-    store = MemoryMultiUserStore()
+    class StrictLimitStore(MemoryMultiUserStore):
+        async def query_documents(self, collection, *, filters, limit=100):
+            assert 1 <= limit <= 100
+            return await super().query_documents(
+                collection, filters=filters, limit=limit
+            )
+
+    store = StrictLimitStore()
     attempted: list[str] = []
     for index in range(5):
         task_id = f"task-fair-{index}"
