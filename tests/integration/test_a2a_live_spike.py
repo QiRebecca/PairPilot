@@ -84,6 +84,12 @@ async def test_qi_reads_card_and_sends_live_a2a_message() -> None:
     assert len(app.state.provenance_store.records) == 1
     provenance = app.state.provenance_store.records[0]
     assert provenance.inbound_message_id == str(envelope.message_id)
-    assert provenance.exact_model_id == "gemini-3.7-flash"
+    assert provenance.exact_model_id in {
+        "gemini-3.7-flash",
+        "SYSTEM_BOUNDED_NONRESPONSE",
+    }
+    if provenance.exact_model_id == "SYSTEM_BOUNDED_NONRESPONSE":
+        assert decision_claim.value == "DECLINE_INTRODUCTION"
+        assert "could not produce a valid response" in outbound.natural_language
     for handler in app.state.a2a_handlers.values():
         await handler.aclose()

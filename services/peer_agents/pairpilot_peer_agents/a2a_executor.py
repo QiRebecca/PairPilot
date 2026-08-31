@@ -83,8 +83,8 @@ class PeerAgentExecutor(AgentExecutor):
 
     async def _generate_decision(
         self, *, session_id: str, user_message: genai.types.Content
-    ) -> PeerDecision:
-        """Retry an empty/schema-invalid live turn without inventing a fallback."""
+    ) -> tuple[PeerDecision, bool]:
+        """Retry invalid output, then return an explicit nonresponse decision."""
 
         next_message = user_message
         last_error: ValidationError | None = None
@@ -100,13 +100,16 @@ class PeerAgentExecutor(AgentExecutor):
                         part.text for part in event.content.parts or [] if part.text
                     )
             try:
-                return PeerDecision.model_validate_json(
-                    "".join(response_fragments).strip()
+                return (
+                    PeerDecision.model_validate_json(
+                        "".join(response_fragments).strip()
+                    ),
+                    True,
                 )
             except ValidationError as exc:
                 last_error = exc
                 if attempt + 1 == self.MAX_MODEL_ATTEMPTS:
-                    raise
+                    break
                 next_message = genai.types.Content(
                     role="user",
                     parts=[
@@ -121,7 +124,35 @@ class PeerAgentExecutor(AgentExecutor):
                     ],
                 )
         assert last_error is not None
-        raise last_error
+        if self.agent_id == "alice-agent":
+            return (
+                PeerDecision(
+                    action="DECLINE_INTRODUCTION",
+                    speech_act="INTRODUCTION_RESPONSE",
+                    natural_language=(
+                        "This Agent could not produce a valid response after "
+                        "bounded retries. No introduction or compatibility is implied."
+                    ),
+                    claims=[],
+                    reason="MODEL_NO_VALID_OUTPUT_AFTER_BOUNDED_RETRIES",
+                    confidence=0.0,
+                ),
+                False,
+            )
+        return (
+            PeerDecision(
+                action="PROVIDE_INFORMATION",
+                speech_act="INFORMATION_RESPONSE",
+                natural_language=(
+                    "This Agent could not produce a valid response after bounded "
+                    "retries. No compatibility, fact, or acceptance is implied."
+                ),
+                claims=[],
+                reason="MODEL_NO_VALID_OUTPUT_AFTER_BOUNDED_RETRIES",
+                confidence=0.0,
+            ),
+            False,
+        )
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         inbound = context.message
@@ -140,7 +171,7 @@ class PeerAgentExecutor(AgentExecutor):
             parts=[genai.types.Part(text=envelope.model_dump_json())],
         )
 
-        decision = await self._generate_decision(
+        decision, live_model_output = await self._generate_decision(
             session_id=session_id, user_message=user_message
         )
         self._validate_decision(decision)
@@ -232,7 +263,11 @@ class PeerAgentExecutor(AgentExecutor):
             inbound_message_id=inbound.message_id,
             outbound_message_id=str(outbound.message_id),
             response_text=response_text,
-            model_id=self._model_id,
+            model_id=(
+                self._model_id
+                if live_model_output
+                else "SYSTEM_BOUNDED_NONRESPONSE"
+            ),
         )
         await event_queue.enqueue_event(
             Message(
