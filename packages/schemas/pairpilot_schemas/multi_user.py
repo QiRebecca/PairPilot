@@ -41,7 +41,7 @@ class CreateUserTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     title: str = Field(min_length=1, max_length=100)
-    task_type: str = Field(pattern=r"^[a-z0-9_]+$")
+    task_type: str = Field(pattern=r"^[A-Za-z0-9_]+$")
     goal: str = Field(min_length=20, max_length=2_000)
     event: str = Field(min_length=1, max_length=80)
     location: str = Field(min_length=1, max_length=120)
