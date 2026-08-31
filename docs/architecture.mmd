@@ -1,35 +1,53 @@
-flowchart LR
-    PUB["Unauthenticated website<br/>Landing · Sign up · Sign in<br/>Privacy · Terms"]
-    DEMO["Synthetic demo namespace<br/>Qi · Alice · Maya · Lena<br/>never enters production Explore"]
-    AUTH["Firebase Authentication<br/>Email/password · verification<br/>reset · session restoration"]
-    APP["Authenticated PairPilot App<br/>/app/agent · requests · explore<br/>decisions · rooms · network · memory"]
-    API["Cloud Run auth middleware<br/>verify Firebase ID token + revocation<br/>derive UID · owner/member checks"]
-    AGENT["User-scoped Personal Agent runtime<br/>load arbitrary agent_id + owner policy<br/>two bounded ADK/Gemini turns"]
-    TASK["Task Workspace Registry<br/>owner-scoped conversations<br/>decisions · quotas · leases"]
-    POSTS["Public Intent Registry<br/>human-approved projection only<br/>OPEN · PAUSED · MATCHED · CLOSED"]
-    PRIVATE["Private Intent + Memory stores<br/>raw goal · Agent-only boundaries<br/>owner UID never sent to peers"]
-    BUS["Pub/Sub async orchestration<br/>OIDC push · intent.published.v2<br/>bounded retry · idempotent delivery"]
-    A2A["Intent-scoped Agent communication<br/>principal Agent + internal owner UID<br/>source/target task + intent provenance"]
-    COMMIT["Proposal · Hold · Dual Approval<br/>Agent A + Agent B accept version N<br/>Human A + Human B approve hashes"]
-    ROOM["Participant-scoped rooms<br/>AGENTS_ONLY before match<br/>SHARED_ROOM after atomic commit"]
-    SOCIAL["Independent owner networks<br/>relationship + scoped memory<br/>block · report · leave · delete"]
-    FS[("Firestore authoritative state<br/>server-only access<br/>client rules deny by default")]
+flowchart TB
+    UA["Authenticated User A"]
+    UB["Authenticated User B"]
+    AUTH["Firebase Authentication<br/>verified identity + restored session"]
+    RUN["Cloud Run<br/>authenticated web API + Agent runtime + worker"]
+    PA["Persistent Personal Agents<br/>one owner-scoped Agent per user<br/>global + task-scoped ADK sessions"]
+    MODEL["Vertex AI<br/>gemini-3.7-flash"]
 
-    PUB --> AUTH
-    PUB --> DEMO
-    AUTH -->|"fresh Firebase ID token"| APP
-    APP --> API
-    API --> TASK
-    API --> POSTS
-    API --> PRIVATE
-    POSTS -->|"publish event"| BUS
-    BUS --> AGENT
-    AGENT <-->|"task-scoped A2A"| A2A
-    AGENT --> COMMIT
-    COMMIT -->|"two current human approvals"| FS
-    FS --> POSTS
-    FS --> ROOM
-    FS --> SOCIAL
-    TASK --> FS
-    PRIVATE --> AGENT
-    DEMO -. isolated .-> FS
+    UA --> AUTH
+    UB --> AUTH
+    AUTH -->|"Firebase ID token"| RUN
+    RUN --> PA
+    PA <-->|"live Agent turns"| MODEL
+
+    subgraph FLOW["Agent-operated marketplace — authoritative main flow"]
+        direction LR
+        C["Conversation"] --> D["Agent-drafted<br/>privacy-aware Post"]
+        D --> P["Human review / Agent policy<br/>Publish"]
+        P --> R["Intent Post Registry"]
+        R --> M["Background Market Monitoring<br/>Multi-Candidate Pool"]
+        M --> A["Multiple A2A Negotiations<br/>Coordination Rooms"]
+        A --> K["Dynamic Ranking"]
+        K --> H["Proposal + Hold<br/>Dual Human Approval"]
+        H --> X["Atomic Match"]
+        X --> S["Shared Room<br/>Relationship Network<br/>Confirmed Memory"]
+    end
+
+    PA --> C
+    PA --> D
+    PA --> A
+    PA --> K
+
+    BUS["Pub/Sub background monitoring<br/>publish events + bounded retries + OIDC push"]
+    FS[("Firestore authoritative state<br/>users · Agents · ADK sessions · tasks · Posts<br/>assessments · rooms · proposals · approvals<br/>matches · relationships · memories · leases")]
+    LOG["Cloud Logging<br/>trace IDs + Agent/model provenance + worker outcomes"]
+
+    P -->|"intent.published.v2"| BUS
+    BUS -->|"wake worker"| RUN
+    RUN <-->|"authorized, idempotent state transitions"| FS
+    FLOW --> FS
+    RUN --> LOG
+    BUS --> LOG
+
+    classDef human fill:#172019,stroke:#caff6a,color:#f4f7ef,stroke-width:2px;
+    classDef google fill:#13201d,stroke:#79e8ca,color:#f4f7ef,stroke-width:2px;
+    classDef agent fill:#1e1913,stroke:#efb680,color:#f4f7ef,stroke-width:2px;
+    classDef flow fill:#171917,stroke:#7b827c,color:#f4f7ef,stroke-width:1.5px;
+    classDef consent fill:#1b1724,stroke:#b9a7ff,color:#f4f7ef,stroke-width:2px;
+    class UA,UB human;
+    class AUTH,RUN,MODEL,BUS,FS,LOG google;
+    class PA agent;
+    class C,D,P,R,M,A,K flow;
+    class H,X,S consent;

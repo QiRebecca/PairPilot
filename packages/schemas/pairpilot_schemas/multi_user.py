@@ -66,7 +66,15 @@ class PublishUserPostInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     public_title: str = Field(min_length=1, max_length=120)
-    public_summary: str = Field(min_length=1, max_length=600)
+    public_summary: str = Field(default="", max_length=4_000)
+    public_requirements: list[str] = Field(default_factory=list, max_length=12)
+
+
+class SaveUserPostDraftInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    public_title: str = Field(default="", max_length=120)
+    public_summary: str = Field(default="", max_length=4_000)
     public_requirements: list[str] = Field(default_factory=list, max_length=12)
 
 

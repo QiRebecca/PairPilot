@@ -386,6 +386,24 @@ async def test_public_post_rejects_contact_and_precise_private_details() -> None
 
 
 @pytest.mark.asyncio
+async def test_public_post_description_is_optional_and_falls_back_to_title() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-optional-summary")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Optional Summary"))
+    task = await create_user_task(store, user, task_input("Simple public title"))
+    post = await publish_user_post(
+        store,
+        user,
+        task_id=str(task["task_id"]),
+        public_title="Simple public title",
+        public_summary="",
+        public_requirements=[],
+    )
+    assert post["public_summary"] == "Simple public title"
+
+
+@pytest.mark.asyncio
 async def test_candidate_pool_reranks_multiple_candidates() -> None:
     store = MemoryMultiUserStore()
     users = [principal("uid-a"), principal("uid-b"), principal("uid-c")]
@@ -540,6 +558,8 @@ async def test_two_users_receive_isolated_private_bootstraps_and_real_posts() ->
     bootstrap_b = await build_user_bootstrap(store, user_b)
     assert {item["task_id"] for item in bootstrap_a["tasks"]} == {task_a["task_id"]}
     assert {item["task_id"] for item in bootstrap_b["tasks"]} == {task_b["task_id"]}
+    assert bootstrap_a["myPosts"][0]["task_id"] == task_a["task_id"]
+    assert bootstrap_b["myPosts"][0]["task_id"] == task_b["task_id"]
     assert bootstrap_a["explorePosts"][0]["public_title"] == "Blair public post"
     assert (
         bootstrap_a["explorePosts"][0]["public_summary"]
@@ -549,6 +569,7 @@ async def test_two_users_receive_isolated_private_bootstraps_and_real_posts() ->
     assert "owner_uid" not in bootstrap_a["explorePosts"][0]
     assert "email" not in bootstrap_a["explorePosts"][0]
     assert "maximum_additional_cost_usd" not in bootstrap_a["explorePosts"][0]
+    assert "task_id" not in bootstrap_a["explorePosts"][0]
     assert "Blair request: find" not in str(bootstrap_a)
     assert "Alex request: find" not in str(bootstrap_b)
 
@@ -1032,6 +1053,67 @@ def test_model_failure_stream_is_honest_and_saves_no_assistant(monkeypatch) -> N
     assert not any(
         item.get("role") == "PERSONAL_AGENT"
         for item in store.collections["conversation_messages"].values()
+    )
+
+
+def test_global_conversation_can_focus_an_owned_task_without_switching_threads(
+    monkeypatch,
+) -> None:
+    store = MemoryMultiUserStore()
+    observed_task_ids: list[str | None] = []
+
+    async def focused_turn(
+        _store,
+        _principal,
+        *,
+        conversation,
+        content,
+        client_message_id,
+        invocation_id,
+    ):
+        del content, client_message_id
+        observed_task_ids.append(conversation.get("task_id"))
+        yield {"type": "message.accepted", "invocation_id": invocation_id}
+        yield {
+            "type": "agent.completed",
+            "invocation_id": invocation_id,
+            "assistant_message_id": "assistant-focused",
+            "message": {"content": "I kept the same chat and focused the task."},
+        }
+
+    monkeypatch.setattr(web, "_store", lambda: store)
+    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "personal_agent_turn_runner", focused_turn, raising=False
+    )
+    client = TestClient(web.app)
+    headers = {"Authorization": "Bearer user-a"}
+    assert client.post("/api/app/provision", headers=headers).status_code == 200
+    assert client.put(
+        "/api/app/onboarding",
+        headers=headers,
+        json=onboarding("Alex").model_dump(mode="json"),
+    ).status_code == 200
+    task_response = client.post(
+        "/api/app/tasks",
+        headers=headers,
+        json=task_input("Disney buddy").model_dump(mode="json"),
+    )
+    task_id = task_response.json()["task"]["task_id"]
+    response = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers,
+        json={
+            "content": "Please revise this post.",
+            "client_message_id": "focused-message-0001",
+            "task_id": task_id,
+        },
+    )
+    assert response.status_code == 200
+    assert observed_task_ids == [task_id]
+    assert (
+        store.collections["conversations"]["user:uid-a:global"].get("task_id")
+        is None
     )
 
 

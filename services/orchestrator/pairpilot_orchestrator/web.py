@@ -48,6 +48,7 @@ from pairpilot_schemas import (
     PublishUserPostInput,
     ReportInput,
     RoomMessage,
+    SaveUserPostDraftInput,
     SpeakerType,
     UpdateAccountSettingsInput,
     UserRoomMessageInput,
@@ -92,6 +93,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     leave_user_room,
     provision_user,
     publish_user_post,
+    save_user_post_draft,
     schedule_account_deletion,
     send_user_room_message,
     set_user_post_status,
@@ -809,8 +811,22 @@ async def send_personal_agent_message(
 
     conversation = await _owned_conversation(conversation_id, principal)
     conversation_task_id = str(conversation.get("task_id", "")) or None
-    if body.task_id is not None and body.task_id != conversation_task_id:
+    if (
+        body.task_id is not None
+        and conversation_task_id is not None
+        and body.task_id != conversation_task_id
+    ):
         raise HTTPException(409, "The message task does not match this conversation.")
+    effective_task_id = body.task_id or conversation_task_id
+    if effective_task_id is not None:
+        task_workspace = await _store().get("task_workspaces", effective_task_id)
+        if task_workspace is None:
+            raise HTTPException(404, "Task was not found.")
+        require_task_owner(principal, task_workspace)
+    effective_conversation = {
+        **conversation,
+        "task_id": effective_task_id,
+    }
     request_id = stable_id(
         "chat_request", principal.uid, conversation_id, body.client_message_id
     )
@@ -826,7 +842,7 @@ async def send_personal_agent_message(
             "invocation_id": invocation_id,
             "owner_uid": principal.uid,
             "conversation_id": conversation_id,
-            "task_id": conversation_task_id,
+            "task_id": effective_task_id,
             "client_message_id": body.client_message_id,
             "retry_of": body.retry_of,
             "status": "ACCEPTED",
@@ -847,7 +863,7 @@ async def send_personal_agent_message(
                 "owner_uid": principal.uid,
                 "personal_agent_id": conversation.get("principal_agent_id"),
                 "conversation_id": conversation_id,
-                "task_id": conversation_task_id,
+                "task_id": effective_task_id,
                 "role": "USER",
                 "author_id": principal.uid,
                 "content": body.content,
@@ -863,7 +879,7 @@ async def send_personal_agent_message(
                 request_id=request_id,
                 invocation_id=invocation_id,
                 principal=principal,
-                conversation=conversation,
+                conversation=effective_conversation,
                 body=body,
             )
         )
@@ -1202,6 +1218,56 @@ async def app_publish_task(
             },
         ) from exc
     return {"post": post, "status": "PUBLISHED"}
+
+
+@app.put("/api/app/tasks/{task_id}/draft")
+async def app_save_task_draft(
+    task_id: str,
+    body: SaveUserPostDraftInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        draft = await save_user_post_draft(
+            _store(),
+            principal,
+            task_id=task_id,
+            public_title=body.public_title,
+            public_summary=body.public_summary,
+            public_requirements=body.public_requirements,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Task was not found.") from exc
+    return {"draft": draft, "status": "SAVED"}
+
+
+@app.post("/api/app/tasks/{task_id}/candidates/{candidate_intent_id}/contact")
+async def app_contact_explore_candidate(
+    task_id: str,
+    candidate_intent_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    """Ask the owner's Agent to evaluate one explicitly selected public post."""
+
+    store = _store()
+    task = await store.get("task_workspaces", task_id)
+    if task is None:
+        raise HTTPException(404, "Task was not found.")
+    require_task_owner(principal, task)
+    source_intent_id = str(task.get("intent_id", ""))
+    target = await store.get("intent_posts", candidate_intent_id)
+    if target is None or target.get("status") != "OPEN":
+        raise HTTPException(409, "This public post is no longer available.")
+    if target.get("owner_uid") == principal.uid:
+        raise HTTPException(422, "Your Agent cannot contact your own post.")
+    try:
+        result = await process_candidate_pool_event(
+            store,
+            source_intent_id,
+            requested_target_id=candidate_intent_id,
+        )
+    except AgentRuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"status": "CONTACTED", "result": result}
 
 
 @app.patch("/api/app/posts/{intent_id}/status")

@@ -41,6 +41,7 @@ from pairpilot_schemas.multi_user import (
     OnboardingInput,
     PublishUserPostInput,
     ReportInput,
+    SaveUserPostDraftInput,
     UpdateAccountSettingsInput,
     UserRoomMessageInput,
 )
@@ -109,6 +110,7 @@ __all__ = [
     "HumanProposalDecisionInput",
     "OnboardingInput",
     "PublishUserPostInput",
+    "SaveUserPostDraftInput",
     "ReportInput",
     "UpdateAccountSettingsInput",
     "UserRoomMessageInput",

@@ -633,7 +633,15 @@ async def build_user_bootstrap(
             }
             for item in matches
         ],
-        "myPosts": [_public_post_projection(item) for item in my_posts],
+        "myPosts": [
+            {
+                **_public_post_projection(item),
+                # Owner-only linkage for the authoritative publication state in
+                # its private request workspace. Explore projections omit it.
+                "task_id": item.get("task_id"),
+            }
+            for item in my_posts
+        ],
         "explorePosts": explore,
         "communities": community_payload["communities"],
         "communityMemberships": community_payload["memberships"],
@@ -833,9 +841,14 @@ async def publish_user_post(
         or profile.get("adult_confirmed") is not True
     ):
         raise PermissionError("ONBOARDING_REQUIRED")
+    clean_title = public_title.strip()
+    if not clean_title:
+        raise ValueError("public title is required")
+    clean_summary = public_summary.strip() or clean_title
+    clean_requirements = [item.strip() for item in public_requirements if item.strip()]
     OutboundPrivacyGuard().validate(
         natural_language="\n".join(
-            [public_title, public_summary, *public_requirements]
+            [clean_title, clean_summary, *clean_requirements]
         ),
         references=[],
     )
@@ -852,15 +865,15 @@ async def publish_user_post(
         "task_id": task_id,
         "community_id": community_id,
         "task_type": normalize_intent_type(str(task["task_type"])),
-        "public_title": public_title,
-        "public_summary": public_summary,
+        "public_title": clean_title,
+        "public_summary": clean_summary,
         "public_constraints": {
             "event": draft.get("event"),
             "location": draft.get("location"),
             "date_start": draft.get("date_start"),
             "date_end": draft.get("date_end"),
         },
-        "public_requirements": public_requirements,
+        "public_requirements": clean_requirements,
         "status": "OPEN",
         "capacity": 1,
         "capacity_remaining": 1,
@@ -934,6 +947,40 @@ async def publish_user_post(
         idempotency_key=f"v2:{intent_id}:published",
     )
     return _public_post_projection(post)
+
+
+async def save_user_post_draft(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    *,
+    task_id: str,
+    public_title: str,
+    public_summary: str,
+    public_requirements: list[str],
+) -> dict[str, Any]:
+    """Persist editable public fields without publishing or changing task state."""
+
+    task = await store.get("task_workspaces", task_id)
+    if task is None:
+        raise LookupError("task was not found")
+    require_task_owner(principal, task)
+    intent_id = str(task["intent_id"])
+    private_intent = await store.get("intent_private_data", intent_id)
+    if private_intent is None:
+        raise LookupError("private intent was not found")
+    require_resource_owner(principal, private_intent)
+    clean = _clean(private_intent)
+    draft = dict(clean.get("public_draft", {}))
+    draft.update(
+        public_title=public_title.strip(),
+        public_summary=public_summary.strip(),
+        public_requirements=[
+            item.strip() for item in public_requirements if item.strip()
+        ],
+    )
+    clean.update(public_draft=draft, updated_at=datetime.now(UTC))
+    await store.upsert("intent_private_data", intent_id, clean)
+    return draft
 
 
 async def set_user_post_status(

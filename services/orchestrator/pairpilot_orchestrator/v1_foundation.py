@@ -53,14 +53,16 @@ def memory_is_confirmed(memory: Mapping[str, Any]) -> bool:
 async def ensure_v1_foundation(store: Any) -> None:
     """Create global public community records idempotently."""
 
-    await store.create(
-        "communities",
-        DEFAULT_COMMUNITY_ID,
+    communities = [
         {
             "schema_version": V1_SCHEMA_VERSION,
             "namespace": "production",
             "community_id": DEFAULT_COMMUNITY_ID,
             "name": "ICML Seoul 2026",
+            "description": (
+                "Conference attendees coordinating rooms, meals, coffee chats, "
+                "and local plans."
+            ),
             "type": "CONFERENCE_EVENT",
             "location": "Seoul, South Korea",
             "start_time": datetime(2026, 7, 6, tzinfo=UTC),
@@ -72,7 +74,64 @@ async def ensure_v1_foundation(store: Any) -> None:
             "created_at": datetime(2026, 8, 1, tzinfo=UTC),
             "updated_at": datetime(2026, 8, 1, tzinfo=UTC),
         },
-    )
+        {
+            "schema_version": V1_SCHEMA_VERSION,
+            "namespace": "production",
+            "community_id": "community_hk_disney_buddies",
+            "name": "Hong Kong Disneyland Buddies",
+            "description": (
+                "Find park companions for photos, rides, food, and shared planning."
+            ),
+            "type": "LOCAL_INTEREST",
+            "location": "Hong Kong",
+            "visibility": "PUBLIC",
+            "membership_policy": "PUBLIC_JOIN",
+            "moderator_uids": [],
+            "status": "ACTIVE",
+            "created_at": datetime(2026, 8, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 8, 1, tzinfo=UTC),
+        },
+        {
+            "schema_version": V1_SCHEMA_VERSION,
+            "namespace": "production",
+            "community_id": "community_agent_builders",
+            "name": "Agent Builders",
+            "description": (
+                "Meet collaborators building practical AI agents and "
+                "agent-to-agent products."
+            ),
+            "type": "PROFESSIONAL_INTEREST",
+            "location": "Global",
+            "visibility": "PUBLIC",
+            "membership_policy": "PUBLIC_JOIN",
+            "moderator_uids": [],
+            "status": "ACTIVE",
+            "created_at": datetime(2026, 8, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 8, 1, tzinfo=UTC),
+        },
+        {
+            "schema_version": V1_SCHEMA_VERSION,
+            "namespace": "production",
+            "community_id": "community_shanghai_weekend",
+            "name": "Shanghai Weekend Plans",
+            "description": (
+                "Low-pressure meals, coffee chats, events, and weekend "
+                "activities around Shanghai."
+            ),
+            "type": "LOCAL_INTEREST",
+            "location": "Shanghai, China",
+            "visibility": "PUBLIC",
+            "membership_policy": "PUBLIC_JOIN",
+            "moderator_uids": [],
+            "status": "ACTIVE",
+            "created_at": datetime(2026, 8, 1, tzinfo=UTC),
+            "updated_at": datetime(2026, 8, 1, tzinfo=UTC),
+        },
+    ]
+    for community in communities:
+        await store.create(
+            "communities", str(community["community_id"]), community
+        )
 
 
 async def join_community(

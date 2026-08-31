@@ -52,4 +52,37 @@ describe("PersonalAgentChat", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
     expect(screen.queryByText("A convenient fallback answer")).not.toBeInTheDocument();
   });
+
+  it("renders an Agent directive as a real clickable task card", () => {
+    const navigate = vi.fn();
+    render(
+      <PersonalAgentChat
+        conversation={{ conversation_id: "user:uid-a:global" }}
+        messages={[{
+          message_id: "assistant-1",
+          conversation_id: "user:uid-a:global",
+          role: "PERSONAL_AGENT",
+          content: "I created the request.",
+          presentation_directive_ids: ["directive-1"],
+        }]}
+        directives={[{
+          directive_id: "directive-1",
+          conversation_id: "user:uid-a:global",
+          task_id: "task-disney",
+          action: "OPEN_TASK",
+          entity_ids: ["task-disney"],
+        }]}
+        tasks={[{
+          task_id: "task-disney",
+          title: "Hong Kong Disneyland buddy",
+          goal: "Find someone who enjoys taking photos.",
+          status: "DRAFT",
+        }]}
+        refresh={vi.fn().mockResolvedValue(undefined)}
+        navigate={navigate}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Hong Kong Disneyland buddy/i }));
+    expect(navigate).toHaveBeenCalledWith("/app/requests/task-disney");
+  });
 });

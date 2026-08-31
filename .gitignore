@@ -28,6 +28,7 @@ application_default_credentials.json
 .gcloud/
 .firebase/
 evidence/private/
+JUDGE_TESTING_INSTRUCTIONS_PRIVATE.md
 
 # Editors and OS
 .DS_Store
