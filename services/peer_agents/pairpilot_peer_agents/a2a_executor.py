@@ -1,5 +1,6 @@
 """Official A2A 1.x executor adapting requests to isolated peer ADK sessions."""
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -27,6 +28,7 @@ class PeerAgentExecutor(AgentExecutor):
     """Run one named peer using an isolated runner, context, and session store."""
 
     MAX_MODEL_ATTEMPTS = 3
+    MAX_RUNTIME_ATTEMPTS = 2
 
     def __init__(
         self,
@@ -87,18 +89,26 @@ class PeerAgentExecutor(AgentExecutor):
         """Retry invalid output, then return an explicit nonresponse decision."""
 
         next_message = user_message
-        last_error: ValidationError | None = None
+        last_error: Exception | None = None
         for attempt in range(self.MAX_MODEL_ATTEMPTS):
             response_fragments: list[str] = []
-            async for event in self._runner.run_async(
-                user_id=self.owner_id,
-                session_id=session_id,
-                new_message=next_message,
-            ):
-                if event.content:
-                    response_fragments.extend(
-                        part.text for part in event.content.parts or [] if part.text
-                    )
+            try:
+                async for event in self._runner.run_async(
+                    user_id=self.owner_id,
+                    session_id=session_id,
+                    new_message=next_message,
+                ):
+                    if event.content:
+                        response_fragments.extend(
+                            part.text for part in event.content.parts or [] if part.text
+                        )
+            except Exception as exc:
+                last_error = exc
+                if attempt + 1 >= self.MAX_RUNTIME_ATTEMPTS:
+                    break
+                next_message = user_message
+                await asyncio.sleep(2**attempt)
+                continue
             try:
                 return (
                     PeerDecision.model_validate_json(
