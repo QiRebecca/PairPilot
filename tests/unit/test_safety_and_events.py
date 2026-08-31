@@ -41,6 +41,35 @@ def test_minimum_necessary_reformulation_is_allowed_without_private_reference() 
     )
 
 
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Build Week room share test multi-20260901-0351",
+        "Meet on 2026-09-10 for coffee after Build Week.",
+        "Hackathon team 2026-0910 is looking for a designer.",
+    ],
+)
+def test_dates_and_event_identifiers_are_not_mistaken_for_phone_numbers(
+    content: str,
+) -> None:
+    assert OutboundPrivacyGuard().validate(
+        natural_language=content, references=[]
+    ) == content
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "Call +1 555 010 1234",
+        "Phone: 415-555-0123",
+        "手机：13800138000",
+    ],
+)
+def test_real_phone_number_shapes_remain_blocked(content: str) -> None:
+    with pytest.raises(DisclosureViolation):
+        OutboundPrivacyGuard().validate(natural_language=content, references=[])
+
+
 def test_peer_claim_is_not_a_verified_fact() -> None:
     evidence = EvidenceRecord(
         subject_agent_id="candidate-agent",

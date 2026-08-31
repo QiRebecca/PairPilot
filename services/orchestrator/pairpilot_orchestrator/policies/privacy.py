@@ -51,7 +51,14 @@ class OutboundPrivacyGuard:
             raise DisclosureViolation("prohibited private phrase detected")
         prohibited_patterns = (
             r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
-            r"(?<!\d)(?:\+?\d[\s().-]?){7,15}(?!\d)",
+            r"(?<!\w)\+\d(?:[\s().-]?\d){6,14}(?!\d)",
+            (
+                r"\b(?:phone|mobile|tel|whatsapp|call|text)\s*[:：]?\s*"
+                r"(?:\+?\d[\s().-]?){7,15}(?!\d)"
+            ),
+            r"(?:电话|手机|微信)\s*[:：]?\s*(?:\+?\d[\s().-]?){7,15}(?!\d)",
+            r"\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b",
+            r"(?<!\d)1[3-9]\d{9}(?!\d)",
             r"\b(?:room|suite)\s*(?:number|no\.?|#)?\s*\d{2,6}\b",
             (
                 r"\b\d{1,6}\s+[A-Z0-9 .'-]+\s"
