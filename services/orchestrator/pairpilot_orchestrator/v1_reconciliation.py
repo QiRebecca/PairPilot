@@ -130,20 +130,48 @@ async def reconcile_stale_holds(store: MultiUserStore, *, now: datetime) -> int:
 
 async def reconcile_open_posts(store: MultiUserStore) -> dict[str, int]:
     posts = await store.query_documents(
-        "intent_posts", filters=[("status", "EQUAL", "OPEN")], limit=20
+        "intent_posts", filters=[("status", "EQUAL", "OPEN")], limit=200
     )
-    attempted = 0
-    contacted = 0
+    eligible: list[tuple[float, float, dict[str, Any]]] = []
     for post in posts:
         task = await store.get("task_workspaces", str(post.get("task_id", "")))
         if task is None or int(task.get("contact_count", 0)) >= 5:
             continue
+        last_reconciled = task.get("last_reconciled_at")
+        published = post.get("published_at")
+        eligible.append(
+            (
+                _as_timestamp(last_reconciled),
+                _as_timestamp(published),
+                post,
+            )
+        )
+    eligible.sort(key=lambda item: (item[0], item[1], str(item[2].get("intent_id"))))
+    attempted = 0
+    contacted = 0
+    for _, _, post in eligible[:MAX_POSTS_PER_RECONCILIATION]:
         result = await process_candidate_pool_event(store, str(post["intent_id"]))
         attempted += 1
         contacted += int(result.get("contacted", 0))
-        if attempted >= MAX_POSTS_PER_RECONCILIATION:
-            break
+        task_id = str(post.get("task_id", ""))
+        current = await store.get("task_workspaces", task_id)
+        if current is not None:
+            clean = _clean(current)
+            timestamp = datetime.now(UTC)
+            clean.update(last_reconciled_at=timestamp, updated_at=timestamp)
+            await store.upsert("task_workspaces", task_id, clean)
     return {"posts_attempted": attempted, "candidates_contacted": contacted}
+
+
+def _as_timestamp(value: object) -> float:
+    if isinstance(value, datetime):
+        return value.timestamp()
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 async def run_v1_reconciliation(

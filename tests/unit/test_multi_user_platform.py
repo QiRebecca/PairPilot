@@ -48,6 +48,7 @@ from pairpilot_orchestrator.v1_foundation import (
 from pairpilot_orchestrator.v1_operations import build_admin_dashboard
 from pairpilot_orchestrator.v1_reconciliation import (
     reconcile_candidate_availability,
+    reconcile_open_posts,
 )
 from pairpilot_orchestrator.v1_relationships import (
     list_match_contact_cards,
@@ -262,6 +263,49 @@ async def test_personal_agent_task_tool_no_longer_uses_legacy_type() -> None:
     )
     created = store.collections["task_workspaces"][str(result["task_id"])]
     assert created["task_type"] == "EVENT_BUDDY"
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_rotates_fairly_across_open_posts(monkeypatch) -> None:
+    store = MemoryMultiUserStore()
+    attempted: list[str] = []
+    for index in range(5):
+        task_id = f"task-fair-{index}"
+        intent_id = f"intent-fair-{index}"
+        await store.create(
+            "task_workspaces",
+            task_id,
+            {
+                "namespace": "production",
+                "task_id": task_id,
+                "contact_count": 0,
+                "status": "SEARCHING",
+            },
+        )
+        await store.create(
+            "intent_posts",
+            intent_id,
+            {
+                "namespace": "production",
+                "intent_id": intent_id,
+                "task_id": task_id,
+                "status": "OPEN",
+                "published_at": datetime(2026, 9, 1, 0, index, tzinfo=UTC),
+            },
+        )
+
+    async def fake_process(_store, intent_id):
+        attempted.append(intent_id)
+        return {"contacted": 0}
+
+    monkeypatch.setattr(
+        "pairpilot_orchestrator.v1_reconciliation.process_candidate_pool_event",
+        fake_process,
+    )
+    assert (await reconcile_open_posts(store))["posts_attempted"] == 3
+    assert (await reconcile_open_posts(store))["posts_attempted"] == 3
+    assert attempted[:3] == ["intent-fair-0", "intent-fair-1", "intent-fair-2"]
+    assert attempted[3:5] == ["intent-fair-3", "intent-fair-4"]
 
 
 @pytest.mark.asyncio
