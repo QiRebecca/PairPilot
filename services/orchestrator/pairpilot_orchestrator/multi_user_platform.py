@@ -24,8 +24,18 @@ from pairpilot_orchestrator.auth.authorization import (
 )
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
 from pairpilot_orchestrator.infrastructure.google_cloud import encode_fields
+from pairpilot_orchestrator.policies.privacy import OutboundPrivacyGuard
+from pairpilot_orchestrator.v1_foundation import (
+    DEFAULT_COMMUNITY_ID,
+    active_community_ids,
+    ensure_v1_foundation,
+    join_community,
+    list_communities_for_user,
+    normalize_intent_type,
+    require_active_membership,
+)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PRODUCTION_NAMESPACE = "production"
 MAX_ACTIVE_TASKS_PER_USER = 3
 MAX_NEW_CONTACTS_PER_TASK = 5
@@ -136,6 +146,7 @@ async def provision_user(
 ) -> dict[str, Any]:
     """Create one complete, deterministic identity bundle atomically."""
 
+    await ensure_v1_foundation(store)
     existing = await store.get("users", principal.uid)
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
     agent_id = agent_id_for_uid(principal.uid)
@@ -153,9 +164,12 @@ async def provision_user(
                 "email_verified": principal.email_verified,
                 "onboarding_status": "NOT_STARTED",
                 "account_status": "ACTIVE",
+                "admin": principal.admin,
                 "personal_agent_id": agent_id,
                 "timezone": "UTC",
                 "adult_confirmed": False,
+                "community_ids": [],
+                "notification_preference": "IN_APP",
                 "created_at": timestamp,
                 "updated_at": timestamp,
             },
@@ -257,6 +271,21 @@ async def provision_user(
                 "created_at": timestamp,
             },
         ),
+        (
+            "notification_settings",
+            principal.uid,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "namespace": PRODUCTION_NAMESPACE,
+                "owner_uid": principal.uid,
+                "preference": "IN_APP",
+                "in_app_enabled": True,
+                "email_enabled": False,
+                "meaningful_events_only": True,
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            },
+        ),
     ]
     if existing is None:
         try:
@@ -278,8 +307,12 @@ async def provision_user(
             )
         )
         clean = _clean(existing)
-        if clean.get("email_verified") != principal.email_verified:
+        if (
+            clean.get("email_verified") != principal.email_verified
+            or clean.get("admin") != principal.admin
+        ):
             clean["email_verified"] = principal.email_verified
+            clean["admin"] = principal.admin
             clean["updated_at"] = timestamp
             await store.upsert("users", principal.uid, clean)
     result = await store.get("users", principal.uid)
@@ -312,6 +345,8 @@ async def complete_onboarding(
         general_location=body.general_location,
         language=body.language,
         adult_confirmed=body.adult_confirmed,
+        community_ids=body.community_ids,
+        notification_preference=body.notification_preference,
         updated_at=timestamp,
     )
     agent_id = str(profile["personal_agent_id"])
@@ -336,6 +371,8 @@ async def complete_onboarding(
         public_profile_visible=body.public_profile_visible,
         public_sharing_policy=body.public_sharing_policy,
         agent_sharing_policy=body.agent_sharing_policy,
+        default_public_visibility=body.default_public_visibility,
+        default_agent_visibility=body.default_agent_visibility,
         updated_at=timestamp,
     )
     autonomy = _clean(autonomy_document)
@@ -376,6 +413,19 @@ async def complete_onboarding(
             ),
         ]
     )
+    if principal.email_verified:
+        for community_id in body.community_ids:
+            await join_community(store, principal, community_id, now=timestamp)
+    notification_settings = await store.get("notification_settings", principal.uid)
+    if notification_settings is not None:
+        notification_clean = _clean(notification_settings)
+        notification_clean.update(
+            preference=body.notification_preference,
+            in_app_enabled=body.notification_preference != "NONE",
+            email_enabled=body.notification_preference == "IN_APP_AND_EMAIL",
+            updated_at=timestamp,
+        )
+        await store.upsert("notification_settings", principal.uid, notification_clean)
     return profile
 
 
@@ -384,6 +434,7 @@ def _public_post_projection(post: Mapping[str, Any]) -> dict[str, Any]:
         "schema_version",
         "intent_id",
         "owner_agent_id",
+        "community_id",
         "public_display_name",
         "task_type",
         "public_title",
@@ -394,18 +445,28 @@ def _public_post_projection(post: Mapping[str, Any]) -> dict[str, Any]:
         "capacity",
         "capacity_remaining",
         "authorship",
+        "human_approval_status",
         "published_at",
         "expires_at",
         "updated_at",
     }
-    return {key: value for key, value in post.items() if key in allowed}
+    projection = {key: value for key, value in post.items() if key in allowed}
+    projection.setdefault("community_id", DEFAULT_COMMUNITY_ID)
+    projection.setdefault("human_approval_status", "APPROVED")
+    return projection
 
 
 async def build_user_bootstrap(
     store: MultiUserStore,
     principal: AuthenticatedPrincipal,
 ) -> dict[str, Any]:
-    await provision_user(store, principal)
+    provisioned_profile = await provision_user(store, principal)
+    if (
+        principal.email_verified
+        and provisioned_profile.get("onboarding_status") == "COMPLETED"
+        and not await active_community_ids(store, principal.uid)
+    ):
+        await join_community(store, principal, DEFAULT_COMMUNITY_ID)
     agent_id = agent_id_for_uid(principal.uid)
     results = await asyncio.gather(
         store.get("users", principal.uid),
@@ -479,6 +540,38 @@ async def build_user_bootstrap(
     incoming_blocks = cast(list[dict[str, Any]], results[16])
     presentation_directives = cast(list[dict[str, Any]], results[17])
     private_intents = cast(list[dict[str, Any]], results[18])
+    (
+        community_payload,
+        notifications,
+        candidate_assessments,
+        rank_events,
+        contact_cards,
+        outcomes,
+    ) = await asyncio.gather(
+        list_communities_for_user(store, principal),
+        store.query_documents(
+            "notifications", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "candidate_assessments",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+        ),
+        store.query_documents(
+            "candidate_rank_events",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+        ),
+        store.query_documents(
+            "contact_cards", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "outcomes", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+    )
+    member_community_ids = {
+        str(item["community_id"])
+        for item in community_payload["memberships"]
+        if item.get("status") == "ACTIVE"
+    }
     blocked_uids = {str(item.get("blocked_uid")) for item in outgoing_blocks} | {
         str(item.get("blocker_uid")) for item in incoming_blocks
     }
@@ -488,6 +581,7 @@ async def build_user_bootstrap(
         if item.get("owner_uid") != principal.uid
         and item.get("owner_uid") not in blocked_uids
         and item.get("namespace") == PRODUCTION_NAMESPACE
+        and str(item.get("community_id", DEFAULT_COMMUNITY_ID)) in member_community_ids
     ]
     safe_rooms = []
     for room in rooms:
@@ -512,6 +606,7 @@ async def build_user_bootstrap(
         "tasks": [
             {
                 **_clean(item),
+                "community_id": item.get("community_id", DEFAULT_COMMUNITY_ID),
                 "agent_public_draft": next(
                     (
                         dict(private.get("public_draft", {}))
@@ -540,6 +635,13 @@ async def build_user_bootstrap(
         ],
         "myPosts": [_public_post_projection(item) for item in my_posts],
         "explorePosts": explore,
+        "communities": community_payload["communities"],
+        "communityMemberships": community_payload["memberships"],
+        "notifications": [_clean(item) for item in notifications],
+        "candidateAssessments": [_clean(item) for item in candidate_assessments],
+        "candidateRankEvents": [_clean(item) for item in rank_events],
+        "contactCards": [_clean(item) for item in contact_cards],
+        "outcomes": [_clean(item) for item in outcomes],
     }
 
 
@@ -551,6 +653,8 @@ async def create_user_task(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     await provision_user(store, principal)
+    if principal.email_verified:
+        await require_active_membership(store, principal, body.community_id)
     active_tasks = await store.query_documents(
         "task_workspaces", filters=[("owner_uid", "EQUAL", principal.uid)]
     )
@@ -576,7 +680,8 @@ async def create_user_task(
         "owner_uid": principal.uid,
         "principal_agent_id": agent_id,
         "title": body.title,
-        "task_type": body.task_type,
+        "task_type": normalize_intent_type(body.task_type),
+        "community_id": body.community_id,
         "goal": body.goal,
         "status": "DRAFT",
         "conversation_id": conversation_id,
@@ -593,6 +698,7 @@ async def create_user_task(
         "owner_uid": principal.uid,
         "owner_agent_id": agent_id,
         "task_id": task_id,
+        "community_id": body.community_id,
         "raw_user_goal": body.goal,
         "agent_only_constraints": {
             "maximum_additional_cost_usd": body.maximum_additional_cost_usd,
@@ -621,6 +727,7 @@ async def create_user_task(
         "principal_agent_id": agent_id,
         "kind": "TASK_USER_AGENT",
         "task_id": task_id,
+        "community_id": body.community_id,
         "participant_uids": [principal.uid],
         "participant_agent_ids": [agent_id],
         "created_at": timestamp,
@@ -666,6 +773,19 @@ async def create_user_task(
             for collection, document_id, document in documents
         ]
     )
+    await store.write_event(
+        event_type="product.task_created_and_post_drafted.v1",
+        run_id=task_id,
+        producer=agent_id,
+        payload={
+            "taskId": task_id,
+            "intentId": intent_id,
+            "communityId": body.community_id,
+            "taskType": str(task["task_type"]),
+        },
+        idempotency_key=f"product:{task_id}:created",
+        publish_immediately=False,
+    )
     return task
 
 
@@ -701,6 +821,8 @@ async def publish_user_post(
     if task is None:
         raise LookupError("task was not found")
     require_task_owner(principal, task)
+    community_id = str(task.get("community_id", DEFAULT_COMMUNITY_ID))
+    await require_active_membership(store, principal, community_id)
     profile = await store.get("users", principal.uid)
     private_intent = await store.get("intent_private_data", str(task["intent_id"]))
     if profile is None or private_intent is None:
@@ -711,6 +833,12 @@ async def publish_user_post(
         or profile.get("adult_confirmed") is not True
     ):
         raise PermissionError("ONBOARDING_REQUIRED")
+    OutboundPrivacyGuard().validate(
+        natural_language="\n".join(
+            [public_title, public_summary, *public_requirements]
+        ),
+        references=[],
+    )
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
     intent_id = str(task["intent_id"])
     draft = dict(private_intent.get("public_draft", {}))
@@ -722,7 +850,8 @@ async def publish_user_post(
         "owner_agent_id": str(task["principal_agent_id"]),
         "public_display_name": str(profile["display_name"]),
         "task_id": task_id,
-        "task_type": str(task["task_type"]),
+        "community_id": community_id,
+        "task_type": normalize_intent_type(str(task["task_type"])),
         "public_title": public_title,
         "public_summary": public_summary,
         "public_constraints": {
@@ -740,6 +869,7 @@ async def publish_user_post(
             "approved_by_owner": True,
             "approved_at": timestamp,
         },
+        "human_approval_status": "APPROVED",
         "published_at": timestamp,
         "expires_at": timestamp + timedelta(days=365),
         "updated_at": timestamp,
@@ -826,6 +956,21 @@ async def set_user_post_status(
     if status == "CLOSED":
         clean["closed_to_new_contacts"] = True
     await store.upsert("intent_posts", intent_id, clean)
+    await store.write_event(
+        event_type=f"intent.{status.lower()}.v1",
+        run_id=str(clean["task_id"]),
+        producer=str(clean["owner_agent_id"]),
+        payload={
+            "schemaVersion": SCHEMA_VERSION,
+            "namespace": PRODUCTION_NAMESPACE,
+            "taskId": str(clean["task_id"]),
+            "intentId": intent_id,
+            "status": status,
+        },
+        idempotency_key=(
+            f"v1:{intent_id}:status:{status}:{clean['updated_at'].isoformat()}"
+        ),
+    )
     return _public_post_projection(clean)
 
 
@@ -973,6 +1118,47 @@ async def block_agent_owner(
             await store.upsert(
                 "coordination_rooms", str(proposal["room_id"]), room_clean
             )
+    rooms = await store.query_documents(
+        "coordination_rooms",
+        filters=[("participant_uids", "ARRAY_CONTAINS", principal.uid)],
+    )
+    for room in rooms:
+        if blocked_uid not in room.get("participant_uids", []):
+            continue
+        room_clean = _clean(room)
+        room_clean.update(
+            status="CLOSED_BY_BLOCK",
+            human_participation_available=False,
+            updated_at=timestamp,
+        )
+        await store.upsert("coordination_rooms", str(room["room_id"]), room_clean)
+        cards = await store.query_documents(
+            "contact_cards", filters=[("room_id", "EQUAL", room["room_id"])]
+        )
+        for card in cards:
+            card_clean = _clean(card)
+            card_clean.update(
+                fields={}, status="REVOKED_BY_BLOCK", updated_at=timestamp
+            )
+            await store.upsert(
+                "contact_cards", str(card["contact_card_id"]), card_clean
+            )
+    assessments = await store.query_documents(
+        "candidate_assessments",
+        filters=[("owner_uid", "EQUAL", principal.uid)],
+    )
+    for assessment in assessments:
+        if assessment.get("candidate_agent_id") != target_agent_id:
+            continue
+        clean_assessment = _clean(assessment)
+        clean_assessment.update(
+            state="WITHDRAWN", last_material_change_at=timestamp, updated_at=timestamp
+        )
+        await store.upsert(
+            "candidate_assessments",
+            str(clean_assessment["assessment_id"]),
+            clean_assessment,
+        )
     return {"block_id": block_id, "status": "ACTIVE"}
 
 
@@ -1018,10 +1204,11 @@ async def update_account_settings(
     principal: AuthenticatedPrincipal,
     body: UpdateAccountSettingsInput,
 ) -> dict[str, Any]:
-    profile, privacy, autonomy = await asyncio.gather(
+    profile, privacy, autonomy, notification_settings = await asyncio.gather(
         store.get("users", principal.uid),
         store.get("user_privacy_configs", principal.uid),
         store.get("user_autonomy_configs", principal.uid),
+        store.get("notification_settings", principal.uid),
     )
     if profile is None or privacy is None or autonomy is None:
         raise LookupError("account settings were not found")
@@ -1039,35 +1226,60 @@ async def update_account_settings(
         default_mode=body.default_autonomy_mode,
         updated_at=timestamp,
     )
-    await store.commit_writes(
-        [
+    writes = [
+        _update_write(
+            store,
+            "users",
+            principal.uid,
+            profile_clean,
+            update_time=str(profile["_updateTime"]),
+        ),
+        _update_write(
+            store,
+            "user_privacy_configs",
+            principal.uid,
+            privacy_clean,
+            update_time=str(privacy["_updateTime"]),
+        ),
+        _update_write(
+            store,
+            "user_autonomy_configs",
+            principal.uid,
+            autonomy_clean,
+            update_time=str(autonomy["_updateTime"]),
+        ),
+    ]
+    notification_clean = _clean(notification_settings or {})
+    if body.notification_preference is not None and notification_settings is not None:
+        notification_clean.update(
+            preference=body.notification_preference,
+            in_app_enabled=body.notification_preference != "NONE",
+            email_enabled=body.notification_preference == "IN_APP_AND_EMAIL",
+            updated_at=timestamp,
+        )
+        writes.append(
             _update_write(
                 store,
-                "users",
+                "notification_settings",
                 principal.uid,
-                profile_clean,
-                update_time=str(profile["_updateTime"]),
-            ),
-            _update_write(
-                store,
-                "user_privacy_configs",
-                principal.uid,
-                privacy_clean,
-                update_time=str(privacy["_updateTime"]),
-            ),
-            _update_write(
-                store,
-                "user_autonomy_configs",
-                principal.uid,
-                autonomy_clean,
-                update_time=str(autonomy["_updateTime"]),
-            ),
-        ]
-    )
+                notification_clean,
+                update_time=str(notification_settings["_updateTime"]),
+            )
+        )
+        profile_clean["notification_preference"] = body.notification_preference
+        writes[0] = _update_write(
+            store,
+            "users",
+            principal.uid,
+            profile_clean,
+            update_time=str(profile["_updateTime"]),
+        )
+    await store.commit_writes(writes)
     return {
         "profile": profile_clean,
         "privacy": privacy_clean,
         "autonomy": autonomy_clean,
+        "notificationSettings": notification_clean,
     }
 
 

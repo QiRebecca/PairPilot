@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
     BlockUserInput,
+    ContactCardInput,
     ConversationRole,
     CreateUserTaskInput,
     DeleteAccountInput,
@@ -34,10 +35,13 @@ from pairpilot_schemas import (
     IntentPost,
     IntentPublicConstraints,
     IntentStatus,
+    JoinCommunityInput,
+    MemoryActionInput,
     MessageAuthorship,
     MessageVisibility,
     NegotiationBoundaries,
     OnboardingInput,
+    OutcomeCheckInInput,
     PersonalAgentIntent,
     PresentationAction,
     PresentationMode,
@@ -68,21 +72,15 @@ from pairpilot_orchestrator.domain import (
 )
 from pairpilot_orchestrator.generic_agent_runtime import (
     AgentRuntimeError,
-    compatible_posts,
-    consume_daily_agent_turns,
-    load_personal_agent,
-    process_published_intent,
-    users_blocked,
+    create_negotiation_for_pair,
 )
 from pairpilot_orchestrator.infrastructure import GoogleCloudStore
 from pairpilot_orchestrator.intent_drafting import draft_with_qi_agent
-from pairpilot_orchestrator.multi_user_agent import negotiate_pair_with_adk
 from pairpilot_orchestrator.multi_user_commit import (
     MultiUserCommitError,
     approve_multi_user_proposal,
 )
 from pairpilot_orchestrator.multi_user_platform import (
-    MAX_NEW_CONTACTS_PER_TASK,
     PRODUCTION_NAMESPACE,
     block_agent_owner,
     build_user_bootstrap,
@@ -115,6 +113,27 @@ from pairpilot_orchestrator.personal_agent_os import (
 from pairpilot_orchestrator.personal_agent_routing import route_personal_agent_message
 from pairpilot_orchestrator.policies.privacy import OutboundPrivacyGuard
 from pairpilot_orchestrator.run_golden_path import run
+from pairpilot_orchestrator.v1_candidate_pool import (
+    process_candidate_pool_event,
+    set_candidate_state,
+)
+from pairpilot_orchestrator.v1_foundation import (
+    join_community,
+    leave_community,
+    list_communities_for_user,
+    update_memory_lifecycle,
+)
+from pairpilot_orchestrator.v1_operations import build_admin_dashboard
+from pairpilot_orchestrator.v1_reconciliation import (
+    reconcile_candidate_availability,
+    run_v1_reconciliation,
+)
+from pairpilot_orchestrator.v1_relationships import (
+    list_match_contact_cards,
+    offer_contact_card,
+    revoke_contact_card,
+    submit_outcome_check_in,
+)
 
 MAX_PUBLIC_RUNS_PER_UTC_DAY = 12
 MAX_REQUESTS_PER_MINUTE = 120
@@ -208,6 +227,12 @@ class PostStatusBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["OPEN", "PAUSED", "CLOSED"]
+
+
+class CandidateStateBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: Literal["BACKUP", "WITHDRAWN", "PROMISING", "NEEDS_INFORMATION"]
 
 
 class PubSubPushMessage(BaseModel):
@@ -769,6 +794,11 @@ async def app_bootstrap(principal: AuthenticatedUser) -> dict[str, Any]:
     return await build_user_bootstrap(_store(), principal)
 
 
+@app.get("/api/admin/dashboard")
+async def admin_dashboard(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await build_admin_dashboard(_store(), principal)
+
+
 @app.post("/api/v1/conversations/{conversation_id}/messages")
 async def send_personal_agent_message(
     conversation_id: str,
@@ -962,6 +992,62 @@ async def personal_agent_conversation_audit(
     return result
 
 
+@app.get("/api/app/matches/{match_id}/contacts")
+async def app_list_match_contacts(
+    match_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        cards = await list_match_contact_cards(_store(), principal, match_id=match_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    return {"contactCards": cards}
+
+
+@app.put("/api/app/matches/{match_id}/contacts/mine")
+async def app_offer_match_contact(
+    match_id: str,
+    body: ContactCardInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        card = await offer_contact_card(
+            _store(), principal, match_id=match_id, body=body
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"contactCard": card}
+
+
+@app.delete("/api/app/matches/{match_id}/contacts/mine")
+async def app_revoke_match_contact(
+    match_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        card = await revoke_contact_card(_store(), principal, match_id=match_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Contact card was not found.") from exc
+    return {"contactCard": card}
+
+
+@app.post("/api/app/matches/{match_id}/outcome")
+async def app_submit_match_outcome(
+    match_id: str,
+    body: OutcomeCheckInInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        outcome = await submit_outcome_check_in(
+            _store(), principal, match_id=match_id, body=body
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    return {"outcome": outcome}
+
+
 @app.put("/api/app/onboarding")
 async def app_onboarding(
     body: OnboardingInput,
@@ -971,6 +1057,66 @@ async def app_onboarding(
     return {"profile": profile}
 
 
+@app.get("/api/app/communities")
+async def app_list_communities(
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await list_communities_for_user(_store(), principal)
+
+
+@app.post("/api/app/communities/{community_id}/join")
+async def app_join_community(
+    community_id: str,
+    body: JoinCommunityInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        membership = await join_community(
+            _store(), principal, community_id, invite_token=body.invite_token
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Community was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    return {"membership": membership}
+
+
+@app.post("/api/app/communities/{community_id}/leave")
+async def app_leave_community(
+    community_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        membership = await leave_community(_store(), principal, community_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Community membership was not found.") from exc
+    return {"membership": membership}
+
+
+@app.post("/api/app/memories/{memory_id}/actions")
+async def app_memory_action(
+    memory_id: str,
+    body: MemoryActionInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        memory = await update_memory_lifecycle(
+            _store(),
+            principal,
+            memory_id,
+            action=body.action,
+            content=body.content,
+            scope=body.scope,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Memory was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, "Memory is not owned by this account.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"memory": memory}
+
+
 @app.post("/api/app/tasks")
 async def app_create_task(
     body: CreateUserTaskInput,
@@ -978,6 +1124,14 @@ async def app_create_task(
 ) -> dict[str, Any]:
     try:
         task = await create_user_task(_store(), principal, body)
+    except PermissionError as exc:
+        raise HTTPException(
+            403,
+            detail={
+                "code": str(exc),
+                "message": "Join the selected community before creating a request.",
+            },
+        ) from exc
     except ValueError as exc:
         if str(exc) == "ACTIVE_TASK_QUOTA_EXCEEDED":
             raise HTTPException(
@@ -987,6 +1141,8 @@ async def app_create_task(
                     "message": "Close an active request before creating another.",
                 },
             ) from exc
+        if str(exc) == "UNSUPPORTED_INTENT_TYPE":
+            raise HTTPException(422, "Unsupported PairPilot V1 intent type.") from exc
         raise
     return {"task": task}
 
@@ -1037,6 +1193,14 @@ async def app_publish_task(
             403,
             detail={"code": str(exc), "message": "Complete onboarding first."},
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            422,
+            detail={
+                "code": "PUBLIC_DISCLOSURE_VIOLATION",
+                "message": "Remove contact details or protected private information.",
+            },
+        ) from exc
     return {"post": post, "status": "PUBLISHED"}
 
 
@@ -1053,6 +1217,81 @@ async def app_set_post_status(
     except LookupError as exc:
         raise HTTPException(404, "Post was not found.") from exc
     return {"post": post}
+
+
+@app.patch("/api/app/tasks/{task_id}/candidates/{candidate_intent_id}/state")
+async def app_set_candidate_state(
+    task_id: str,
+    candidate_intent_id: str,
+    body: CandidateStateBody,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        assessment = await set_candidate_state(
+            _store(),
+            owner_uid=principal.uid,
+            task_id=task_id,
+            candidate_intent_id=candidate_intent_id,
+            state=body.state,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Candidate was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, "Candidate is not owned by this account.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"candidate": assessment}
+
+
+@app.post("/api/app/tasks/{task_id}/candidates/{candidate_intent_id}/proposal")
+async def app_create_candidate_proposal(
+    task_id: str,
+    candidate_intent_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    """Promote one ranked candidate into an exact two-human proposal."""
+
+    store = _store()
+    task = await store.get("task_workspaces", task_id)
+    if task is None:
+        raise HTTPException(404, "Task was not found.")
+    require_task_owner(principal, task)
+    source_intent_id = str(task.get("intent_id", ""))
+    source_post, target_post = await asyncio.gather(
+        store.get("intent_posts", source_intent_id),
+        store.get("intent_posts", candidate_intent_id),
+    )
+    if source_post is None or target_post is None:
+        raise HTTPException(409, "One of the candidate posts is no longer available.")
+    assessment_id = stable_id("candidate", task_id, candidate_intent_id)
+    assessment = await store.get("candidate_assessments", assessment_id)
+    if assessment is None or assessment.get("owner_uid") != principal.uid:
+        raise HTTPException(404, "Candidate was not found in this task.")
+    room_messages = await store.query_documents(
+        "room_messages", filters=[("room_id", "EQUAL", assessment.get("room_id"))]
+    )
+    agent_messages = {
+        str(item["speaker_id"]): str(item["content"])
+        for item in room_messages
+        if item.get("speaker_type") == "PERSONAL_AGENT"
+    }
+    try:
+        proposal = await create_negotiation_for_pair(
+            store,
+            source_post=source_post,
+            target_post=target_post,
+            agent_messages=agent_messages,
+        )
+    except AgentRuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    clean_assessment = _clean(assessment)
+    clean_assessment.update(
+        state="RECOMMENDED",
+        proposal_id=proposal["proposal_id"],
+        updated_at=datetime.now(UTC),
+    )
+    await store.upsert("candidate_assessments", assessment_id, clean_assessment)
+    return {"proposal": proposal, "candidate": clean_assessment}
 
 
 @app.post("/api/app/proposals/{proposal_id}/approve")
@@ -1210,12 +1449,25 @@ async def internal_event_worker(
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(400, "Invalid Pub/Sub event payload.") from exc
     event_type = str(event.get("eventType", ""))
+    availability_events = {
+        "intent.closed.v1",
+        "intent.paused.v1",
+        "intent.open.v1",
+        "intent.expired.v1",
+        "intent.matched.v1",
+    }
     if event_type not in {
         "intent.published.v2",
         "agent.contact.requested.v3",
         "proposal.evaluation.requested.v3",
+        *availability_events,
     }:
         return {"status": "IGNORED"}
+    if event_type in availability_events:
+        changed = await reconcile_candidate_availability(
+            _store(), now=datetime.now(UTC)
+        )
+        return {"status": "AVAILABILITY_RECONCILED", "changed": changed}
     event_payload = dict(event.get("payload", {}))
     intent_id = str(
         event_payload.get("intentId") or event_payload.get("sourceIntentId") or ""
@@ -1225,95 +1477,23 @@ async def internal_event_worker(
         raise HTTPException(400, "Published intent event is missing intentId.")
     try:
         store = _store()
-        source = await store.get("intent_posts", intent_id)
-        if source is None:
-            raise AgentRuntimeError("source post is unavailable")
-        if requested_target_id:
-            requested_target = await store.get("intent_posts", requested_target_id)
-            open_posts = [requested_target] if requested_target is not None else []
-        else:
-            open_posts = await store.query_documents(
-                "intent_posts", filters=[("status", "EQUAL", "OPEN")]
-            )
-        target = None
-        source_task = await store.get("task_workspaces", str(source["task_id"]))
-        if source_task is None:
-            raise AgentRuntimeError("source task is missing")
-        if int(source_task.get("contact_count", 0)) >= MAX_NEW_CONTACTS_PER_TASK:
-            raise AgentRuntimeError("task contact quota is exhausted")
-        for candidate in open_posts:
-            if (
-                candidate.get("intent_id") == intent_id
-                or candidate.get("owner_uid") == source.get("owner_uid")
-                or not compatible_posts(source, candidate)
-            ):
-                continue
-            target_task = await store.get("task_workspaces", str(candidate["task_id"]))
-            if (
-                target_task is None
-                or int(target_task.get("contact_count", 0)) >= MAX_NEW_CONTACTS_PER_TASK
-                or await users_blocked(
-                    store,
-                    str(source["owner_uid"]),
-                    str(candidate["owner_uid"]),
-                )
-            ):
-                continue
-            target = candidate
-            break
-        agent_messages: dict[str, str] | None = None
-        if target is not None:
-            await consume_daily_agent_turns(
-                store,
-                [str(source["owner_uid"]), str(target["owner_uid"])],
-            )
-            source_runtime, target_runtime = await asyncio.gather(
-                load_personal_agent(store, str(source["owner_agent_id"])),
-                load_personal_agent(store, str(target["owner_agent_id"])),
-            )
-            try:
-                agent_messages = await negotiate_pair_with_adk(
-                    store=store,
-                    source_runtime=source_runtime,
-                    target_runtime=target_runtime,
-                    source_post=source,
-                    target_post=target,
-                )
-            except Exception as exc:
-                attempt = int(event_payload.get("agentAttempt", 0))
-                await store.write_event(
-                    event_type="agent.negotiation_turn_failed.v2",
-                    run_id=str(event_payload.get("taskId", intent_id)),
-                    producer="generic-personal-agent-runtime",
-                    payload={
-                        "intentId": intent_id,
-                        "attempt": attempt,
-                        "errorType": type(exc).__name__,
-                    },
-                    idempotency_key=(f"v2:{intent_id}:agent-turn-failed:{attempt}"),
-                )
-                if attempt < 1:
-                    await store.write_event(
-                        event_type="intent.published.v2",
-                        run_id=str(event_payload.get("taskId", intent_id)),
-                        producer="generic-personal-agent-runtime",
-                        payload={**event_payload, "agentAttempt": attempt + 1},
-                        idempotency_key=f"v2:{intent_id}:agent-retry:{attempt + 1}",
-                    )
-                    return {
-                        "status": "BOUNDED_RETRY_SCHEDULED",
-                        "attempt": attempt + 1,
-                    }
-                return {
-                    "status": "NO_ACTION",
-                    "reason": "bounded Personal Agent turn did not accept",
-                }
-        result = await process_published_intent(
-            store, intent_id, agent_messages=agent_messages
+        result = await process_candidate_pool_event(
+            store,
+            intent_id,
+            requested_target_id=requested_target_id or None,
         )
     except AgentRuntimeError as exc:
         return {"status": "NO_ACTION", "reason": str(exc)}
     return {"status": "PROCESSED", "result": result}
+
+
+@app.post("/api/internal/reconcile")
+async def internal_reconcile_worker(
+    _worker: InternalWorker,
+) -> dict[str, Any]:
+    """Repair missed events and stale state without browser participation."""
+
+    return await run_v1_reconciliation(_store())
 
 
 @app.get("/api/demo/state")

@@ -64,4 +64,3 @@ def require_match_participant(
 def require_admin(principal: AuthenticatedPrincipal) -> None:
     if not principal.admin:
         _forbidden()
-

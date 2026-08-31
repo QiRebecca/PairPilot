@@ -21,6 +21,14 @@ class OnboardingInput(BaseModel):
     public_sharing_policy: str = Field(min_length=1, max_length=500)
     agent_sharing_policy: str = Field(min_length=1, max_length=500)
     always_ask_policy: str = Field(min_length=1, max_length=500)
+    community_ids: list[str] = Field(
+        default_factory=lambda: ["community_icml_seoul_2026"], max_length=20
+    )
+    default_public_visibility: Literal["COMMUNITY", "BROADER_NETWORK"] = "COMMUNITY"
+    default_agent_visibility: Literal["MINIMUM_NECESSARY", "TASK_CONTEXT"] = (
+        "MINIMUM_NECESSARY"
+    )
+    notification_preference: Literal["IN_APP", "IN_APP_AND_EMAIL", "NONE"] = "IN_APP"
 
     @model_validator(mode="after")
     def require_adult_confirmation(self) -> OnboardingInput:
@@ -42,6 +50,10 @@ class CreateUserTaskInput(BaseModel):
     public_requirements: list[str] = Field(default_factory=list, max_length=12)
     maximum_additional_cost_usd: int = Field(ge=0, le=10_000)
     partial_date_overlap_allowed: bool = True
+    community_id: str = Field(
+        default="community_icml_seoul_2026",
+        pattern=r"^community_[a-z0-9_]+$",
+    )
 
     @model_validator(mode="after")
     def validate_dates(self) -> CreateUserTaskInput:
@@ -69,9 +81,9 @@ class UserRoomMessageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=4_000)
-    authorship: Literal[
-        "HUMAN_WRITTEN", "AGENT_DRAFTED_HUMAN_APPROVED"
-    ] = "HUMAN_WRITTEN"
+    authorship: Literal["HUMAN_WRITTEN", "AGENT_DRAFTED_HUMAN_APPROVED"] = (
+        "HUMAN_WRITTEN"
+    )
     idempotency_key: str = Field(min_length=8, max_length=100)
 
 
@@ -87,9 +99,7 @@ class ReportInput(BaseModel):
 
     target_type: Literal["POST", "USER", "MESSAGE"]
     target_id: str = Field(min_length=1, max_length=200)
-    category: Literal[
-        "SPAM", "HARASSMENT", "SAFETY", "MISREPRESENTATION", "OTHER"
-    ]
+    category: Literal["SPAM", "HARASSMENT", "SAFETY", "MISREPRESENTATION", "OTHER"]
     details: str = Field(min_length=1, max_length=1_000)
 
 
@@ -100,6 +110,7 @@ class UpdateAccountSettingsInput(BaseModel):
     default_autonomy_mode: Literal["AGENT", "COPILOT", "HUMAN"]
     public_sharing_policy: str = Field(min_length=1, max_length=500)
     agent_sharing_policy: str = Field(min_length=1, max_length=500)
+    notification_preference: Literal["IN_APP", "IN_APP_AND_EMAIL", "NONE"] | None = None
 
 
 class DeleteAccountInput(BaseModel):

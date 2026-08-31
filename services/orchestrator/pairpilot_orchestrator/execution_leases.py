@@ -93,4 +93,3 @@ async def release_execution_lease(
         released_at=(now or datetime.now(UTC)).astimezone(UTC),
     )
     await store.upsert("execution_leases", lease_id, clean)
-

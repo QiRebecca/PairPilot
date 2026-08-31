@@ -14,6 +14,7 @@ from pairpilot_orchestrator.firestore_session_service import FirestoreSessionSer
 from pairpilot_orchestrator.generic_agent_runtime import (
     AgentRuntimeError,
     consume_daily_agent_turns,
+    load_personal_agent,
     process_published_intent,
 )
 from pairpilot_orchestrator.infrastructure.google_cloud import decode_fields
@@ -31,9 +32,30 @@ from pairpilot_orchestrator.multi_user_platform import (
     provision_user,
     publish_user_post,
 )
+from pairpilot_orchestrator.v1_candidate_pool import (
+    record_candidate_exchange,
+    set_candidate_state,
+)
+from pairpilot_orchestrator.v1_foundation import (
+    DEFAULT_COMMUNITY_ID,
+    memory_is_confirmed,
+    update_memory_lifecycle,
+)
+from pairpilot_orchestrator.v1_operations import build_admin_dashboard
+from pairpilot_orchestrator.v1_reconciliation import (
+    reconcile_candidate_availability,
+)
+from pairpilot_orchestrator.v1_relationships import (
+    list_match_contact_cards,
+    offer_contact_card,
+    revoke_contact_card,
+    submit_outcome_check_in,
+)
 from pairpilot_schemas import (
+    ContactCardInput,
     CreateUserTaskInput,
     OnboardingInput,
+    OutcomeCheckInInput,
 )
 
 
@@ -203,6 +225,187 @@ async def test_provisioning_is_idempotent_and_creates_one_agent() -> None:
     assert len(store.collections["users"]) == 1
     assert len(store.collections["personal_agents"]) == 1
     assert len(store.collections["conversations"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_admin_dashboard_requires_claim() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-a")
+    await provision_user(store, user)
+    with pytest.raises(HTTPException) as denied:
+        await build_admin_dashboard(store, user)
+    assert denied.value.status_code == 403
+    admin = AuthenticatedPrincipal(
+        uid="uid-admin",
+        email="admin@example.test",
+        email_verified=True,
+        admin=True,
+    )
+    dashboard = await build_admin_dashboard(store, admin)
+    assert dashboard["access"] == "EXPLICIT_ADMIN_CLAIM"
+    assert "conversation_messages" not in dashboard
+    assert "memories" not in dashboard
+
+
+@pytest.mark.asyncio
+async def test_v1_onboarding_joins_default_community_and_scopes_bootstrap() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-community")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Community Member"))
+    memberships = list(store.collections["community_memberships"].values())
+    assert len(memberships) == 1
+    assert memberships[0]["community_id"] == DEFAULT_COMMUNITY_ID
+    assert memberships[0]["status"] == "ACTIVE"
+    task = await create_user_task(store, user, task_input("V1 community task"))
+    assert task["community_id"] == DEFAULT_COMMUNITY_ID
+    assert task["task_type"] == "ROOM_SHARE"
+    bootstrap = await build_user_bootstrap(store, user)
+    assert bootstrap["communities"][0]["community_id"] == DEFAULT_COMMUNITY_ID
+    assert bootstrap["communityMemberships"][0]["role"] == "MEMBER"
+
+
+@pytest.mark.asyncio
+async def test_public_post_rejects_contact_and_precise_private_details() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-private")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Private Member"))
+    task = await create_user_task(store, user, task_input("Private-safe task"))
+    with pytest.raises(ValueError):
+        await publish_user_post(
+            store,
+            user,
+            task_id=str(task["task_id"]),
+            public_title="Contact me at private@example.test",
+            public_summary="My hotel room number is 1204.",
+            public_requirements=[],
+        )
+    assert store.collections["intent_posts"] == {}
+
+
+@pytest.mark.asyncio
+async def test_candidate_pool_reranks_multiple_candidates() -> None:
+    store = MemoryMultiUserStore()
+    users = [principal("uid-a"), principal("uid-b"), principal("uid-c")]
+    tasks: list[dict[str, Any]] = []
+    for user, name, end_day in zip(
+        users, ("Alex", "Blair", "Casey"), (10, 7, 10), strict=True
+    ):
+        await provision_user(store, user)
+        await complete_onboarding(store, user, onboarding(name))
+        task = await create_user_task(
+            store,
+            user,
+            task_input(f"{name} terms").model_copy(
+                update={"date_end": date(2026, 7, end_day)}
+            ),
+        )
+        await publish_user_post(
+            store,
+            user,
+            task_id=str(task["task_id"]),
+            public_title=f"{name} post",
+            public_summary=f"{name} reports compatible ICML room-share dates.",
+            public_requirements=["Quiet nights"],
+        )
+        tasks.append(task)
+    posts = [await store.get("intent_posts", str(task["intent_id"])) for task in tasks]
+    assert all(post is not None for post in posts)
+    source = posts[0]
+    assert source is not None
+    for index, target in enumerate(posts[1:], start=1):
+        assert target is not None
+        await record_candidate_exchange(
+            store,
+            source_post=source,
+            target_post=target,
+            agent_messages={
+                str(source["owner_agent_id"]): f"Source reversible turn {index}",
+                str(target["owner_agent_id"]): f"Candidate reversible turn {index}",
+            },
+            invocation_id=f"invocation-{index}",
+        )
+    source_assessments = [
+        item
+        for item in store.collections["candidate_assessments"].values()
+        if item.get("task_id") == tasks[0]["task_id"]
+    ]
+    assert len(source_assessments) == 2
+    initial_order = sorted(source_assessments, key=lambda item: item["current_rank"])
+    assert initial_order[0]["candidate_intent_id"] == tasks[2]["intent_id"]
+    await set_candidate_state(
+        store,
+        owner_uid=users[0].uid,
+        task_id=str(tasks[0]["task_id"]),
+        candidate_intent_id=str(tasks[2]["intent_id"]),
+        state="BACKUP",
+    )
+    reranked = sorted(
+        [
+            item
+            for item in store.collections["candidate_assessments"].values()
+            if item.get("task_id") == tasks[0]["task_id"]
+        ],
+        key=lambda item: item["current_rank"],
+    )
+    assert reranked[0]["candidate_intent_id"] == tasks[1]["intent_id"]
+    assert len(store.collections["candidate_rank_events"]) >= 3
+    assert len(store.collections["coordination_rooms"]) == 2
+    closed_post = dict(store.collections["intent_posts"][str(tasks[1]["intent_id"])])
+    closed_post["status"] = "CLOSED"
+    await store.upsert("intent_posts", str(tasks[1]["intent_id"]), closed_post)
+    changed = await reconcile_candidate_availability(
+        store, now=datetime(2026, 9, 1, tzinfo=UTC)
+    )
+    assert changed >= 1
+    source_closed = next(
+        item
+        for item in store.collections["candidate_assessments"].values()
+        if item.get("task_id") == tasks[0]["task_id"]
+        and item.get("candidate_intent_id") == tasks[1]["intent_id"]
+    )
+    assert source_closed["state"] == "CLOSED"
+
+
+@pytest.mark.asyncio
+async def test_only_confirmed_memory_enters_agent_runtime() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-memory")
+    await provision_user(store, user)
+    agent_id = agent_id_for_uid(user.uid)
+    proposed = {
+        "memory_id": "memory-proposed",
+        "owner_uid": user.uid,
+        "owner_agent_id": agent_id,
+        "content": "Prefers quiet rooms.",
+        "scope": "ROOM_SHARE",
+        "status": "PROPOSED",
+        "confirmation_status": "PROPOSED",
+    }
+    confirmed = {
+        **proposed,
+        "memory_id": "memory-confirmed",
+        "content": "Avoids smoking rooms.",
+        "status": "CONFIRMED",
+        "confirmation_status": "CONFIRMED",
+    }
+    await store.create("memories", "memory-proposed", proposed)
+    await store.create("memories", "memory-confirmed", confirmed)
+    runtime = await load_personal_agent(store, agent_id)
+    assert [item["memory_id"] for item in runtime["permitted_memories"]] == [
+        "memory-confirmed"
+    ]
+    assert memory_is_confirmed(proposed) is False
+    updated = await update_memory_lifecycle(
+        store, user, "memory-proposed", action="CONFIRM"
+    )
+    assert updated["status"] == "CONFIRMED"
+    assert memory_is_confirmed(updated) is True
+    with pytest.raises(PermissionError):
+        await update_memory_lifecycle(
+            store, principal("uid-other"), "memory-proposed", action="ARCHIVE"
+        )
 
 
 @pytest.mark.asyncio
@@ -483,6 +686,32 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     assert room["room_type"] == "SHARED_COORDINATION_ROOM"
     assert room["human_participation_available"] is True
     assert len(store.collections["relationships"]) == 2
+    offered = await offer_contact_card(
+        store,
+        user_a,
+        match_id=proposal_id,
+        body=ContactCardInput(public_email="alex-public@example.test"),
+    )
+    assert offered["fields"] == {"public_email": "alex-public@example.test"}
+    visible_to_peer = await list_match_contact_cards(
+        store, user_b, match_id=proposal_id
+    )
+    assert visible_to_peer[0]["fields"] == offered["fields"]
+    await revoke_contact_card(store, user_a, match_id=proposal_id)
+    assert await list_match_contact_cards(store, user_b, match_id=proposal_id) == []
+    outcome = await submit_outcome_check_in(
+        store,
+        user_a,
+        match_id=proposal_id,
+        body=OutcomeCheckInInput(
+            did_plan_happen=True,
+            would_coordinate_again=True,
+            agreed_term_inaccurate=False,
+            optional_feedback="Private owner feedback.",
+        ),
+    )
+    assert outcome["did_plan_happen"] is True
+    assert len(store.collections["relationship_events"]) == 3
 
     bootstrap_a = await build_user_bootstrap(store, user_a)
     bootstrap_b = await build_user_bootstrap(store, user_b)
@@ -537,8 +766,11 @@ async def test_two_agents_two_humans_commit_one_match_and_shared_room() -> None:
     assert len(store.collections["matches"]) == 2
     assert len(store.collections["relationships"]) == 2
     assert {
-        item["successful_plans"] for item in store.collections["relationships"].values()
+        item["plans_committed"] for item in store.collections["relationships"].values()
     } == {2}
+    assert {
+        item["successful_plans"] for item in store.collections["relationships"].values()
+    } == {0, 1}
 
 
 @pytest.mark.asyncio

@@ -25,6 +25,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     _update_write,
     stable_id,
 )
+from pairpilot_orchestrator.v1_foundation import create_notification
 
 
 class MultiUserCommitError(Exception):
@@ -145,6 +146,21 @@ async def approve_multi_user_proposal(
             idempotency_key=(
                 f"v2:{proposal_id}:v{current_version}:human:{principal.uid}"
             ),
+        )
+        peer_uid = next(uid for uid in participant_uids if uid != principal.uid)
+        await create_notification(
+            store,
+            owner_uid=peer_uid,
+            notification_type="PEER_APPROVED_PROPOSAL",
+            title="The other person approved your proposal",
+            body=(
+                "Your independent approval is still required before any match exists."
+            ),
+            entity_ids=[proposal_id, str(proposal["room_id"])],
+            idempotency_key=(
+                f"peer-approved:{proposal_id}:v{current_version}:{principal.uid}"
+            ),
+            now=timestamp,
         )
         return {
             "status": "WAITING_FOR_OTHER_HUMAN",
@@ -426,7 +442,16 @@ async def commit_dual_approved_match(
             "peer_owner_uid_internal": peer_uid,
             "relation_type": "SUCCESSFUL_COORDINATION",
             "match_id": proposal_id,
-            "successful_plans": 1,
+            "plans_committed": 1,
+            "plans_reported": 0,
+            "successful_plans": 0,
+            "cancellation_history": 0,
+            "commitment_inaccuracy_reports": 0,
+            "would_coordinate_again_yes": 0,
+            "relevant_communities": [str(source_post.get("community_id", ""))],
+            "task_type_compatibility": [str(source_post.get("task_type", ""))],
+            "introduction_path": "DIRECT_COMMUNITY_POST",
+            "last_interaction_at": timestamp,
             "created_at": timestamp,
             "updated_at": timestamp,
         }
@@ -437,8 +462,19 @@ async def commit_dual_approved_match(
             )
         else:
             relationship.update(
-                successful_plans=(
-                    int(existing_relationship.get("successful_plans", 0)) + 1
+                plans_committed=(
+                    int(existing_relationship.get("plans_committed", 0)) + 1
+                ),
+                plans_reported=int(existing_relationship.get("plans_reported", 0)),
+                successful_plans=int(existing_relationship.get("successful_plans", 0)),
+                cancellation_history=int(
+                    existing_relationship.get("cancellation_history", 0)
+                ),
+                commitment_inaccuracy_reports=int(
+                    existing_relationship.get("commitment_inaccuracy_reports", 0)
+                ),
+                would_coordinate_again_yes=int(
+                    existing_relationship.get("would_coordinate_again_yes", 0)
                 ),
                 created_at=existing_relationship.get("created_at", timestamp),
             )
@@ -451,6 +487,27 @@ async def commit_dual_approved_match(
                     update_time=str(existing_relationship["_updateTime"]),
                 )
             )
+        relationship_event_id = stable_id(
+            "relationship_event", proposal_id, uid, "match_committed"
+        )
+        writes.append(
+            _create_write(
+                store,
+                "relationship_events",
+                relationship_event_id,
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "namespace": PRODUCTION_NAMESPACE,
+                    "relationship_event_id": relationship_event_id,
+                    "relationship_id": relationship_id,
+                    "owner_uid": uid,
+                    "match_id": proposal_id,
+                    "event_type": "DUAL_APPROVED_MATCH_COMMITTED",
+                    "source": "ATOMIC_MATCH_COMMIT",
+                    "created_at": timestamp,
+                },
+            )
+        )
         memory_id = stable_id("memory", proposal_id, uid)
         memory = {
             "schema_version": SCHEMA_VERSION,
@@ -463,6 +520,7 @@ async def commit_dual_approved_match(
             "scope": "MATCH_HISTORY",
             "source": "dual_human_approved_match",
             "confirmation_status": "REVIEWABLE",
+            "status": "PROPOSED",
             "match_id": proposal_id,
             "created_at": timestamp,
         }
@@ -523,4 +581,31 @@ async def commit_dual_approved_match(
         },
         idempotency_key=f"v2:{proposal_id}:v{version}:match-committed",
     )
+    for uid in participant_uids:
+        await create_notification(
+            store,
+            owner_uid=uid,
+            notification_type="MATCH_COMPLETED",
+            title="Your match is confirmed",
+            body=(
+                "Both people approved the same proposal. The shared room is now "
+                "open, and contact sharing remains opt-in."
+            ),
+            entity_ids=[proposal_id, room_id],
+            idempotency_key=f"match-completed:{proposal_id}:{uid}",
+            now=timestamp,
+        )
+        await create_notification(
+            store,
+            owner_uid=uid,
+            notification_type="MEMORY_CONFIRMATION_REQUESTED",
+            title="Review a new Memory proposal",
+            body=(
+                "The completed match created a private Memory proposal. It is "
+                "inert until you confirm it."
+            ),
+            entity_ids=[stable_id("memory", proposal_id, uid), proposal_id],
+            idempotency_key=f"memory-review:{proposal_id}:{uid}",
+            now=timestamp,
+        )
     return match

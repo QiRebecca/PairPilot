@@ -38,6 +38,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     set_user_post_status,
     stable_id,
 )
+from pairpilot_orchestrator.v1_foundation import memory_is_confirmed
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
@@ -150,7 +151,7 @@ async def _scoped_context(
                 "scope": item.get("scope"),
             }
             for item in memories
-            if item.get("archived") is not True
+            if memory_is_confirmed(item)
             and item.get("scope") not in {"PRIVATE_ONLY", "DO_NOT_USE"}
         ][:MAX_CONTEXT_ITEMS],
         "relationships": [
@@ -370,7 +371,7 @@ def _build_tools(
                 _clean(item)
                 for item in items
                 if needle in str(item.get("content", "")).casefold()
-                and item.get("archived") is not True
+                and memory_is_confirmed(item)
             ][:MAX_CONTEXT_ITEMS]
         }
 
@@ -385,6 +386,7 @@ def _build_tools(
             "owner_agent_id": agent_id_for_uid(principal.uid),
             "content": content,
             "scope": scope,
+            "status": "PROPOSED",
             "confirmation_status": "PROPOSED",
             "created_at": datetime.now(UTC),
         }

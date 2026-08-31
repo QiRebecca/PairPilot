@@ -24,6 +24,11 @@ from pairpilot_orchestrator.multi_user_platform import (
     effect_contract_hash,
     stable_id,
 )
+from pairpilot_orchestrator.v1_foundation import (
+    DEFAULT_COMMUNITY_ID,
+    memory_is_confirmed,
+    normalize_intent_type,
+)
 
 
 class AgentRuntimeError(Exception):
@@ -108,7 +113,7 @@ async def load_personal_agent(
     permitted_memories = [
         _clean(item)
         for item in memories
-        if item.get("archived") is not True
+        if memory_is_confirmed(item)
         and item.get("scope") not in {"PRIVATE_ONLY", "DO_NOT_USE"}
     ]
     return {
@@ -129,7 +134,16 @@ def _date_range(post: dict[str, Any]) -> tuple[date, date]:
 
 
 def compatible_posts(source: dict[str, Any], target: dict[str, Any]) -> bool:
-    if source.get("task_type") != target.get("task_type"):
+    try:
+        source_type = normalize_intent_type(str(source.get("task_type", "")))
+        target_type = normalize_intent_type(str(target.get("task_type", "")))
+    except ValueError:
+        return False
+    if source_type != target_type:
+        return False
+    if str(source.get("community_id", DEFAULT_COMMUNITY_ID)) != str(
+        target.get("community_id", DEFAULT_COMMUNITY_ID)
+    ):
         return False
     source_constraints = dict(source.get("public_constraints", {}))
     target_constraints = dict(target.get("public_constraints", {}))

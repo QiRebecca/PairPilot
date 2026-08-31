@@ -23,6 +23,7 @@ PUBLIC_AGENT_POST_FIELDS = {
     "schema_version",
     "intent_id",
     "owner_agent_id",
+    "community_id",
     "public_display_name",
     "task_type",
     "public_title",
@@ -32,6 +33,7 @@ PUBLIC_AGENT_POST_FIELDS = {
     "status",
     "capacity_remaining",
     "authorship",
+    "human_approval_status",
     "published_at",
     "expires_at",
 }

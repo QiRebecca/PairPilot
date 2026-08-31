@@ -70,6 +70,19 @@ from pairpilot_schemas.personal_agent_os import (
     TaskStatus,
     TaskWorkspace,
 )
+from pairpilot_schemas.v1 import (
+    Community,
+    CommunityMembershipRole,
+    CommunityMembershipStatus,
+    CommunityVisibility,
+    ContactCardInput,
+    IntentType,
+    JoinCommunityInput,
+    MemoryActionInput,
+    MemoryStatus,
+    NotificationPreferenceInput,
+    OutcomeCheckInInput,
+)
 
 __all__ = [
     "A2AMessageEnvelope",
@@ -132,4 +145,15 @@ __all__ = [
     "SpeakerType",
     "TaskStatus",
     "TaskWorkspace",
+    "Community",
+    "CommunityMembershipRole",
+    "CommunityMembershipStatus",
+    "CommunityVisibility",
+    "ContactCardInput",
+    "IntentType",
+    "JoinCommunityInput",
+    "MemoryActionInput",
+    "MemoryStatus",
+    "NotificationPreferenceInput",
+    "OutcomeCheckInInput",
 ]

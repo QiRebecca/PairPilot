@@ -1,5 +1,6 @@
 """Minimum-necessary disclosure guard for all outbound peer messages."""
 
+import re
 from dataclasses import dataclass
 
 
@@ -36,7 +37,31 @@ class OutboundPrivacyGuard:
         for reference in references:
             if reference.raw_content.casefold() in lowered:
                 raise DisclosureViolation("raw memory content must be reformulated")
-        prohibited_fragments = ("light sleeper",)
+        prohibited_fragments = (
+            "light sleeper",
+            "sleep apnea",
+            "insomnia",
+            "hotel room number",
+            "my room number",
+            "right now at",
+            "currently at",
+            "live location",
+        )
         if any(fragment in lowered for fragment in prohibited_fragments):
             raise DisclosureViolation("prohibited private phrase detected")
+        prohibited_patterns = (
+            r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+            r"(?<!\d)(?:\+?\d[\s().-]?){7,15}(?!\d)",
+            r"\b(?:room|suite)\s*(?:number|no\.?|#)?\s*\d{2,6}\b",
+            (
+                r"\b\d{1,6}\s+[A-Z0-9 .'-]+\s"
+                r"(?:street|st|road|rd|avenue|ave|lane|ln|drive|dr)\b"
+            ),
+            r"(?<!\d)-?\d{1,2}\.\d{4,}\s*,\s*-?\d{1,3}\.\d{4,}(?!\d)",
+        )
+        if any(
+            re.search(pattern, natural_language, flags=re.IGNORECASE)
+            for pattern in prohibited_patterns
+        ):
+            raise DisclosureViolation("prohibited identifying detail detected")
         return natural_language
