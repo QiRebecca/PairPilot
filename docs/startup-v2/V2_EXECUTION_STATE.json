@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T22:20:00+08:00",
+  "updated_at": "2026-09-01T23:39:00+08:00",
   "current_phase": 11,
   "current_phase_name": "Closed-beta acceptance",
   "current_phase_status": "PARTIAL",
@@ -18,6 +18,17 @@
     "peer_revision": "pairpilot-peer-agents-00022-seh",
     "image_digest": "sha256:8023ad23b8b9a4bd77e397682ccf96e02a8dfd0e88293bba0a17a72274d32d35",
     "model_id": "gemini-3.7-flash"
+  },
+  "candidate": {
+    "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
+    "orchestrator_revision": "pairpilot-orchestrator-00053-suw",
+    "image_digest": "sha256:04500d3320139300b2e07200643fdca952dfd67bb58c77f3b27937c313cae6a3",
+    "traffic_percent": 0,
+    "environment": "candidate",
+    "collection_prefix": "candidate_v2_",
+    "event_topic": "pairpilot-v2-candidate-events",
+    "push_subscription": "pairpilot-v2-candidate-worker",
+    "dead_letter_topic": "pairpilot-v2-candidate-dlq"
   },
   "baseline": {
     "firebase_users": 89,
@@ -48,7 +59,34 @@
     "9": "PARTIAL",
     "10": "PARTIAL",
     "11": "PARTIAL",
-    "12": "NOT_IMPLEMENTED"
+    "12": "PARTIAL"
+  },
+  "candidate_acceptance": {
+    "security_load_run_id": "v2-acceptance-1788273643",
+    "agent_lifecycle_run_id": "v2-acceptance-1788273819",
+    "personal_agent_chat_run_id": "v2-acceptance-1788276697",
+    "authenticated_users": 10,
+    "communities": 3,
+    "tasks": 25,
+    "posts": 25,
+    "task_types": 5,
+    "agent_rooms": 8,
+    "matches": 7,
+    "completed_matches": 4,
+    "cancelled_matches": 3,
+    "memories": 20,
+    "a2a_completed_turns": 18,
+    "a2a_failed_turns": 0,
+    "concurrent_requests": 80,
+    "request_concurrency": 20,
+    "request_failures": 0,
+    "load_elapsed_seconds": 20.55,
+    "global_personal_agent_turns": 3,
+    "global_personal_agent_tools": [
+      "draft_intent_post",
+      "revise_intent_post",
+      "publish_intent_post"
+    ]
   },
   "migration_dry_run": {
     "migration_id": "V2_001_schema_registry_and_environment",
@@ -61,21 +99,20 @@
     "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
   },
   "next_actions": [
-    "Commit candidate isolation and cohort tooling",
-    "Deploy an immutable no-traffic candidate revision",
-    "Seed the controlled ten-user and three-Community cohort",
-    "Run security, offline, failure, concurrency, and performance acceptance",
+    "Run remaining named lifecycle acceptance scenarios",
+    "Run offline monitoring and failure-injection acceptance",
+    "Run the candidate migration dry-run and apply gate",
     "Capture authenticated visual and accessibility evidence"
   ],
   "known_blockers": [
     "Mixed legacy and V1 lifecycle states in production",
     "Twenty-six historical records require explicit environment classification",
-    "Candidate Pub/Sub isolation is not yet deployed",
     "Non-empty DLQ inspection backlog",
     "No Firestore composite indexes for planned search",
     "No candidate vector index or public-Post embedding backfill",
     "Saved-search monitoring worker not implemented",
     "Core authenticated pages still remaining in BetaApp need decomposition",
-    "Full V2 offline monitoring and candidate acceptance not run"
+    "Full V2 offline monitoring and failure-injection acceptance not run",
+    "Authenticated multi-viewport visual and accessibility acceptance not run"
   ]
 }

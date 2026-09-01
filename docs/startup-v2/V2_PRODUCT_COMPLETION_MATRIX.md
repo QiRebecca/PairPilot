@@ -8,7 +8,7 @@ are valid completion states.
 | Capability | Status | Current evidence / missing gate |
 |---|---|---|
 | Submission snapshot and rollback | LIVE_VERIFIED | Git tag, submitted revision, digest, rollback command recorded |
-| Persistent Personal Agent multi-turn chat | LIVE_VERIFIED | Production real-Gemini two-turn and multi-user acceptance |
+| Persistent Personal Agent multi-turn chat | LIVE_VERIFIED | Candidate global conversation completed live draft, revise and explicit publish after the post-tool 429 failure was reproduced and fixed |
 | Authenticated multi-user isolation | LIVE_VERIFIED | Firebase principals, owner checks, deny-all Firestore browser rules, tests |
 | Unified V2 schema and state machines | PARTIAL | Canonical Post, Room, Match, Connection, Memory, Decision, Notification, and action-autonomy vocabularies plus validators exist; legacy Room/Match/Connection runtime writes still need migration |
 | Versioned migration framework | IMPLEMENTED_UNVERIFIED | Registry, checksums, pagination, dry-run, optimistic concurrency, environment/backup guards, migration report, and real 3,093-record dry-run pass; candidate apply is still gated |
@@ -16,7 +16,7 @@ are valid completion states.
 | Explore natural-language and structured search | PARTIAL | Authenticated server filters, six views, bounded text relevance, result explanations, and local browser acceptance pass; Firestore vector index and embedding backfill remain gated |
 | Saved Posts and saved searches | PARTIAL | Owner-scoped entities, save/remove APIs, monitored-search event, and UI exist; event worker monitoring and candidate acceptance remain |
 | Post Detail route | IMPLEMENTED_UNVERIFIED | Authorized `/app/posts/:intentId` and public-only API pass local browser direct-link acceptance; candidate deployment remains |
-| Agent evaluate/contact from Post | IMPLEMENTED_UNVERIFIED | Post Detail selects an owned compatible Request and invokes real candidate processing; candidate multi-user acceptance remains |
+| Agent evaluate/contact from Post | LIVE_VERIFIED | Eight candidate contacts produced real Gemini/ADK/A2A turns, evidence-backed assessments and Rooms across independent users |
 | Community join/leave | LIVE_VERIFIED | Authenticated APIs and production data exist |
 | Community Detail and scoped feed | IMPLEMENTED_UNVERIFIED | Direct route, five tabs, scoped Posts/members/Rooms pass local tests and browser acceptance |
 | Community rules and moderation | PARTIAL | Scoped moderator queue/actions, removal/suspension authority, untrusted-content warning, and audit exist locally; cross-path and candidate acceptance remain |
@@ -43,5 +43,5 @@ are valid completion states.
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
 | Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
 | Responsive/accessibility acceptance | PARTIAL | New route semantics, focus, reduced-motion, offline announcement, tablet/mobile layouts and 9 frontend tests pass; authenticated four-viewport visual/keyboard/screen-reader acceptance remains |
-| Ten-user/three-Community V2 acceptance | PARTIAL | Fail-closed isolated seeder/driver defines 10 auth users, 3 Communities, 25 Posts, 5 types, 8 Agent Rooms, 4 completed and 3 cancelled plans; candidate run has not started |
-| Candidate deployment and production promotion | PARTIAL | Collection-prefix/topic/subscription no-traffic deploy tooling and startup guards pass locally; candidate not deployed and production unchanged |
+| Ten-user/three-Community V2 acceptance | LIVE_VERIFIED | Candidate runs exercised 10 auth users, 3 Communities, 25 Posts, 5 types, 8 Agent contacts, 7 Matches, 4 completions, 3 cancellations, 20 Memories and 80 concurrent authenticated requests |
+| Candidate deployment and production promotion | PARTIAL | Isolated revision `00053-suw`, immutable digest, prefix, topic, OIDC subscription and DLQ are live at zero traffic; migration apply, visual gate and production promotion remain |

@@ -6,12 +6,16 @@ Updated: 2026-09-01
 
 Phase 11 — Closed-beta acceptance: `PARTIAL`
 
-Candidate state now has a fail-closed physical collection prefix and independent
-Pub/Sub topology definition. A ten-user/three-Community/25-Post seeder and bounded
-acceptance driver exist and pass local static/unit gates. The driver uses generic
-Agent and authoritative lifecycle routes rather than writing outcomes directly.
-Phase 11 remains partial because no candidate revision is deployed, no cohort is
-seeded, and no live multi-user scenario has yet passed against Startup V2.
+The isolated candidate is live at revision `pairpilot-orchestrator-00053-suw`
+with zero production traffic. Ten independently authenticated controlled users,
+three Communities, 25 Requests/Posts, all five task types, 20 mixed-state Memories,
+eight real Agent contacts, seven dual-approved Matches, four completions and three
+cancellations passed through generic runtime and authoritative APIs. A separate
+80-request/20-concurrency authenticated smoke passed with zero failures. The same
+global Personal Agent conversation completed live draft, revise and explicit publish
+turns after a 429 recovery defect was reproduced and fixed. Phase 11 remains partial
+because the full ten-scenario matrix, offline monitoring, failure injection, and
+authenticated visual/accessibility acceptance have not all passed.
 
 ## Protected baselines
 
@@ -29,29 +33,30 @@ seeded, and no live multi-user scenario has yet passed against Startup V2.
 | 1 Unified domain model | PARTIAL | Remaining lifecycle migrations and candidate apply |
 | 2 Explore and Post Detail | PARTIAL | Vector index/backfill, monitoring worker, candidate acceptance |
 | 3 Communities | PARTIAL | moderation actions, cross-path rule enforcement, candidate acceptance |
-| 4 Rooms | PARTIAL | live private-Agent turn, draft/approve/send, candidate acceptance |
-| 5 Matches | PARTIAL | candidate multi-user and failure-injection acceptance |
+| 4 Rooms | PARTIAL | shared Agent draft/approve/send and complete state-transition acceptance |
+| 5 Matches | PARTIAL | calendar/contact/change/reapproval/backup and failure-injection acceptance |
 | 6 Connections | PARTIAL | candidate relationship-reuse and browser acceptance |
 | 7 Memory | PARTIAL | candidate semantic scope and browser acceptance |
 | 8 Product glue | PARTIAL | remaining inline decisions, all-action runtime enforcement, candidate acceptance |
 | 9 Safety and operations | PARTIAL | candidate moderation/DLQ/failure acceptance and provider metrics |
 | 10 Unified UI refinement | PARTIAL | remaining route decomposition and authenticated four-viewport visual/a11y QA |
-| 11 Closed-beta acceptance | PARTIAL | deploy isolated candidate, seed cohort, run all live/security/reliability scenarios |
-| 12 Deployment/promotion | NOT_IMPLEMENTED | no-traffic V2 candidate and migration gates |
+| 11 Closed-beta acceptance | PARTIAL | run remaining live/security/offline/reliability and visual scenarios |
+| 12 Deployment/promotion | PARTIAL | candidate is deployed and traced; migration apply and production promotion remain gated |
 
 ## Immediate next work
 
-1. Commit the candidate-isolation and cohort tooling checkpoint.
-2. Deploy an immutable no-traffic candidate and verify its health/environment.
-3. Seed the ten-user, three-Community cohort and run bounded acceptance.
-4. Run remaining failure injection and authenticated visual/accessibility gates.
-5. Keep production traffic and migration apply unchanged until every gate passes.
+1. Run the ten named lifecycle scenarios that are not covered by the core cohort run.
+2. Run duplicate delivery, DLQ, lease expiry, conflict, expiry, orphan and reconnect
+   failure injection in the isolated candidate.
+3. Apply the versioned migration only to `candidate_v2_` after its dry-run gate.
+4. Run authenticated four-viewport visual/accessibility acceptance.
+5. Keep production traffic and production migration apply unchanged until every gate
+   passes.
 
 ## Known blockers
 
 - Production contains mixed legacy and V1 state vocabularies.
 - Twenty-six scanned historical records require explicit environment classification.
-- Candidate Pub/Sub isolation is implemented in deployment tooling but not deployed.
 - The DLQ inspection subscription has 25 undelivered messages requiring
   classification; the production push worker itself has zero backlog.
 - Firestore has no composite indexes for the planned search filters.
@@ -60,4 +65,5 @@ seeded, and no live multi-user scenario has yet passed against Startup V2.
 - Core authenticated pages still remaining in `BetaApp.tsx` need decomposition.
 - Agent-drafted shared Room messages still need an explicit draft/approve/send path.
 - Authenticated V2 four-viewport screenshots and keyboard/screen-reader QA have not run.
-- Offline monitoring and browser-level acceptance are not yet V2-verified.
+- Candidate offline monitoring, failure injection and browser-level acceptance are
+  not yet V2-verified.
