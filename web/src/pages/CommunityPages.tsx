@@ -1,4 +1,4 @@
-import { Bot, Building2, CalendarDays, MapPin, MessageCircle, ShieldCheck, UsersRound } from "lucide-react";
+import { Bot, Building2, CalendarDays, Flag, MapPin, MessageCircle, ShieldCheck, UsersRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 
@@ -103,7 +103,7 @@ export function CommunityDetailPage({ communityId, refresh, navigate }: {
     {activeTab === "Open Requests" ? !detail.viewer.joined ? <LockedPanel /> : requests.some(([, posts]) => posts.length) ? <div className="community-request-sections">{requests.map(([type, posts]) => posts.length ? <section key={type}><div className="section-heading"><h2>{requestLabels[type] || type.replaceAll("_", " ")}</h2><span className="status-pill">{posts.length} OPEN</span></div><div className="request-grid">{posts.map((post) => <button className="request-card" key={asString(post.intent_id)} onClick={() => navigate(`/app/posts/${asString(post.intent_id)}`)}><span className="status-pill">OPEN</span><h3>{asString(post.public_title)}</h3><p>{asString(post.public_summary)}</p><span>Open Post Detail →</span></button>)}</div></section> : null)}</div> : <div className="empty-state"><Building2 /><h3>No open Requests yet</h3><p>Your Personal Agent can publish the first scoped Post for this Community.</p></div> : null}
     {activeTab === "Members & Agents" ? !detail.viewer.joined ? <LockedPanel /> : <div className="member-directory">{detail.members.map((member) => <article key={`${asString(member.personal_agent_id)}-${asString(member.display_name)}`}><div className="member-avatar"><UsersRound size={18} /></div><div><span className="status-pill">{asString(member.role)}</span><h3>{asString(member.display_name)}</h3><p><Bot size={13} />{asString(member.personal_agent)}</p><small>{Array.isArray(member.public_interests) && member.public_interests.length ? member.public_interests.map(String).join(" · ") : "No public interests listed"}</small><small>{String(member.open_post_count || 0)} open Posts{member.shared_connection ? " · Shared Connection" : ""}</small></div></article>)}</div> : null}
     {activeTab === "Plans & Rooms" ? !detail.viewer.joined ? <LockedPanel /> : detail.plans_and_rooms.length ? <div className="request-grid">{detail.plans_and_rooms.map((room) => <button className="request-card" key={asString(room.room_id)} onClick={() => navigate(`/app/rooms/${asString(room.room_id)}`)}><MessageCircle /><span className="status-pill">{asString(room.state) || asString(room.status) || "ACTIVE"}</span><h3>{asString(room.title) || "Community coordination room"}</h3><p>{asString(room.last_material_update)}</p><span>Open visible Room →</span></button>)}</div> : <div className="empty-state"><MessageCircle /><h3>No Community-visible plans yet</h3><p>Private and Agents-only Rooms are intentionally excluded.</p></div> : null}
-    {activeTab === "Rules" ? <section className="community-panel rules-panel"><ShieldCheck /><h2>Rules enforced across Posts and Agent contact</h2><ol>{rules.map((rule) => <li key={rule}>{rule}</li>)}</ol><p>Community Agents can apply these rules and route reports, but cannot approve Matches, impersonate moderators, or access protected Memory.</p></section> : null}
+    {activeTab === "Rules" ? <div className="community-columns"><section className="community-panel rules-panel"><ShieldCheck /><h2>Rules enforced across Posts and Agent contact</h2><ol>{rules.map((rule) => <li key={rule}>{rule}</li>)}</ol><p>Community Agents can apply these rules and route reports, but cannot approve Matches, impersonate moderators, or access protected Memory.</p></section>{detail.viewer.can_moderate ? <CommunityModerationPanel communityId={communityId} /> : null}</div> : null}
   </div>;
 }
 
@@ -113,4 +113,25 @@ function CommunityAgentCard({ question, answer, busy, setQuestion, onSubmit }: {
 
 function LockedPanel() {
   return <div className="empty-state locked-community"><ShieldCheck /><h3>Members-only Community view</h3><p>Join this Community to see its scoped requests, public member identities, and Community-visible Rooms.</p></div>;
+}
+
+function CommunityModerationPanel({ communityId }: { communityId: string }) {
+  const { request } = useAuth();
+  const [reports, setReports] = useState<RecordValue[]>([]);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    const payload = await request<{ reports: RecordValue[] }>(`/api/app/communities/${communityId}/moderation/reports`);
+    setReports(payload.reports);
+  }, [communityId, request]);
+  useEffect(() => { void load().catch((reason: Error) => setError(reason.message)); }, [load]);
+  async function moderate(reportId: string, action: "ACKNOWLEDGE" | "RESOLVE" | "REMOVE_POST") {
+    setBusy(`${reportId}:${action}`); setError("");
+    try {
+      await request(`/api/app/communities/${communityId}/moderation/reports/${reportId}/actions`, { method: "POST", body: JSON.stringify({ action, reason: `Community moderator selected ${action.toLowerCase().replaceAll("_", " ")}` }) });
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Moderation action failed."); }
+    finally { setBusy(""); }
+  }
+  return <section className="community-panel community-moderation"><Flag /><h2>Moderator queue</h2><p>Only Community-scoped reports appear here. Private Agent conversations and protected Memory are never available.</p>{error ? <div className="form-error" role="alert">{error}</div> : null}{reports.length ? reports.map((report) => { const id = asString(report.report_id); const canRemove = report.target_type === "POST"; return <article key={id}><span className="status-pill">{asString(report.status)}</span><strong>{asString(report.category)}</strong><p>{asString(report.details)}</p><small>{asString(report.review_notice)}</small><div className="card-actions"><button disabled={Boolean(busy)} onClick={() => void moderate(id, "ACKNOWLEDGE")}>Acknowledge</button><button disabled={Boolean(busy)} onClick={() => void moderate(id, "RESOLVE")}>Resolve</button>{canRemove ? <button className="danger-subtle" disabled={Boolean(busy)} onClick={() => void moderate(id, "REMOVE_POST")}>Remove Post</button> : null}</div></article>; }) : <p>No Community reports need review.</p>}</section>;
 }

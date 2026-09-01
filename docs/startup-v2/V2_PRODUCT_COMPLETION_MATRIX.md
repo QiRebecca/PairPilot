@@ -19,7 +19,7 @@ are valid completion states.
 | Agent evaluate/contact from Post | IMPLEMENTED_UNVERIFIED | Post Detail selects an owned compatible Request and invokes real candidate processing; candidate multi-user acceptance remains |
 | Community join/leave | LIVE_VERIFIED | Authenticated APIs and production data exist |
 | Community Detail and scoped feed | IMPLEMENTED_UNVERIFIED | Direct route, five tabs, scoped Posts/members/Rooms pass local tests and browser acceptance |
-| Community rules and moderation | PARTIAL | Rules are visible and Agent-scoped; moderator mutation actions and cross-path enforcement remain |
+| Community rules and moderation | PARTIAL | Scoped moderator queue/actions, removal/suspension authority, untrusted-content warning, and audit exist locally; cross-path and candidate acceptance remain |
 | Community Agent | IMPLEMENTED_UNVERIFIED | Logical safe-scope Agent answers rules and surfaces only public Posts |
 | Candidate Pool and dynamic ranking | LIVE_VERIFIED | Multiple candidates, rank events, real A2A acceptance |
 | Continuous offline monitoring | IMPLEMENTED_UNVERIFIED | Pub/Sub/reconciliation exists; required browser-closed scenario not accepted |
@@ -38,10 +38,10 @@ are valid completion states.
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |
 | Action-specific Autonomy Center | PARTIAL | Twelve-action global/task UI, persistence, locked final commitment, history, and Post-publish enforcement exist; remaining Agent actions need common enforcement |
 | Admin authorization | LIVE_VERIFIED | Explicit admin claim enforced server-side |
-| Admin operations console | PARTIAL | Dashboard exists; DLQ retry, model usage, moderation and lifecycle analytics incomplete |
+| Admin operations console | IMPLEMENTED_UNVERIFIED | Fourteen-section role-protected console, report detail/actions, idempotent failed-job/DLQ actions, quotas, model usage, deletion queue and audit pass local tests/build; candidate/provider acceptance remains |
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
-| Product lifecycle analytics | NOT_IMPLEMENTED | Event log exists but no privacy-safe metric model/dashboard |
+| Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
 | Responsive/accessibility acceptance | NOT_IMPLEMENTED | No four-viewport visual and keyboard acceptance for V2 |
 | Ten-user/three-Community V2 acceptance | NOT_IMPLEMENTED | Data volume exists; the required V2 scenario matrix has not run |
 | Candidate deployment and production promotion | NOT_IMPLEMENTED | No Startup V2 candidate exists |

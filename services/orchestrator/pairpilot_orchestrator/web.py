@@ -25,11 +25,14 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
+    AdminModerationInput,
+    AdminQuotaUpdateInput,
     AutonomyMode,
     AutonomyPolicyUpdateInput,
     BlockUserInput,
     CancelMatchInput,
     CommunityAgentQueryInput,
+    CommunityModerationInput,
     CompleteMatchInput,
     ConnectionUsageInput,
     ContactCardInput,
@@ -38,6 +41,7 @@ from pairpilot_schemas import (
     DecisionResolutionInput,
     DeleteAccountInput,
     ExploreSearchInput,
+    FailedJobActionInput,
     FieldSource,
     HumanProposalDecisionInput,
     IntentPost,
@@ -137,7 +141,6 @@ from pairpilot_orchestrator.v1_foundation import (
     leave_community,
     list_communities_for_user,
 )
-from pairpilot_orchestrator.v1_operations import build_admin_dashboard
 from pairpilot_orchestrator.v1_reconciliation import (
     reconcile_candidate_availability,
     run_v1_reconciliation,
@@ -180,6 +183,14 @@ from pairpilot_orchestrator.v2_memory import (
     apply_memory_action,
     get_memory_detail,
     list_memory_workspace,
+)
+from pairpilot_orchestrator.v2_operations import (
+    build_operations_console,
+    get_admin_report,
+    list_community_reports,
+    moderate_report,
+    operate_failed_job,
+    update_user_quota,
 )
 from pairpilot_orchestrator.v2_product_glue import (
     get_autonomy_center,
@@ -871,7 +882,83 @@ async def app_bootstrap(principal: AuthenticatedUser) -> dict[str, Any]:
 
 @app.get("/api/admin/dashboard")
 async def admin_dashboard(principal: AuthenticatedUser) -> dict[str, Any]:
-    return await build_admin_dashboard(_store(), principal)
+    return await build_operations_console(_store(), principal)
+
+
+@app.get("/api/admin/reports/{report_id}")
+async def admin_report_detail(
+    report_id: str, principal: AuthenticatedUser
+) -> dict[str, Any]:
+    try:
+        return await get_admin_report(_store(), principal, report_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Report was not found.") from exc
+
+
+@app.post("/api/admin/reports/{report_id}/actions")
+async def admin_moderate_report(
+    report_id: str,
+    body: AdminModerationInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await moderate_report(
+            _store(),
+            principal,
+            report_id=report_id,
+            action=body.action,
+            reason=body.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Report or target was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/admin/failed-jobs/{job_id}/actions")
+async def admin_failed_job_action(
+    job_id: str,
+    body: FailedJobActionInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await operate_failed_job(
+            _store(),
+            principal,
+            job_id=job_id,
+            action=body.action,
+            idempotency_key=body.idempotency_key,
+            reason=body.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Failed job was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.put("/api/admin/quotas/{owner_uid}")
+async def admin_update_quota(
+    owner_uid: str,
+    body: AdminQuotaUpdateInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await update_user_quota(
+            _store(),
+            principal,
+            owner_uid=owner_uid,
+            values={
+                "active_task_limit": body.active_task_limit,
+                "concurrent_negotiations_per_task": (
+                    body.concurrent_negotiations_per_task
+                ),
+                "new_contacts_per_task": body.new_contacts_per_task,
+                "daily_agent_turn_limit": body.daily_agent_turn_limit,
+            },
+            reason=body.reason,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Usage quota was not found.") from exc
 
 
 @app.post("/api/v1/conversations/{conversation_id}/messages")
@@ -1512,6 +1599,36 @@ async def app_query_community_agent(
         )
     except LookupError as exc:
         raise HTTPException(404, "Community was not found.") from exc
+
+
+@app.get("/api/app/communities/{community_id}/moderation/reports")
+async def app_list_community_moderation_reports(
+    community_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await list_community_reports(_store(), principal, community_id)
+
+
+@app.post("/api/app/communities/{community_id}/moderation/reports/{report_id}/actions")
+async def app_moderate_community_report(
+    community_id: str,
+    report_id: str,
+    body: CommunityModerationInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await moderate_report(
+            _store(),
+            principal,
+            report_id=report_id,
+            action=body.action,
+            reason=body.reason,
+            community_id=community_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Report or target was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.post("/api/app/explore/search")

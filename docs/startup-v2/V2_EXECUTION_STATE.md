@@ -4,14 +4,14 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 8 — Product glue: `PARTIAL`
+Phase 9 — Safety and operations: `PARTIAL`
 
-An owner-scoped Decision Inbox, actionable/filterable in-app Notifications,
-action-specific global/task Autonomy Center, authority activity, action-specific
-Post publishing enforcement, and server-authorized cross-page Personal Agent
-directives now exist locally. Phase 8 remains partial until all decision types
-resolve inline, all Agent action paths use the common autonomy helper, and
-candidate multi-user browser acceptance passes.
+A server-authorized, privacy-bounded operations console now provides operational
+reports/moderation, idempotent failed-job and DLQ actions, bounded quota changes,
+model usage, lifecycle analytics, deletion visibility, and audit history. Scoped
+Community moderators can act only inside their own Community. Phase 9 remains
+partial until provider-native metrics and retry behavior, cross-surface blocking,
+and candidate multi-user moderation/failure acceptance pass.
 
 ## Protected baselines
 
@@ -34,17 +34,17 @@ candidate multi-user browser acceptance passes.
 | 6 Connections | PARTIAL | candidate relationship-reuse and browser acceptance |
 | 7 Memory | PARTIAL | candidate semantic scope and browser acceptance |
 | 8 Product glue | PARTIAL | remaining inline decisions, all-action runtime enforcement, candidate acceptance |
-| 9 Safety and operations | PARTIAL | moderation, DLQ operations, analytics, operational Admin |
+| 9 Safety and operations | PARTIAL | candidate moderation/DLQ/failure acceptance and provider metrics |
 | 10 Unified UI refinement | NOT_IMPLEMENTED | decomposed routes and four-viewport visual QA |
 | 11 Closed-beta acceptance | NOT_IMPLEMENTED | ten controlled users and all ten scenarios |
 | 12 Deployment/promotion | NOT_IMPLEMENTED | no-traffic V2 candidate and migration gates |
 
 ## Immediate next work
 
-1. Build moderation, operational Admin, failed-job/DLQ actions, and lifecycle analytics.
+1. Decompose and refine the Request workspace, remaining App Shell routes, and recovery states.
 2. Connect private Room instructions to live Personal Agent turns and shared drafts.
-3. Implement the remaining lifecycle normalization migrations.
-4. Add candidate-environment feature and namespace configuration.
+3. Complete keyboard, reduced-motion, semantic error, tablet, and mobile refinement.
+4. Create an isolated candidate namespace before controlled-cohort acceptance.
 5. Keep production migration apply disabled until backup and candidate gates pass.
 
 ## Known blockers

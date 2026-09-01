@@ -262,3 +262,43 @@ class AutonomyPolicyUpdateInput(BaseModel):
         min_length=1, max_length=20
     )
     task_id: str | None = Field(default=None, pattern=r"^task_[a-z0-9_-]+$")
+
+
+class AdminModerationInput(BaseModel):
+    """A bounded operator action; private report text is never echoed to analytics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal[
+        "ACKNOWLEDGE",
+        "RESOLVE",
+        "DISMISS",
+        "REMOVE_POST",
+        "SUSPEND_MEMBERSHIP",
+    ]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class CommunityModerationInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["ACKNOWLEDGE", "RESOLVE", "REMOVE_POST", "SUSPEND_MEMBERSHIP"]
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class FailedJobActionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["RETRY", "DISMISS", "MOVE_FROM_DLQ"]
+    idempotency_key: str = Field(min_length=8, max_length=120)
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AdminQuotaUpdateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active_task_limit: int = Field(ge=1, le=100)
+    concurrent_negotiations_per_task: int = Field(ge=1, le=20)
+    new_contacts_per_task: int = Field(ge=1, le=100)
+    daily_agent_turn_limit: int = Field(ge=1, le=1_000)
+    reason: str = Field(min_length=3, max_length=500)

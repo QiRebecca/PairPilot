@@ -1242,6 +1242,26 @@ async def create_user_report(
     category: str,
     details: str,
 ) -> dict[str, Any]:
+    target: Mapping[str, Any] | None = None
+    target_owner_uid: str | None = None
+    community_id: str | None = None
+    if target_type == "POST":
+        target = await store.get("intent_posts", target_id)
+        if target is not None:
+            target_owner_uid = str(target.get("owner_uid") or "") or None
+            community_id = str(target.get("community_id") or "") or None
+    elif target_type == "MESSAGE":
+        target = await store.get("room_messages", target_id)
+        if target is not None:
+            target_owner_uid = str(target.get("speaker_id") or "") or None
+            room_id = str(target.get("room_id") or "")
+            room = await store.get("coordination_rooms", room_id) if room_id else None
+            if room is not None:
+                community_id = str(room.get("community_id") or "") or None
+    elif target_type == "USER":
+        target = await store.get("personal_agents", target_id)
+        if target is not None:
+            target_owner_uid = str(target.get("owner_uid") or "") or None
     report_id = f"report_{uuid4().hex}"
     report = {
         "schema_version": SCHEMA_VERSION,
@@ -1250,6 +1270,8 @@ async def create_user_report(
         "reporter_uid": principal.uid,
         "target_type": target_type,
         "target_id": target_id,
+        "target_owner_uid": target_owner_uid,
+        "community_id": community_id,
         "category": category,
         "details": details,
         "status": "OPEN",

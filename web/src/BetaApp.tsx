@@ -42,6 +42,7 @@ import {
   DecisionInboxPage,
   NotificationsPage as V2NotificationsPage,
 } from "./pages/ProductGluePages";
+import { OperationsPage } from "./pages/OperationsPage";
 import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
 
@@ -1387,83 +1388,6 @@ export function Matches({
   );
 }
 
-function AdminPage() {
-  const { request } = useAuth();
-  const [dashboard, setDashboard] = useState<RecordValue | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    void request<RecordValue>("/api/admin/dashboard")
-      .then(setDashboard)
-      .catch((reason: Error) => setError(reason.message));
-  }, [request]);
-  if (error)
-    return (
-      <div className="beta-page">
-        <PageTitle
-          eyebrow="EXPLICIT ADMIN CLAIM REQUIRED"
-          title="Admin"
-          subtitle="This console is protected by server-side Firebase role claims."
-        />
-        <div className="form-error">{error}</div>
-      </div>
-    );
-  if (!dashboard) return <Loading />;
-  const counts = (dashboard.counts || {}) as RecordValue;
-  const health = (dashboard.health || {}) as RecordValue;
-  const analytics = (dashboard.analytics || {}) as RecordValue;
-  const usage = (dashboard.model_usage || {}) as RecordValue;
-  return (
-    <div className="beta-page">
-      <PageTitle
-        eyebrow="PRIVACY-SAFE OPERATIONS"
-        title="Admin & analytics"
-        subtitle="Aggregates and queues only. Private goals, messages, memories, and outcome text are excluded."
-      />
-      <div className="admin-metrics">
-        {Object.entries(counts).map(([key, value]) => (
-          <article key={key}>
-            <small>{key.replaceAll("_", " ")}</small>
-            <strong>{String(value ?? "—")}</strong>
-          </article>
-        ))}
-      </div>
-      <div className="settings-grid">
-        <section>
-          <h2>System health</h2>
-          {Object.entries(health).map(([key, value]) => (
-            <p key={key}>
-              {key.replaceAll("_", " ")}: <strong>{String(value)}</strong>
-            </p>
-          ))}
-        </section>
-        <section>
-          <h2>Model usage</h2>
-          {Object.entries(usage).map(([key, value]) => (
-            <p key={key}>
-              {key.replaceAll("_", " ")}: <strong>{String(value)}</strong>
-            </p>
-          ))}
-        </section>
-      </div>
-      <section className="admin-analytics">
-        <h2>Product analytics</h2>
-        <div>
-          {Object.entries(analytics).map(([key, value]) => (
-            <article key={key}>
-              <span>{key.replaceAll("_", " ")}</span>
-              <strong>
-                {typeof value === "number"
-                  ? value.toFixed(2)
-                  : "Not enough data"}
-              </strong>
-            </article>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
 export function NetworkPage({ data }: { data: BetaBootstrap }) {
   return (
     <div className="beta-page">
@@ -1842,7 +1766,7 @@ export function BetaApp() {
       page = <DecisionInboxPage navigate={navigate} />;
     else if (path === "/app/notifications")
       page = <V2NotificationsPage navigate={navigate} />;
-    else if (path === "/app/admin") page = <AdminPage />;
+    else if (path === "/app/admin") page = <OperationsPage />;
     else if (path === "/app/settings/autonomy")
       page = <AutonomyCenterPage tasks={data.tasks} />;
     else if (path === "/app/settings")
