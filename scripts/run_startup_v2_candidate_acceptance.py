@@ -393,35 +393,47 @@ def _stream_chat_turn(
     task_id: str,
     content: str,
 ) -> dict[str, Any]:
-    response = requests.post(
+    client_message_id = f"candidate-chat-{uuid4().hex}"
+    endpoint = (
         BASE_URL
         + "/api/v1/conversations/"
         + requests.utils.quote(conversation_id, safe="")
-        + "/messages",
-        headers={
-            "Authorization": f"Bearer {user.token}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "content": content,
-            "client_message_id": f"candidate-chat-{uuid4().hex}",
-            "task_id": task_id,
-            "retry_of": None,
-        },
-        timeout=(30, 330),
-        stream=True,
+        + "/messages"
     )
-    if response.status_code != 200:
-        raise RuntimeError(
-            f"Personal Agent chat returned HTTP {response.status_code}: "
-            f"{response.text[:500]}"
-        )
     events: list[dict[str, Any]] = []
-    for line in response.iter_lines(decode_unicode=True):
-        if not line or not line.startswith("data: "):
-            continue
-        event = json.loads(line.removeprefix("data: "))
-        events.append(event)
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                endpoint,
+                headers={
+                    "Authorization": f"Bearer {user.token}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "content": content,
+                    "client_message_id": client_message_id,
+                    "task_id": task_id,
+                    "retry_of": None,
+                },
+                timeout=(45, 330),
+                stream=True,
+            )
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Personal Agent chat returned HTTP {response.status_code}: "
+                    f"{response.text[:500]}"
+                )
+            events = []
+            for line in response.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                event = json.loads(line.removeprefix("data: "))
+                events.append(event)
+            break
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == 2:
+                raise
+            time.sleep(2**attempt)
     terminal = next(
         (
             event
