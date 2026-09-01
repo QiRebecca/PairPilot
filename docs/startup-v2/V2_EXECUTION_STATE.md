@@ -4,13 +4,13 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 1 — Unified domain model: `PARTIAL`
+Phase 2 — Explore and Post Detail: `PARTIAL`
 
-Canonical lifecycle contracts, server-side Post transition enforcement, the
-versioned migration registry, environment/backup/write guards, paginated scanning,
-and the first privacy-safe production dry-run exist. Phase 1 remains partial
-until legacy Room, Match, Connection, Decision, Notification, Memory, and
-Autonomy records are normalized in an isolated candidate environment.
+Server-authorized Explore search, six marketplace views, structured filters,
+Saved Posts, Saved Searches, a direct Post route, and Agent-contact actions exist.
+Local browser acceptance exposed and fixed legacy Request and controlled-demo
+leakage issues. Phase 2 remains partial until vector retrieval, saved-search
+workers, candidate deployment, and multi-user acceptance pass.
 
 ## Protected baselines
 
@@ -26,7 +26,7 @@ Autonomy records are normalized in an isolated candidate environment.
 |---|---|---|
 | 0 Audit and protection | IMPLEMENTED_UNVERIFIED | Candidate environment gate required for LIVE_VERIFIED |
 | 1 Unified domain model | PARTIAL | Remaining lifecycle migrations and candidate apply |
-| 2 Explore and Post Detail | PARTIAL | Server search contract and direct Post route |
+| 2 Explore and Post Detail | PARTIAL | Vector index/backfill, monitoring worker, candidate acceptance |
 | 3 Communities | PARTIAL | Community Detail/rules/roles/Community Agent |
 | 4 Rooms | PARTIAL | V2 lifecycle, summary, three-channel acceptance |
 | 5 Matches | PARTIAL | plan detail/change/cancel/calendar/backup |
@@ -40,10 +40,10 @@ Autonomy records are normalized in an isolated candidate environment.
 
 ## Immediate next work
 
-1. Implement the remaining lifecycle normalization migrations.
-2. Add candidate-environment feature and namespace configuration.
-3. Normalize public API projections behind versioned V2 contracts.
-4. Build server-side Explore search, saved searches, and Post Detail.
+1. Build Community Detail, rules, roles, scoped feed, and Community Agent boundary.
+2. Implement the remaining lifecycle normalization migrations.
+3. Add candidate-environment feature and namespace configuration.
+4. Create candidate vector index and public-Post embedding backfill.
 5. Keep production migration apply disabled until backup and candidate gates pass.
 
 ## Known blockers
@@ -54,5 +54,7 @@ Autonomy records are normalized in an isolated candidate environment.
 - The DLQ inspection subscription has 25 undelivered messages requiring
   classification; the production push worker itself has zero backlog.
 - Firestore has no composite indexes for the planned search filters.
+- Firestore has no candidate vector index or public-Post embedding backfill.
+- Saved-search events are durable but no V2 monitoring worker consumes them yet.
 - The frontend is concentrated in `BetaApp.tsx`.
 - Offline monitoring and browser-level acceptance are not yet V2-verified.

@@ -31,6 +31,7 @@ from pairpilot_schemas import (
     ConversationRole,
     CreateUserTaskInput,
     DeleteAccountInput,
+    ExploreSearchInput,
     FieldSource,
     HumanProposalDecisionInput,
     IntentPost,
@@ -49,6 +50,8 @@ from pairpilot_schemas import (
     PublishUserPostInput,
     ReportInput,
     RoomMessage,
+    SavePostInput,
+    SaveSearchInput,
     SaveUserPostDraftInput,
     SpeakerType,
     UpdateAccountSettingsInput,
@@ -136,6 +139,13 @@ from pairpilot_orchestrator.v1_relationships import (
     offer_contact_card,
     revoke_contact_card,
     submit_outcome_check_in,
+)
+from pairpilot_orchestrator.v2_marketplace import (
+    create_saved_search,
+    get_post_detail,
+    save_post,
+    search_marketplace,
+    unsave_post,
 )
 
 logger = logging.getLogger(__name__)
@@ -1096,6 +1106,71 @@ async def app_list_communities(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     return await list_communities_for_user(_store(), principal)
+
+
+@app.post("/api/app/explore/search")
+async def app_search_marketplace(
+    body: ExploreSearchInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await search_marketplace(_store(), principal, body)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@app.get("/api/app/posts/{intent_id}")
+async def app_get_post_detail(
+    intent_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await get_post_detail(_store(), principal, intent_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Post was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
+@app.put("/api/app/posts/{intent_id}/saved")
+async def app_save_post(
+    intent_id: str,
+    body: SavePostInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        saved = await save_post(
+            _store(), principal, intent_id=intent_id, task_id=body.task_id
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    return {"savedPost": saved}
+
+
+@app.delete("/api/app/posts/{intent_id}/saved")
+async def app_unsave_post(
+    intent_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return {"savedPost": await unsave_post(_store(), principal, intent_id=intent_id)}
+
+
+@app.post("/api/app/saved-searches")
+async def app_create_saved_search(
+    body: SaveSearchInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        saved_search = await create_saved_search(_store(), principal, body)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"savedSearch": saved_search}
 
 
 @app.post("/api/app/communities/{community_id}/join")

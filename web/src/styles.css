@@ -251,3 +251,30 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 @media (max-width: 620px) {
   .public-nav, .hero, .beta-page { width: min(100% - 24px, 1080px); }.public-nav .text-button { display: none; }.hero { padding-top: 35px; }.hero-copy h1 { font-size: 43px; }.hero-actions { align-items: stretch; flex-direction: column; }.hero-product-card { padding: 25px; }.beta-sidebar .beta-brand { font-size: 0; }.beta-sidebar .beta-brand > span { width: 32px; height: 32px; }.beta-sidebar nav button span, .beta-sidebar nav button b { display: none; }.beta-page { padding-top: 32px; }.composer-fields, .request-grid, .explore-grid, .settings-grid, .effect-grid { grid-template-columns: 1fr; }.effect-grid > div { border-right: 0; }.effect-grid > div:nth-last-child(-n+2) { border-bottom: 1px solid #ddd6ee; }.effect-grid > div:last-child { border-bottom: 0; }.composer-footer { align-items: stretch; flex-direction: column; gap: 12px; }.composer-footer button { width: 100%; }.demo-banner span { display: none; }
 }
+
+/* Direct-linkable authenticated Post Detail */
+.post-detail-document { margin-top: 24px; padding: clamp(24px, 4vw, 48px); border: 1px solid var(--line); border-radius: 24px; background: #fff; box-shadow: 0 22px 60px rgba(20, 42, 34, .08); }
+.post-detail-document > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.post-detail-document h1 { max-width: 760px; margin: 7px 0 0; font-size: clamp(32px, 5vw, 56px); line-height: 1.04; }
+.post-detail-summary { max-width: 780px; margin: 24px 0; color: #40554d; font-size: 14px; line-height: 1.7; }
+.post-detail-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.post-detail-facts > div { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid #e1e8e4; border-radius: 14px; background: #f8faf9; }
+.post-detail-facts span { display: grid; gap: 3px; }.post-detail-facts small { color: #708078; }
+.post-detail-actions { margin-top: 28px; padding: 20px; border-radius: 16px; background: #f0f7f3; }
+.post-detail-actions label { display: grid; gap: 8px; font-weight: 650; }.post-detail-actions select { width: 100%; min-height: 44px; }
+.post-detail-safety { display: flex; gap: 16px; margin-top: 28px; padding-top: 18px; border-top: 1px solid #e5e9e7; }
+.post-detail-safety button { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #68766f; background: transparent; cursor: pointer; }
+@media (max-width: 680px) { .post-detail-document > header { display: grid; }.post-detail-facts { grid-template-columns: 1fr; } }
+.marketplace-tabs { display: flex; gap: 5px; margin-bottom: 14px; padding: 5px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.marketplace-tabs button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; color: var(--muted); background: transparent; white-space: nowrap; font-size: 9px; font-weight: 750; }
+.marketplace-tabs button.active { color: white; background: var(--green); }
+.marketplace-search-panel { margin-bottom: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: white; }
+.marketplace-search-panel .explore-search { margin-bottom: 12px; }
+.marketplace-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; gap: 9px; }
+.marketplace-filters label { display: grid; gap: 5px; color: var(--muted); font-size: 8px; font-weight: 750; }
+.marketplace-filters select, .marketplace-filters input { width: 100%; min-height: 38px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.monitor-search { min-height: 38px; white-space: nowrap; }
+.marketplace-result-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 20px 0 12px; }
+.marketplace-result-heading small { color: var(--muted); font-size: 8px; }.surfaced-reason { display: flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 6px !important; color: var(--green); }
+@media (max-width: 900px) { .marketplace-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }.monitor-search { width: 100%; } }
+@media (max-width: 620px) { .marketplace-filters { grid-template-columns: 1fr; }.marketplace-result-heading { align-items: flex-start; flex-direction: column; } }

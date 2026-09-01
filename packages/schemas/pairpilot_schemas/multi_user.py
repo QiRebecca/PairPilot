@@ -125,3 +125,50 @@ class DeleteAccountInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirmation: Literal["DELETE MY PAIRPILOT ACCOUNT"]
+
+
+class ExploreSearchInput(BaseModel):
+    """Bounded server-side marketplace search over public projections."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(default="", max_length=500)
+    view: Literal[
+        "FOR_YOUR_REQUESTS",
+        "FROM_COMMUNITIES",
+        "FROM_CONNECTIONS",
+        "LATEST",
+        "SAVED",
+        "MY_POSTS",
+    ] = "FOR_YOUR_REQUESTS"
+    task_id: str | None = Field(default=None, pattern=r"^task_[a-z0-9_-]+$")
+    community_id: str | None = Field(default=None, pattern=r"^community_[a-z0-9_]+$")
+    intent_type: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_]+$")
+    location: str | None = Field(default=None, max_length=120)
+    date_start: date | None = None
+    date_end: date | None = None
+    tags: list[str] = Field(default_factory=list, max_length=12)
+    minimum_capacity: int = Field(default=1, ge=0, le=20)
+    freshness_days: int | None = Field(default=None, ge=1, le=365)
+    limit: int = Field(default=30, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> ExploreSearchInput:
+        if self.date_start and self.date_end and self.date_end < self.date_start:
+            raise ValueError("date_end must not precede date_start")
+        return self
+
+
+class SavePostInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str | None = Field(default=None, pattern=r"^task_[a-z0-9_-]+$")
+
+
+class SaveSearchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=100)
+    search: ExploreSearchInput
+    monitor_enabled: bool = False
+    notification_sensitivity: Literal["HIGH", "MEANINGFUL", "LOW"] = "MEANINGFUL"

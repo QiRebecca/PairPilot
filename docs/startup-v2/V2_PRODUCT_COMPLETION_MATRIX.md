@@ -13,10 +13,10 @@ are valid completion states.
 | Unified V2 schema and state machines | PARTIAL | Canonical Post, Room, Match, Connection, Memory, Decision, Notification, and action-autonomy vocabularies plus validators exist; legacy Room/Match/Connection runtime writes still need migration |
 | Versioned migration framework | IMPLEMENTED_UNVERIFIED | Registry, checksums, pagination, dry-run, optimistic concurrency, environment/backup guards, migration report, and real 3,093-record dry-run pass; candidate apply is still gated |
 | Request workspace tabs and activity | PARTIAL | Request route works; required tabbed workspace and material-change invalidation missing |
-| Explore natural-language and structured search | PARTIAL | Keyword/tag client filter and public feed exist; no server hybrid retrieval or filters |
-| Saved Posts and saved searches | NOT_IMPLEMENTED | No authoritative entities or routes |
-| Post Detail route | NOT_IMPLEMENTED | Explore uses a modal, not `/app/posts/:intentId` |
-| Agent evaluate/contact from Post | PARTIAL | Contact API exists; no complete evaluate/create-related-request flow |
+| Explore natural-language and structured search | PARTIAL | Authenticated server filters, six views, bounded text relevance, result explanations, and local browser acceptance pass; Firestore vector index and embedding backfill remain gated |
+| Saved Posts and saved searches | PARTIAL | Owner-scoped entities, save/remove APIs, monitored-search event, and UI exist; event worker monitoring and candidate acceptance remain |
+| Post Detail route | IMPLEMENTED_UNVERIFIED | Authorized `/app/posts/:intentId` and public-only API pass local browser direct-link acceptance; candidate deployment remains |
+| Agent evaluate/contact from Post | IMPLEMENTED_UNVERIFIED | Post Detail selects an owned compatible Request and invokes real candidate processing; candidate multi-user acceptance remains |
 | Community join/leave | LIVE_VERIFIED | Authenticated APIs and production data exist |
 | Community Detail and scoped feed | NOT_IMPLEMENTED | No direct Community route or tabs |
 | Community rules and moderation | PARTIAL | Reports/blocking exist; rule enforcement and moderator actions incomplete |

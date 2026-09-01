@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T18:41:00+08:00",
-  "current_phase": 1,
-  "current_phase_name": "Unified domain model",
+  "updated_at": "2026-09-01T19:10:00+08:00",
+  "current_phase": 2,
+  "current_phase_name": "Explore and Post Detail",
   "current_phase_status": "PARTIAL",
   "submission": {
     "commit": "7d3d6f6f4b830688e7d522c2a9517cf8833d27ae",
@@ -32,7 +32,7 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 115,
+    "python_tests": 122,
     "frontend_tests": 7
   },
   "phases": {
@@ -61,10 +61,10 @@
     "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
   },
   "next_actions": [
+    "Build Community Detail, rules, roles, scoped feed, and Community Agent boundary",
     "Implement remaining lifecycle normalization migrations",
     "Add isolated candidate environment and Pub/Sub route",
-    "Create versioned V2 API projections",
-    "Build server-side Explore, saved searches, and Post Detail"
+    "Create candidate vector index and public-Post embedding backfill"
   ],
   "known_blockers": [
     "Mixed legacy and V1 lifecycle states in production",
@@ -72,6 +72,8 @@
     "No candidate Pub/Sub isolation",
     "Non-empty DLQ inspection backlog",
     "No Firestore composite indexes for planned search",
+    "No candidate vector index or public-Post embedding backfill",
+    "Saved-search monitoring worker not implemented",
     "Monolithic authenticated frontend",
     "V2 offline monitoring and browser acceptance not run"
   ]
