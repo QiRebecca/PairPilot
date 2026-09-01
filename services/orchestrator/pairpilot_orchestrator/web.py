@@ -30,6 +30,7 @@ from pairpilot_schemas import (
     CancelMatchInput,
     CommunityAgentQueryInput,
     CompleteMatchInput,
+    ConnectionUsageInput,
     ContactCardInput,
     ConversationRole,
     CreateUserTaskInput,
@@ -148,6 +149,12 @@ from pairpilot_orchestrator.v1_relationships import (
 from pairpilot_orchestrator.v2_communities import (
     get_community_detail,
     query_community_agent,
+)
+from pairpilot_orchestrator.v2_connections import (
+    get_connection_detail,
+    list_connections_for_user,
+    record_connection_usage,
+    set_connection_preference,
 )
 from pairpilot_orchestrator.v2_marketplace import (
     create_saved_search,
@@ -1067,6 +1074,85 @@ async def app_list_matches(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     return await list_matches_for_user(_store(), principal)
+
+
+@app.get("/api/app/connections")
+async def app_list_connections(
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await list_connections_for_user(_store(), principal)
+
+
+@app.get("/api/app/connections/{connection_id}")
+async def app_get_connection(
+    connection_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await get_connection_detail(_store(), principal, connection_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Connection was not found.") from exc
+
+
+@app.put("/api/app/connections/{connection_id}/muted")
+async def app_mute_connection(
+    connection_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await set_connection_preference(
+            _store(), principal, connection_id=connection_id, muted=True
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Connection was not found.") from exc
+
+
+@app.delete("/api/app/connections/{connection_id}/muted")
+async def app_unmute_connection(
+    connection_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await set_connection_preference(
+            _store(), principal, connection_id=connection_id, muted=False
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Connection was not found.") from exc
+
+
+@app.put("/api/app/connections/{connection_id}/suggestions/removed")
+async def app_remove_connection_from_suggestions(
+    connection_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await set_connection_preference(
+            _store(),
+            principal,
+            connection_id=connection_id,
+            removed_from_suggestions=True,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Connection was not found.") from exc
+
+
+@app.post("/api/app/connections/{connection_id}/usage")
+async def app_record_connection_usage(
+    connection_id: str,
+    body: ConnectionUsageInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        usage = await record_connection_usage(
+            _store(),
+            principal,
+            connection_id=connection_id,
+            task_id=body.task_id,
+            purpose=body.purpose,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"usage": usage}
 
 
 @app.get("/api/app/matches/{match_id}")

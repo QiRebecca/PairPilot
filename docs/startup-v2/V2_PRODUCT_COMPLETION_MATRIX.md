@@ -30,8 +30,8 @@ are valid completion states.
 | Calendar `.ics` export | IMPLEMENTED_UNVERIFIED | Authenticated participant-only escaped UTC calendar route and download UI pass local tests |
 | Match change/cancel/backup | IMPLEMENTED_UNVERIFIED | Exact-version dual approval, audited cancellation, notifications, durable reopen event, and ranked backup activation pass local tests |
 | Opt-in Contact Cards | LIVE_VERIFIED | Match-scoped offer/revoke and authorization implemented |
-| Connections list/detail | PARTIAL | Relationships and graph/list content exist under Network; no V2 routes or actions |
-| Connection reuse | IMPLEMENTED_UNVERIFIED | Warm-introduction tool exists; future-task behavioral acceptance missing |
+| Connections list/detail | IMPLEMENTED_UNVERIFIED | Owner-scoped list, eight views, direct detail, dimensions, plan/Room links, provenance, controls, and secondary Graph pass local tests/build |
+| Connection reuse | IMPLEMENTED_UNVERIFIED | Personal Agent inspection/warm-introduction is task-context checked and usage-audited; candidate future-task acceptance remains |
 | Memory lifecycle | PARTIAL | propose/confirm/reject/archive/delete exist; types, usage events and scope evidence incomplete |
 | Decision Inbox | PARTIAL | Decision records and badges exist; no unified route/filter/action product |
 | In-app notifications | PARTIAL | Notifications exist; read state, category filters, mark-all-read and routing incomplete |

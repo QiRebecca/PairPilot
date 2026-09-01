@@ -220,3 +220,15 @@ class CompleteMatchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     confirmation: Literal["MARK PLAN COMPLETED"]
+
+
+class ConnectionUsageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: str | None = Field(default=None, pattern=r"^task_[a-z0-9_-]+$")
+    purpose: Literal[
+        "INSPECT",
+        "PRIORITIZE_FOR_TASK",
+        "REQUEST_WARM_INTRODUCTION",
+        "ADAPT_COMMUNICATION",
+    ]

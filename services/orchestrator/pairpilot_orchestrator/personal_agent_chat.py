@@ -44,6 +44,7 @@ from pairpilot_orchestrator.v1_foundation import (
     memory_is_confirmed,
     normalize_intent_type,
 )
+from pairpilot_orchestrator.v2_connections import record_connection_usage
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
@@ -440,15 +441,39 @@ def _build_tools(
         items = await store.query_documents(
             "relationships", filters=[("owner_uid", "EQUAL", principal.uid)]
         )
+        relationship = next(
+            (item for item in items if item.get("peer_agent_id") == peer_agent_id),
+            None,
+        )
+        if relationship is None:
+            return {"relationship": None, "context_applicable": False}
+        usage = await record_connection_usage(
+            store,
+            principal,
+            connection_id=str(relationship["relationship_id"]),
+            task_id=scoped_task_id or None,
+            purpose="INSPECT",
+        )
         return {
-            "relationship": next(
-                (
-                    _clean(item)
-                    for item in items
-                    if item.get("peer_agent_id") == peer_agent_id
-                ),
-                None,
-            )
+            "relationship": {
+                key: value
+                for key, value in relationship.items()
+                if key
+                in {
+                    "relationship_id",
+                    "peer_agent_id",
+                    "relation_type",
+                    "plans_committed",
+                    "successful_plans",
+                    "cancellation_history",
+                    "commitment_inaccuracy_reports",
+                    "task_type_compatibility",
+                    "introduction_path",
+                    "last_interaction_at",
+                }
+            },
+            "context_applicable": usage["context_applicable"],
+            "usage_id": usage["usage_id"],
         }
 
     async def inspect_memory(query: str) -> dict[str, Any]:
@@ -851,6 +876,8 @@ def _build_tools(
         """Check relationship evidence before proposing a warm introduction."""
 
         relationship = await inspect_relationship(peer_agent_id)
+        if relationship["relationship"] and not relationship["context_applicable"]:
+            return {"status": "CONTEXT_MISMATCH", **relationship}
         return {
             "status": "ELIGIBLE"
             if relationship["relationship"]

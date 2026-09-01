@@ -31,6 +31,7 @@ import {
   PostDetailPage,
 } from "./pages/MarketplacePages";
 import { CommunityDetailPage, CommunityListPage } from "./pages/CommunityPages";
+import { ConnectionDetailPage, ConnectionsPage } from "./pages/ConnectionPages";
 import { MatchDetailPage, MatchesPage } from "./pages/MatchPages";
 import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
@@ -97,7 +98,7 @@ function BetaShell({
     ["/app/communities", Building2, "Communities"],
     ["/app/rooms", MessageSquareMore, "Rooms"],
     ["/app/matches", CheckCircle2, "Matches"],
-    ["/app/network", UsersRound, "Network"],
+    ["/app/connections", UsersRound, "Connections"],
     ["/app/memory", MemoryStick, "Memory"],
     ["/app/notifications", Bell, "Notifications"],
     ["/app/settings", Settings, "Settings"],
@@ -1441,7 +1442,7 @@ function AdminPage() {
   );
 }
 
-function NetworkPage({ data }: { data: BetaBootstrap }) {
+export function NetworkPage({ data }: { data: BetaBootstrap }) {
   return (
     <div className="beta-page">
       <PageTitle
@@ -1745,6 +1746,9 @@ export function BetaApp() {
     ? path.split("/")[3]
     : "";
   const matchId = path.startsWith("/app/matches/") ? path.split("/")[3] : "";
+  const connectionId = path.startsWith("/app/connections/")
+    ? path.split("/")[3]
+    : "";
   let page: ReactNode = <Loading />;
   if (data) {
     if (data.profile.onboarding_status !== "COMPLETED")
@@ -1793,7 +1797,12 @@ export function BetaApp() {
       page = <MatchesPage navigate={navigate} />;
     else if (matchId)
       page = <MatchDetailPage matchId={matchId} navigate={navigate} />;
-    else if (path === "/app/network") page = <NetworkPage data={data} />;
+    else if (path === "/app/connections" || path === "/app/network")
+      page = <ConnectionsPage navigate={navigate} />;
+    else if (connectionId)
+      page = (
+        <ConnectionDetailPage connectionId={connectionId} navigate={navigate} />
+      );
     else if (path === "/app/memory")
       page = <MemoryPage data={data} refresh={refresh} />;
     else if (path === "/app/notifications")

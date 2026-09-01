@@ -4,13 +4,13 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 5 — Matches: `PARTIAL`
+Phase 6 — Connections: `PARTIAL`
 
-Participant-scoped Match list/detail read models, canonical time-aware states,
-calendar export, dual-approved material changes, audited cancellation, backup
-activation, opt-in Contact Cards, explicit completion, private outcome, and
-safety signaling now exist locally. Phase 5 remains partial until candidate
-multi-user browser acceptance and concurrency/failure-injection gates pass.
+Owner-scoped Connection list/detail read models, eight usable views, a secondary
+Graph, contextual dimensions, authoritative provenance, shared plan/Room links,
+mute/remove/block/report controls, Personal Agent action seeding, and scoped
+relationship usage events now exist locally. Phase 6 remains partial until the
+candidate multi-user reuse scenario and browser acceptance pass.
 
 ## Protected baselines
 
@@ -30,7 +30,7 @@ multi-user browser acceptance and concurrency/failure-injection gates pass.
 | 3 Communities | PARTIAL | moderation actions, cross-path rule enforcement, candidate acceptance |
 | 4 Rooms | PARTIAL | live private-Agent turn, draft/approve/send, candidate acceptance |
 | 5 Matches | PARTIAL | candidate multi-user and failure-injection acceptance |
-| 6 Connections | PARTIAL | list/detail/provenance/reuse acceptance |
+| 6 Connections | PARTIAL | candidate relationship-reuse and browser acceptance |
 | 7 Memory | PARTIAL | types, scope, usage events, contradiction handling |
 | 8 Product glue | PARTIAL | Decision Inbox, notification actions, autonomy policies |
 | 9 Safety and operations | PARTIAL | moderation, DLQ operations, analytics, operational Admin |
@@ -40,7 +40,7 @@ multi-user browser acceptance and concurrency/failure-injection gates pass.
 
 ## Immediate next work
 
-1. Build Connection list/detail, provenance, and warm-reuse flows.
+1. Build the typed, scoped, usage-audited Memory lifecycle and review UI.
 2. Connect private Room instructions to live Personal Agent turns and shared drafts.
 3. Implement the remaining lifecycle normalization migrations.
 4. Add candidate-environment feature and namespace configuration.

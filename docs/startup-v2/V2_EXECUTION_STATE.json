@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T20:32:00+08:00",
-  "current_phase": 5,
-  "current_phase_name": "Matches",
+  "updated_at": "2026-09-01T20:45:00+08:00",
+  "current_phase": 6,
+  "current_phase_name": "Connections",
   "current_phase_status": "PARTIAL",
   "submission": {
     "commit": "7d3d6f6f4b830688e7d522c2a9517cf8833d27ae",
@@ -32,7 +32,7 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 138,
+    "python_tests": 142,
     "frontend_tests": 7
   },
   "phases": {
@@ -61,7 +61,7 @@
     "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
   },
   "next_actions": [
-    "Build Connection list/detail, provenance, and warm-reuse flows",
+    "Build typed scoped Memory lifecycle, usage events, contradictions, and review UI",
     "Connect private Room instructions to live Personal Agent turns and shared drafts",
     "Implement remaining lifecycle normalization migrations",
     "Add isolated candidate environment and Pub/Sub route",
