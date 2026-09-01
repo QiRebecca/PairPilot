@@ -4,13 +4,13 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 6 — Connections: `PARTIAL`
+Phase 7 — Memory: `PARTIAL`
 
-Owner-scoped Connection list/detail read models, eight usable views, a secondary
-Graph, contextual dimensions, authoritative provenance, shared plan/Room links,
-mute/remove/block/report controls, Personal Agent action seeding, and scoped
-relationship usage events now exist locally. Phase 6 remains partial until the
-candidate multi-user reuse scenario and browser acceptance pass.
+Typed owner-scoped Memory read models, ten review groups, direct detail,
+confirmed-only retrieval, task/type/relationship scope enforcement, task
+exceptions, usage provenance, contradiction Decisions, and full lifecycle
+controls now exist locally. Phase 7 remains partial until live semantic and
+candidate multi-user browser acceptance pass.
 
 ## Protected baselines
 
@@ -31,7 +31,7 @@ candidate multi-user reuse scenario and browser acceptance pass.
 | 4 Rooms | PARTIAL | live private-Agent turn, draft/approve/send, candidate acceptance |
 | 5 Matches | PARTIAL | candidate multi-user and failure-injection acceptance |
 | 6 Connections | PARTIAL | candidate relationship-reuse and browser acceptance |
-| 7 Memory | PARTIAL | types, scope, usage events, contradiction handling |
+| 7 Memory | PARTIAL | candidate semantic scope and browser acceptance |
 | 8 Product glue | PARTIAL | Decision Inbox, notification actions, autonomy policies |
 | 9 Safety and operations | PARTIAL | moderation, DLQ operations, analytics, operational Admin |
 | 10 Unified UI refinement | NOT_IMPLEMENTED | decomposed routes and four-viewport visual QA |
@@ -40,7 +40,7 @@ candidate multi-user reuse scenario and browser acceptance pass.
 
 ## Immediate next work
 
-1. Build the typed, scoped, usage-audited Memory lifecycle and review UI.
+1. Build Decision Inbox, actionable Notifications, and action-specific Autonomy Center.
 2. Connect private Room instructions to live Personal Agent turns and shared drafts.
 3. Implement the remaining lifecycle normalization migrations.
 4. Add candidate-environment feature and namespace configuration.

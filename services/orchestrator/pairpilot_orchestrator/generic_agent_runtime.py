@@ -26,9 +26,9 @@ from pairpilot_orchestrator.multi_user_platform import (
 )
 from pairpilot_orchestrator.v1_foundation import (
     DEFAULT_COMMUNITY_ID,
-    memory_is_confirmed,
     normalize_intent_type,
 )
+from pairpilot_orchestrator.v2_memory import memory_applies
 
 
 class AgentRuntimeError(Exception):
@@ -110,12 +110,34 @@ async def load_personal_agent(
     memories = await store.query_documents(
         "memories", filters=[("owner_uid", "EQUAL", owner_uid)]
     )
-    permitted_memories = [
-        _clean(item)
-        for item in memories
-        if memory_is_confirmed(item)
-        and item.get("scope") not in {"PRIVATE_ONLY", "DO_NOT_USE"}
-    ]
+    permitted_memories = []
+    for item in memories:
+        if not memory_applies(
+            item,
+            task_id=None,
+            task_type=None,
+            relationship_id=None,
+        ):
+            continue
+        usage_id = f"memory_usage_{uuid4().hex}"
+        await store.create(
+            "memory_usage_events",
+            usage_id,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "namespace": PRODUCTION_NAMESPACE,
+                "usage_id": usage_id,
+                "memory_id": item.get("memory_id"),
+                "owner_uid": owner_uid,
+                "task_id": None,
+                "task_type": None,
+                "relationship_id": None,
+                "purpose": "GENERIC_AGENT_CONTEXT",
+                "reason": "confirmed global Memory matched generic Agent context",
+                "created_at": datetime.now(UTC),
+            },
+        )
+        permitted_memories.append({**_clean(item), "usage_id": usage_id})
     return {
         "agent": _clean(agent),
         "owner": _clean(profile),

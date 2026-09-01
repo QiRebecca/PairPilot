@@ -552,7 +552,7 @@ async def test_only_confirmed_memory_enters_agent_runtime() -> None:
         "owner_uid": user.uid,
         "owner_agent_id": agent_id,
         "content": "Prefers quiet rooms.",
-        "scope": "ROOM_SHARE",
+        "scope": "GLOBAL",
         "status": "PROPOSED",
         "confirmation_status": "PROPOSED",
     }

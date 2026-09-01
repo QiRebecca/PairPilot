@@ -71,6 +71,8 @@ class MemoryActionInput(BaseModel):
         "REJECT",
         "ARCHIVE",
         "RESTRICT_SCOPE",
+        "TEMPORARILY_DISABLE",
+        "ENABLE",
         "STOP_USING",
         "DELETE",
     ]

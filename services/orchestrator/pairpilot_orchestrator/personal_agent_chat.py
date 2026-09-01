@@ -41,10 +41,10 @@ from pairpilot_orchestrator.multi_user_platform import (
 )
 from pairpilot_orchestrator.v1_foundation import (
     active_community_ids,
-    memory_is_confirmed,
     normalize_intent_type,
 )
 from pairpilot_orchestrator.v2_connections import record_connection_usage
+from pairpilot_orchestrator.v2_memory import retrieve_memory_context
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
@@ -181,8 +181,11 @@ async def _scoped_context(
     decisions = await store.query_documents(
         "decisions", filters=[("owner_uid", "EQUAL", principal.uid)]
     )
-    memories = await store.query_documents(
-        "memories", filters=[("owner_uid", "EQUAL", principal.uid)]
+    permitted_memories = await retrieve_memory_context(
+        store,
+        principal,
+        task_id=task_id,
+        purpose="PERSONAL_AGENT_CONTEXT",
     )
     relationships = await store.query_documents(
         "relationships", filters=[("owner_uid", "EQUAL", principal.uid)]
@@ -212,16 +215,7 @@ async def _scoped_context(
             for item in decisions
             if item.get("status") == "OPEN"
         ][:MAX_CONTEXT_ITEMS],
-        "confirmedMemory": [
-            {
-                "memory_id": item.get("memory_id"),
-                "content": item.get("content"),
-                "scope": item.get("scope"),
-            }
-            for item in memories
-            if memory_is_confirmed(item)
-            and item.get("scope") not in {"PRIVATE_ONLY", "DO_NOT_USE"}
-        ][:MAX_CONTEXT_ITEMS],
+        "confirmedMemory": permitted_memories[:MAX_CONTEXT_ITEMS],
         "relationships": [
             {
                 "relationship_id": item.get("relationship_id"),
@@ -479,30 +473,51 @@ def _build_tools(
     async def inspect_memory(query: str) -> dict[str, Any]:
         """Search this owner's permitted memory by a short text query."""
 
-        items = await store.query_documents(
-            "memories", filters=[("owner_uid", "EQUAL", principal.uid)]
-        )
-        needle = query.casefold()
         return {
-            "memories": [
-                _clean(item)
-                for item in items
-                if needle in str(item.get("content", "")).casefold()
-                and memory_is_confirmed(item)
-            ][:MAX_CONTEXT_ITEMS]
+            "memories": await retrieve_memory_context(
+                store,
+                principal,
+                task_id=scoped_task_id,
+                purpose="PERSONAL_AGENT_INSPECT_MEMORY",
+                query=query,
+            )
         }
 
-    async def propose_memory(content: str, scope: str) -> dict[str, Any]:
+    async def propose_memory(
+        content: str,
+        scope: str,
+        memory_type: str = "WORKING_BELIEF",
+        topic_key: str = "",
+        contradicts_memory_id: str = "",
+    ) -> dict[str, Any]:
         """Propose, but do not silently confirm, an owner-scoped memory."""
 
         memory_id = f"memory_{uuid4().hex}"
+        allowed_types = {
+            "CONFIRMED_USER_MEMORY",
+            "TASK_MEMORY",
+            "EPISODIC_MEMORY",
+            "RELATIONAL_MEMORY",
+            "WORKING_BELIEF",
+        }
+        normalized_type = memory_type.upper()
+        if normalized_type not in allowed_types:
+            normalized_type = "WORKING_BELIEF"
         document = {
+            "schema_version": 3,
             "namespace": PRODUCTION_NAMESPACE,
             "memory_id": memory_id,
             "owner_uid": principal.uid,
             "owner_agent_id": agent_id_for_uid(principal.uid),
             "content": content,
             "scope": scope,
+            "memory_type": normalized_type,
+            "topic_key": topic_key.strip() or None,
+            "contradicts_memory_ids": (
+                [contradicts_memory_id] if contradicts_memory_id else []
+            ),
+            "confidence": "AGENT_PROPOSED_UNCONFIRMED",
+            "sensitivity": "PRIVATE",
             "status": "PROPOSED",
             "confirmation_status": "PROPOSED",
             "created_at": datetime.now(UTC),

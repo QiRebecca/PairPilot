@@ -47,7 +47,12 @@ def normalize_intent_type(value: str) -> str:
 
 def memory_is_confirmed(memory: Mapping[str, Any]) -> bool:
     status = str(memory.get("status") or memory.get("confirmation_status") or "")
-    return status.upper() == "CONFIRMED" and memory.get("archived") is not True
+    return (
+        status.upper() == "CONFIRMED"
+        and memory.get("archived") is not True
+        and memory.get("disabled") is not True
+        and memory.get("scope") != "DO_NOT_USE"
+    )
 
 
 async def ensure_v1_foundation(store: Any) -> None:
@@ -311,6 +316,12 @@ async def update_memory_lifecycle(
         if not scope:
             raise ValueError("restricted Memory scope is required")
         clean.update(scope=scope)
+    elif action == "TEMPORARILY_DISABLE":
+        clean.update(disabled=True, disabled_at=timestamp)
+    elif action == "ENABLE":
+        if str(clean.get("status")) != "CONFIRMED":
+            raise ValueError("only confirmed Memory can be enabled")
+        clean.update(disabled=False, enabled_at=timestamp)
     elif action == "STOP_USING":
         clean.update(scope="DO_NOT_USE")
     elif action == "DELETE":

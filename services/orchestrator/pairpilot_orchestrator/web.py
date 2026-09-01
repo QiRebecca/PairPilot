@@ -133,7 +133,6 @@ from pairpilot_orchestrator.v1_foundation import (
     join_community,
     leave_community,
     list_communities_for_user,
-    update_memory_lifecycle,
 )
 from pairpilot_orchestrator.v1_operations import build_admin_dashboard
 from pairpilot_orchestrator.v1_reconciliation import (
@@ -173,6 +172,11 @@ from pairpilot_orchestrator.v2_matches import (
     list_matches_for_user,
     mark_match_completed,
     propose_match_change,
+)
+from pairpilot_orchestrator.v2_memory import (
+    apply_memory_action,
+    get_memory_detail,
+    list_memory_workspace,
 )
 from pairpilot_orchestrator.v2_rooms import (
     get_room_workspace,
@@ -1489,6 +1493,21 @@ async def app_leave_community(
     return {"membership": membership}
 
 
+@app.get("/api/app/memories")
+async def app_list_memories(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await list_memory_workspace(_store(), principal)
+
+
+@app.get("/api/app/memories/{memory_id}")
+async def app_get_memory(
+    memory_id: str, principal: AuthenticatedUser
+) -> dict[str, Any]:
+    try:
+        return await get_memory_detail(_store(), principal, memory_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Memory was not found.") from exc
+
+
 @app.post("/api/app/memories/{memory_id}/actions")
 async def app_memory_action(
     memory_id: str,
@@ -1496,10 +1515,10 @@ async def app_memory_action(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     try:
-        memory = await update_memory_lifecycle(
+        memory = await apply_memory_action(
             _store(),
             principal,
-            memory_id,
+            memory_id=memory_id,
             action=body.action,
             content=body.content,
             scope=body.scope,

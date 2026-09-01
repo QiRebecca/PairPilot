@@ -32,7 +32,7 @@ are valid completion states.
 | Opt-in Contact Cards | LIVE_VERIFIED | Match-scoped offer/revoke and authorization implemented |
 | Connections list/detail | IMPLEMENTED_UNVERIFIED | Owner-scoped list, eight views, direct detail, dimensions, plan/Room links, provenance, controls, and secondary Graph pass local tests/build |
 | Connection reuse | IMPLEMENTED_UNVERIFIED | Personal Agent inspection/warm-introduction is task-context checked and usage-audited; candidate future-task acceptance remains |
-| Memory lifecycle | PARTIAL | propose/confirm/reject/archive/delete exist; types, usage events and scope evidence incomplete |
+| Memory lifecycle | IMPLEMENTED_UNVERIFIED | Typed grouped list/detail, confirmed-only scoped retrieval, usage events, Why-used provenance, task exceptions, contradiction review, and full controls pass local tests/build |
 | Decision Inbox | PARTIAL | Decision records and badges exist; no unified route/filter/action product |
 | In-app notifications | PARTIAL | Notifications exist; read state, category filters, mark-all-read and routing incomplete |
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |

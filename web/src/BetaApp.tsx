@@ -33,6 +33,10 @@ import {
 import { CommunityDetailPage, CommunityListPage } from "./pages/CommunityPages";
 import { ConnectionDetailPage, ConnectionsPage } from "./pages/ConnectionPages";
 import { MatchDetailPage, MatchesPage } from "./pages/MatchPages";
+import {
+  MemoryDetailPage,
+  MemoryPage as V2MemoryPage,
+} from "./pages/MemoryPages";
 import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
 
@@ -947,7 +951,7 @@ function CandidatePool({
   );
 }
 
-function MemoryPage({
+export function MemoryPage({
   data,
   refresh,
 }: {
@@ -1749,6 +1753,7 @@ export function BetaApp() {
   const connectionId = path.startsWith("/app/connections/")
     ? path.split("/")[3]
     : "";
+  const memoryId = path.startsWith("/app/memory/") ? path.split("/")[3] : "";
   let page: ReactNode = <Loading />;
   if (data) {
     if (data.profile.onboarding_status !== "COMPLETED")
@@ -1804,7 +1809,9 @@ export function BetaApp() {
         <ConnectionDetailPage connectionId={connectionId} navigate={navigate} />
       );
     else if (path === "/app/memory")
-      page = <MemoryPage data={data} refresh={refresh} />;
+      page = <V2MemoryPage navigate={navigate} />;
+    else if (memoryId)
+      page = <MemoryDetailPage memoryId={memoryId} navigate={navigate} />;
     else if (path === "/app/notifications")
       page = <Notifications data={data} />;
     else if (path === "/app/admin") page = <AdminPage />;
