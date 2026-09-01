@@ -43,6 +43,7 @@ import {
   NotificationsPage as V2NotificationsPage,
 } from "./pages/ProductGluePages";
 import { OperationsPage } from "./pages/OperationsPage";
+import { RequestWorkspaceV2Page } from "./pages/RequestWorkspaceV2Page";
 import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
 
@@ -98,6 +99,16 @@ function BetaShell({
   onSignOut: () => void;
   children: ReactNode;
 }) {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
   const openDecisions = data.decisions.filter(
     (item) => item.status === "OPEN",
   ).length;
@@ -174,7 +185,15 @@ function BetaShell({
           </button>
         </div>
       </aside>
-      <main className="beta-main">{children}</main>
+      <main className="beta-main">
+        {!online ? (
+          <div className="offline-banner" role="status">
+            You are offline. Existing content remains visible; sending and state
+            changes will be available after reconnection.
+          </div>
+        ) : null}
+        {children}
+      </main>
     </div>
   );
 }
@@ -441,532 +460,6 @@ function Requests({
         />
       )}
     </div>
-  );
-}
-
-function RequestDetail({
-  taskId,
-  data,
-  refresh,
-}: {
-  taskId: string;
-  data: BetaBootstrap;
-  refresh: () => Promise<void>;
-}) {
-  const { request } = useAuth();
-  const { navigate } = useRouter();
-  const task = data.tasks.find((item) => item.task_id === taskId);
-  const post = data.myPosts.find((item) => item.task_id === taskId);
-  const decisions = data.decisions.filter(
-    (item) => item.task_id === taskId && item.status === "OPEN",
-  );
-  const conversation = data.conversations.find(
-    (item) => item.kind === "GLOBAL_PERSONAL_AGENT",
-  );
-  const messages = data.conversationMessages.filter(
-    (item) => item.conversation_id === conversation?.conversation_id,
-  );
-  const agentDraft = (task?.agent_public_draft || {}) as RecordValue;
-  const draftRequirements = Array.isArray(agentDraft.public_requirements)
-    ? agentDraft.public_requirements.join(", ")
-    : "";
-  const [title, setTitle] = useState(
-    asString(agentDraft.public_title) || asString(task?.title),
-  );
-  const [summary, setSummary] = useState(
-    asString(agentDraft.public_summary) || asString(task?.goal),
-  );
-  const [requirements, setRequirements] = useState(draftRequirements);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
-  useEffect(() => {
-    if (asString(agentDraft.public_title))
-      setTitle(asString(agentDraft.public_title));
-    if (asString(agentDraft.public_summary))
-      setSummary(asString(agentDraft.public_summary));
-    if (draftRequirements) setRequirements(draftRequirements);
-  }, [agentDraft.public_summary, agentDraft.public_title, draftRequirements]);
-  if (!task)
-    return (
-      <Empty
-        icon={<LayoutList />}
-        title="Request not found"
-        body="This request is not part of your account."
-      />
-    );
-  async function publish(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      await request(`/api/app/tasks/${taskId}/publish`, {
-        method: "POST",
-        body: JSON.stringify({
-          public_title: title,
-          public_summary: summary,
-          public_requirements: requirements
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        }),
-      });
-      setNotice(
-        "Published. Your Agent is now looking for compatible real-user posts.",
-      );
-      await refresh();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not publish.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function saveDraft() {
-    setBusy(true);
-    setError("");
-    try {
-      await request(`/api/app/tasks/${taskId}/draft`, {
-        method: "PUT",
-        body: JSON.stringify({
-          public_title: title,
-          public_summary: summary,
-          public_requirements: requirements
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        }),
-      });
-      setNotice(
-        "Draft saved. You can leave and come back without losing these fields.",
-      );
-      await refresh();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not save draft.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function approve(decision: RecordValue) {
-    setBusy(true);
-    setError("");
-    try {
-      const proposalId = asString(decision.proposal_id);
-      const version = asNumber(decision.proposal_version);
-      const result = await request<{ status: string }>(
-        `/api/app/proposals/${proposalId}/approve`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            proposal_version: version,
-            confirmation: `APPROVE VERSION ${version}`,
-          }),
-        },
-      );
-      setNotice(
-        result.status === "MATCH_COMMITTED"
-          ? "Match committed. Your shared room is now open."
-          : "Your approval is recorded. Waiting for the other person.",
-      );
-      await refresh();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not approve.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function setPostStatus(status: "OPEN" | "PAUSED" | "CLOSED") {
-    if (!post) return;
-    setBusy(true);
-    try {
-      await request(`/api/app/posts/${asString(post.intent_id)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      setNotice(
-        status === "CLOSED"
-          ? "Request closed and removed from discovery."
-          : `Post is now ${status.toLowerCase()}.`,
-      );
-      await refresh();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not update the post.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  const completed = task.status === "COMPLETED";
-  const hasCandidates = data.candidateAssessments.some(
-    (item) => item.task_id === taskId,
-  );
-  return (
-    <div className="beta-page">
-      <PageTitle
-        eyebrow={asString(task.status)}
-        title={asString(task.title)}
-        subtitle="This request is the active context below; your Personal Agent conversation and history remain the same."
-      />
-      {notice ? <div className="form-notice">{notice}</div> : null}
-      {error ? <div className="form-error">{error}</div> : null}
-      <PersonalAgentChat
-        title="My Personal Agent"
-        conversation={conversation}
-        messages={messages}
-        taskId={taskId}
-        refresh={refresh}
-        directives={data.presentationDirectives}
-        tasks={data.tasks}
-        posts={data.myPosts}
-        decisions={data.decisions}
-        rooms={data.rooms}
-        matches={data.matches}
-        connections={data.relationships}
-        communities={data.communities}
-        memories={data.memories}
-        navigate={navigate}
-      />
-      {post ? (
-        <section className="published-card">
-          <span
-            className={`status-pill status-${asString(post.status).toLowerCase()}`}
-          >
-            {asString(post.status)}
-          </span>
-          <h2>{asString(post.public_title)}</h2>
-          <p>{asString(post.public_summary)}</p>
-          <small>
-            {post.status === "OPEN"
-              ? `Published and discoverable · capacity ${asNumber(post.capacity_remaining)}`
-              : "Publication is retained as authoritative history and is no longer discoverable."}
-          </small>
-          {post.status !== "MATCHED" && post.status !== "CLOSED" ? (
-            <div className="card-actions">
-              <button
-                className="primary-button"
-                onClick={() => navigate("/app/explore")}
-              >
-                View in Explore
-              </button>
-              <button
-                className="secondary-button"
-                disabled={busy}
-                onClick={() =>
-                  void setPostStatus(
-                    post.status === "PAUSED" ? "OPEN" : "PAUSED",
-                  )
-                }
-              >
-                {post.status === "PAUSED" ? "Resume post" : "Pause post"}
-              </button>
-              <button
-                className="danger-button"
-                disabled={busy}
-                onClick={() => void setPostStatus("CLOSED")}
-              >
-                Close request
-              </button>
-            </div>
-          ) : null}
-        </section>
-      ) : completed ? (
-        <section className="published-card">
-          <span className="status-pill">MATCH COMPLETED</span>
-          <h2>{asString(agentDraft.public_title) || asString(task.title)}</h2>
-          <p>{asString(agentDraft.public_summary) || asString(task.goal)}</p>
-          <small>
-            This request already produced a confirmed Match. Its public Post is
-            no longer discoverable; the Agent conversations and ranked candidate
-            history remain below.
-          </small>
-          <div className="card-actions">
-            <button
-              className="primary-button"
-              onClick={() => navigate("/app/matches")}
-            >
-              Open confirmed Match
-            </button>
-            <button
-              className="secondary-button"
-              onClick={() => navigate("/app/rooms")}
-            >
-              Open Rooms
-            </button>
-          </div>
-        </section>
-      ) : (
-        <section className="decision-card optional-review">
-          <span className="eyebrow">
-            POST PREVIEW · PRIVATE UNTIL PUBLISHED
-          </span>
-          <h2>Review the post your Agent drafted</h2>
-          <p>
-            The description is optional. If left empty, PairPilot uses the
-            title; your private chat and private boundaries are never published.
-          </p>
-          <form onSubmit={publish}>
-            <label>
-              Post title
-              <input
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                required
-              />
-            </label>
-            <label>
-              Description shown publicly (optional)
-              <textarea
-                value={summary}
-                onChange={(event) => setSummary(event.target.value)}
-                placeholder="Your Agent can write this from the conversation."
-              />
-            </label>
-            <label>
-              Requirements / tags
-              <input
-                value={requirements}
-                onChange={(event) => setRequirements(event.target.value)}
-                placeholder="e.g. likes photos, AA costs, thrill rides"
-              />
-            </label>
-            <div className="card-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={busy}
-                onClick={() => void saveDraft()}
-              >
-                Save draft
-              </button>
-              <button className="primary-button" disabled={busy}>
-                Approve & publish
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-      {post || hasCandidates ? (
-        <CandidatePool taskId={taskId} data={data} refresh={refresh} />
-      ) : null}
-      {decisions
-        .filter((item) => item.type === "APPROVE_PROPOSAL")
-        .map((decision) => {
-          const contract = (decision.effect_contract || {}) as RecordValue;
-          return (
-            <section
-              className="decision-card proposal"
-              key={asString(decision.decision_id)}
-            >
-              <span className="eyebrow">
-                BOTH HUMANS MUST APPROVE VERSION{" "}
-                {asNumber(decision.proposal_version)}
-              </span>
-              <h2>{asString(decision.title)}</h2>
-              <p>{asString(decision.summary)}</p>
-              <div className="effect-grid">
-                <div>
-                  <small>Candidate</small>
-                  <strong>{asString(contract.candidate_display_name)}</strong>
-                </div>
-                <div>
-                  <small>Shared dates</small>
-                  <strong>
-                    {asString(
-                      (contract.shared_dates as RecordValue | undefined)?.start,
-                    )}{" "}
-                    –{" "}
-                    {asString(
-                      (contract.shared_dates as RecordValue | undefined)?.end,
-                    )}
-                  </strong>
-                </div>
-                <div>
-                  <small>What you disclose</small>
-                  <strong>
-                    {Array.isArray(contract.what_you_disclose)
-                      ? contract.what_you_disclose.join(", ")
-                      : "Public post only"}
-                  </strong>
-                </div>
-                <div>
-                  <small>Uncertainty</small>
-                  <strong>{asString(contract.remaining_uncertainty)}</strong>
-                </div>
-              </div>
-              <button
-                className="primary-button"
-                disabled={busy}
-                onClick={() => void approve(decision)}
-              >
-                Approve exact current proposal
-              </button>
-            </section>
-          );
-        })}
-    </div>
-  );
-}
-
-function CandidatePool({
-  taskId,
-  data,
-  refresh,
-}: {
-  taskId: string;
-  data: BetaBootstrap;
-  refresh: () => Promise<void>;
-}) {
-  const { request } = useAuth();
-  const { navigate } = useRouter();
-  const [busy, setBusy] = useState("");
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
-  const candidates = data.candidateAssessments
-    .filter((item) => item.task_id === taskId)
-    .sort((a, b) => asNumber(a.current_rank) - asNumber(b.current_rank));
-  async function update(
-    candidate: RecordValue,
-    action: "proposal" | "BACKUP" | "WITHDRAWN" | "NEEDS_INFORMATION",
-  ) {
-    const candidateId = asString(candidate.candidate_intent_id);
-    setBusy(candidateId);
-    setError("");
-    try {
-      if (action === "proposal") {
-        await request(
-          `/api/app/tasks/${taskId}/candidates/${candidateId}/proposal`,
-          { method: "POST", body: "{}" },
-        );
-        setNotice(
-          "An exact proposal is ready for both people to review independently.",
-        );
-      } else {
-        await request(
-          `/api/app/tasks/${taskId}/candidates/${candidateId}/state`,
-          { method: "PATCH", body: JSON.stringify({ state: action }) },
-        );
-        setNotice(
-          action === "WITHDRAWN"
-            ? "Your Agent will stop contacting this candidate."
-            : "Candidate priority updated.",
-        );
-      }
-      await refresh();
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not update candidate.",
-      );
-    } finally {
-      setBusy("");
-    }
-  }
-  if (!candidates.length)
-    return (
-      <section className="candidate-section">
-        <div className="section-heading">
-          <h2>Candidate pool</h2>
-          <span className="status-pill">MONITORING</span>
-        </div>
-        <Empty
-          icon={<UsersRound />}
-          title="Your Agent is watching for candidates"
-          body="It will contact several compatible Agents, gather evidence, and rank qualified options here."
-        />
-      </section>
-    );
-  return (
-    <section className="candidate-section">
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">DYNAMIC, EVIDENCE-BASED</span>
-          <h2>Candidate pool</h2>
-        </div>
-        <span className="status-pill">{candidates.length} ACTIVE</span>
-      </div>
-      {notice ? <div className="form-notice">{notice}</div> : null}
-      {error ? <div className="form-error">{error}</div> : null}
-      <div className="candidate-list">
-        {candidates.map((candidate) => {
-          const candidateId = asString(candidate.candidate_intent_id);
-          const verified = Array.isArray(candidate.verified_support)
-            ? (candidate.verified_support as RecordValue[])
-            : [];
-          const uncertainties = Array.isArray(candidate.uncertainties)
-            ? candidate.uncertainties
-            : [];
-          return (
-            <article className="candidate-card" key={candidateId}>
-              <div className="candidate-rank">
-                #{asNumber(candidate.current_rank)}
-              </div>
-              <div className="candidate-body">
-                <div className="candidate-heading">
-                  <div>
-                    <span className="status-pill">
-                      {asString(candidate.state)}
-                    </span>
-                    <h3>
-                      {asString(candidate.candidate_display_name) ||
-                        "Community member"}
-                    </h3>
-                  </div>
-                  <small>{asString(candidate.priority_band)}</small>
-                </div>
-                <ul>
-                  {verified.slice(0, 3).map((item, index) => (
-                    <li key={`${candidateId}-fact-${index}`}>
-                      {asString(item.fact)}
-                    </li>
-                  ))}
-                </ul>
-                {uncertainties.length ? (
-                  <p>Still uncertain: {uncertainties.join(" ")}</p>
-                ) : null}
-                <div className="card-actions">
-                  <button
-                    className="primary-button"
-                    disabled={
-                      busy === candidateId || Boolean(candidate.proposal_id)
-                    }
-                    onClick={() => void update(candidate, "proposal")}
-                  >
-                    {candidate.proposal_id
-                      ? "Proposal created"
-                      : "Prepare proposal"}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    onClick={() =>
-                      navigate(`/app/rooms/${asString(candidate.room_id)}`)
-                    }
-                  >
-                    Open Agent Room
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={busy === candidateId}
-                    onClick={() => void update(candidate, "BACKUP")}
-                  >
-                    Keep as backup
-                  </button>
-                  <button
-                    className="danger-button"
-                    disabled={busy === candidateId}
-                    onClick={() => void update(candidate, "WITHDRAWN")}
-                  >
-                    Stop contacting
-                  </button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -1713,7 +1206,14 @@ export function BetaApp() {
     else if (path === "/app/requests")
       page = <Requests data={data} navigate={navigate} />;
     else if (taskId)
-      page = <RequestDetail taskId={taskId} data={data} refresh={refresh} />;
+      page = (
+        <RequestWorkspaceV2Page
+          taskId={taskId}
+          data={data}
+          refresh={refresh}
+          navigate={navigate}
+        />
+      );
     else if (path === "/app/explore")
       page = (
         <MarketplaceExplorePage
@@ -1747,7 +1247,14 @@ export function BetaApp() {
       );
     else if (path === "/app/rooms") page = <RoomsPage navigate={navigate} />;
     else if (roomId)
-      page = <RoomDetailPage roomId={roomId} navigate={navigate} />;
+      page = (
+        <RoomDetailPage
+          roomId={roomId}
+          navigate={navigate}
+          data={data}
+          refresh={refresh}
+        />
+      );
     else if (path === "/app/matches")
       page = <MatchesPage navigate={navigate} />;
     else if (matchId)

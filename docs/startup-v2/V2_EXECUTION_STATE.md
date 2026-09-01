@@ -4,14 +4,15 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 9 — Safety and operations: `PARTIAL`
+Phase 10 — Unified UI refinement: `PARTIAL`
 
-A server-authorized, privacy-bounded operations console now provides operational
-reports/moderation, idempotent failed-job and DLQ actions, bounded quota changes,
-model usage, lifecycle analytics, deletion visibility, and audit history. Scoped
-Community moderators can act only inside their own Community. Phase 9 remains
-partial until provider-native metrics and retry behavior, cross-surface blocking,
-and candidate multi-user moderation/failure acceptance pass.
+The Request route is now a seven-tab workspace with Conversation as the default,
+the persistent Personal Agent remains the single chat surface, and Room-private
+Agent communication invokes that same live task-scoped conversation. Responsive
+Request/Admin layouts, reduced-motion support, explicit offline state, semantic
+controls, and route-level Operations were added. Phase 10 remains partial until
+all core routes are decomposed and the authenticated four-viewport visual,
+keyboard, screen-reader, and recovery-state matrix passes in a candidate.
 
 ## Protected baselines
 
@@ -35,16 +36,16 @@ and candidate multi-user moderation/failure acceptance pass.
 | 7 Memory | PARTIAL | candidate semantic scope and browser acceptance |
 | 8 Product glue | PARTIAL | remaining inline decisions, all-action runtime enforcement, candidate acceptance |
 | 9 Safety and operations | PARTIAL | candidate moderation/DLQ/failure acceptance and provider metrics |
-| 10 Unified UI refinement | NOT_IMPLEMENTED | decomposed routes and four-viewport visual QA |
+| 10 Unified UI refinement | PARTIAL | remaining route decomposition and authenticated four-viewport visual/a11y QA |
 | 11 Closed-beta acceptance | NOT_IMPLEMENTED | ten controlled users and all ten scenarios |
 | 12 Deployment/promotion | NOT_IMPLEMENTED | no-traffic V2 candidate and migration gates |
 
 ## Immediate next work
 
-1. Decompose and refine the Request workspace, remaining App Shell routes, and recovery states.
-2. Connect private Room instructions to live Personal Agent turns and shared drafts.
-3. Complete keyboard, reduced-motion, semantic error, tablet, and mobile refinement.
-4. Create an isolated candidate namespace before controlled-cohort acceptance.
+1. Create an isolated candidate namespace before controlled-cohort acceptance.
+2. Build the ten-user, three-Community controlled cohort without hardcoded outcomes.
+3. Run security, offline monitoring, failure, concurrency, and performance scenarios.
+4. Capture the authenticated four-viewport visual and accessibility matrix.
 5. Keep production migration apply disabled until backup and candidate gates pass.
 
 ## Known blockers
@@ -58,4 +59,6 @@ and candidate multi-user moderation/failure acceptance pass.
 - Firestore has no candidate vector index or public-Post embedding backfill.
 - Saved-search events are durable but no V2 monitoring worker consumes them yet.
 - Core authenticated pages still remaining in `BetaApp.tsx` need decomposition.
+- Agent-drafted shared Room messages still need an explicit draft/approve/send path.
+- Authenticated V2 four-viewport screenshots and keyboard/screen-reader QA have not run.
 - Offline monitoring and browser-level acceptance are not yet V2-verified.

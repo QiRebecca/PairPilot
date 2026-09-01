@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T21:45:00+08:00",
-  "current_phase": 9,
-  "current_phase_name": "Safety and operations",
+  "updated_at": "2026-09-01T22:04:00+08:00",
+  "current_phase": 10,
+  "current_phase_name": "Unified UI refinement",
   "current_phase_status": "PARTIAL",
   "submission": {
     "commit": "7d3d6f6f4b830688e7d522c2a9517cf8833d27ae",
@@ -33,7 +33,7 @@
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
     "python_tests": 157,
-    "frontend_tests": 7
+    "frontend_tests": 9
   },
   "phases": {
     "0": "IMPLEMENTED_UNVERIFIED",
@@ -46,7 +46,7 @@
     "7": "PARTIAL",
     "8": "PARTIAL",
     "9": "PARTIAL",
-    "10": "NOT_IMPLEMENTED",
+    "10": "PARTIAL",
     "11": "NOT_IMPLEMENTED",
     "12": "NOT_IMPLEMENTED"
   },
@@ -61,11 +61,11 @@
     "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
   },
   "next_actions": [
-    "Decompose and refine the Request workspace, remaining App Shell routes, and recovery states",
-    "Connect private Room instructions to live Personal Agent turns and shared drafts",
-    "Complete accessibility, tablet, mobile, and recovery-state refinement",
-    "Add isolated candidate environment and Pub/Sub route",
-    "Run the controlled ten-user acceptance matrix"
+    "Create an isolated candidate namespace before controlled-cohort acceptance",
+    "Build the controlled ten-user and three-Community cohort without hardcoded outcomes",
+    "Run security, offline, failure, concurrency, and performance acceptance",
+    "Capture authenticated four-viewport visual and accessibility evidence",
+    "Implement explicit Agent-draft, human-approve, Shared Room send"
   ],
   "known_blockers": [
     "Mixed legacy and V1 lifecycle states in production",

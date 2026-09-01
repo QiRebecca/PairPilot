@@ -12,7 +12,7 @@ are valid completion states.
 | Authenticated multi-user isolation | LIVE_VERIFIED | Firebase principals, owner checks, deny-all Firestore browser rules, tests |
 | Unified V2 schema and state machines | PARTIAL | Canonical Post, Room, Match, Connection, Memory, Decision, Notification, and action-autonomy vocabularies plus validators exist; legacy Room/Match/Connection runtime writes still need migration |
 | Versioned migration framework | IMPLEMENTED_UNVERIFIED | Registry, checksums, pagination, dry-run, optimistic concurrency, environment/backup guards, migration report, and real 3,093-record dry-run pass; candidate apply is still gated |
-| Request workspace tabs and activity | PARTIAL | Request route works; required tabbed workspace and material-change invalidation missing |
+| Request workspace tabs and activity | IMPLEMENTED_UNVERIFIED | Conversation-default seven-tab route, Overview, Post, Candidates, Agent Rooms, material Activity and object Audit pass component/build checks; material-change invalidation and candidate acceptance remain |
 | Explore natural-language and structured search | PARTIAL | Authenticated server filters, six views, bounded text relevance, result explanations, and local browser acceptance pass; Firestore vector index and embedding backfill remain gated |
 | Saved Posts and saved searches | PARTIAL | Owner-scoped entities, save/remove APIs, monitored-search event, and UI exist; event worker monitoring and candidate acceptance remain |
 | Post Detail route | IMPLEMENTED_UNVERIFIED | Authorized `/app/posts/:intentId` and public-only API pass local browser direct-link acceptance; candidate deployment remains |
@@ -24,7 +24,7 @@ are valid completion states.
 | Candidate Pool and dynamic ranking | LIVE_VERIFIED | Multiple candidates, rank events, real A2A acceptance |
 | Continuous offline monitoring | IMPLEMENTED_UNVERIFIED | Pub/Sub/reconciliation exists; required browser-closed scenario not accepted |
 | Room lifecycle and summary | IMPLEMENTED_UNVERIFIED | Participant-scoped list/detail, V2 mapping, header facts and summary panel pass local tests/build |
-| Three-channel isolation | IMPLEMENTED_UNVERIFIED | Server-isolated private, redacted read-only Agents-only, and consent-gated Shared channels exist |
+| Three-channel isolation | IMPLEMENTED_UNVERIFIED | Private Room view now uses the same live task-scoped Personal Agent; redacted read-only Agents-only and consent-gated Shared channels remain server-isolated; shared Agent draft approval remains |
 | Dual-human approval | LIVE_VERIFIED | Version-bound atomic commit tests and live two-user acceptance |
 | Match Detail and executable plan | IMPLEMENTED_UNVERIFIED | Participant-scoped direct list/detail routes and plan actions pass local tests/build; candidate acceptance remains |
 | Calendar `.ics` export | IMPLEMENTED_UNVERIFIED | Authenticated participant-only escaped UTC calendar route and download UI pass local tests |
@@ -42,6 +42,6 @@ are valid completion states.
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
 | Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
-| Responsive/accessibility acceptance | NOT_IMPLEMENTED | No four-viewport visual and keyboard acceptance for V2 |
+| Responsive/accessibility acceptance | PARTIAL | New route semantics, focus, reduced-motion, offline announcement, tablet/mobile layouts and 9 frontend tests pass; authenticated four-viewport visual/keyboard/screen-reader acceptance remains |
 | Ten-user/three-Community V2 acceptance | NOT_IMPLEMENTED | Data volume exists; the required V2 scenario matrix has not run |
 | Candidate deployment and production promotion | NOT_IMPLEMENTED | No Startup V2 candidate exists |
