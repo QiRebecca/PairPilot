@@ -92,6 +92,33 @@ def _optional_identifier(value: Any) -> str | None:
     return str(value) if value not in (None, "") else None
 
 
+def _publish_policy_decision(
+    *, publish_level: str, confirmation: str, authorizing_user_content: str
+) -> str:
+    """Resolve Post publication authority without relying on model prose."""
+
+    if publish_level == "NEVER":
+        return "BLOCKED_BY_AUTONOMY_POLICY"
+    if publish_level == "AUTOMATIC":
+        return "AUTHORIZED"
+    normalized_authority = authorizing_user_content.casefold()
+    user_authorized = any(
+        phrase in normalized_authority
+        for phrase in (
+            "publish",
+            "post it",
+            "go ahead",
+            "发出去",
+            "发布",
+            "确认发",
+            "可以发",
+        )
+    )
+    if confirmation == "PUBLISH THIS POST" and user_authorized:
+        return "AUTHORIZED"
+    return "REQUIRES_HUMAN_CONFIRMATION"
+
+
 def resolve_task_intent_type(requested_type: str, *, event: str, goal: str) -> str:
     """Resolve the canonical V1 type without letting a stale model value abort chat."""
 
@@ -777,23 +804,28 @@ def _build_tools(
             action="PUBLISH_POST",
             task_id=scoped_task_id,
         )
-        full_access = publish_level == "AUTOMATIC"
-        normalized_authority = authorizing_user_content.casefold()
-        user_authorized = any(
-            phrase in normalized_authority
-            for phrase in (
-                "publish",
-                "post it",
-                "go ahead",
-                "发出去",
-                "发布",
-                "确认发",
-                "可以发",
-            )
+        decision = _publish_policy_decision(
+            publish_level=publish_level,
+            confirmation=confirmation,
+            authorizing_user_content=authorizing_user_content,
         )
-        if not full_access and (
-            confirmation != "PUBLISH THIS POST" or not user_authorized
-        ):
+        if decision == "BLOCKED_BY_AUTONOMY_POLICY":
+            directive = await _directive(
+                store,
+                principal,
+                conversation_id=conversation_id,
+                task_id=scoped_task_id,
+                action="SHOW_POST",
+                entity_ids=[scoped_task_id],
+                explanation="Publication is disabled by the owner's autonomy policy.",
+            )
+            return {
+                "status": "BLOCKED_BY_AUTONOMY_POLICY",
+                "action": "PUBLISH_POST",
+                "policy_level": "NEVER",
+                "presentation_directive_id": directive["directive_id"],
+            }
+        if decision == "REQUIRES_HUMAN_CONFIRMATION":
             directive = await _directive(
                 store,
                 principal,
