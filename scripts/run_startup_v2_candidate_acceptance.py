@@ -67,14 +67,21 @@ def _users(api_key: str) -> list[ControlledUser]:
                 api_key,
             ),
         )
-        profile = _api(user, "GET", "/api/app/bootstrap")["profile"]
+        profile = _api(
+            user, "GET", "/api/app/bootstrap", retry_transport=True
+        )["profile"]
         user.uid = str(profile["uid"])
         users.append(user)
     return users
 
 
 def _states(users: list[ControlledUser]) -> dict[int, dict[str, Any]]:
-    return {user.index: _api(user, "GET", "/api/app/bootstrap") for user in users}
+    return {
+        user.index: _api(
+            user, "GET", "/api/app/bootstrap", retry_transport=True
+        )
+        for user in users
+    }
 
 
 def _cohort_inventory(states: dict[int, dict[str, Any]]) -> dict[str, Any]:
@@ -143,7 +150,9 @@ def _wait_for_assessment(
 ) -> dict[str, Any]:
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
-        state = _api(owner, "GET", "/api/app/bootstrap")
+        state = _api(
+            owner, "GET", "/api/app/bootstrap", retry_transport=True
+        )
         assessment = next(
             (
                 item
@@ -168,7 +177,13 @@ def _contact_pairs(
     for owner, own, _peer, peer_post in pairs:
         task_id = str(own["task_id"])
         candidate_intent_id = str(peer_post["intent_id"])
-        state = _api(owner, "GET", "/api/app/bootstrap")
+        print(
+            f"contacting candidate pair {len(assessments) + 1:02d}/{len(pairs):02d}",
+            file=sys.stderr,
+        )
+        state = _api(
+            owner, "GET", "/api/app/bootstrap", retry_transport=True
+        )
         existing = next(
             (
                 item
@@ -186,6 +201,10 @@ def _contact_pairs(
                 {},
             )
         assessments.append(_wait_for_assessment(owner, task_id, candidate_intent_id))
+        print(
+            f"candidate Room ready {len(assessments):02d}/{len(pairs):02d}",
+            file=sys.stderr,
+        )
     return assessments
 
 
@@ -369,6 +388,11 @@ def _non_model_load(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-agent-flows", action="store_true")
+    parser.add_argument(
+        "--skip-load",
+        action="store_true",
+        help="reuse a separately recorded load gate and avoid rate-limit overlap",
+    )
     args = parser.parse_args()
     _assert_candidate_target()
     if not firebase_admin._apps:
@@ -380,18 +404,26 @@ def main() -> None:
         "candidate_url": BASE_URL,
         "inventory": _cohort_inventory(states),
         "security": _security_gate(users, states),
-        "load": _non_model_load(users),
         "passwords_printed": False,
         "tokens_printed": False,
     }
+    report["load"] = (
+        {"status": "SKIPPED_SEPARATE_GATE_REQUIRED"}
+        if args.skip_load
+        else _non_model_load(users)
+    )
     report["memory_volume"] = len(asyncio.run(_seed_memory_volume(users)))
     if not args.skip_agent_flows:
         pairs = _pair_candidates(users, states)
         assessments = _contact_pairs(pairs)
-        plans = [
-            _approve_plan(owner, peer, str(own["task_id"]), assessments[index])
-            for index, (owner, own, peer, _peer_post) in enumerate(pairs[:7])
-        ]
+        plans = []
+        for index, (owner, own, peer, _peer_post) in enumerate(pairs[:7]):
+            plans.append(
+                _approve_plan(
+                    owner, peer, str(own["task_id"]), assessments[index]
+                )
+            )
+            print(f"Match committed {index + 1:02d}/07", file=sys.stderr)
         outcomes = _complete_or_cancel(plans, pairs)
         report["agent_flows"] = {
             "rooms": len(assessments),
