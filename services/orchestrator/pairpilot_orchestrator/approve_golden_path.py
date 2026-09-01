@@ -20,7 +20,11 @@ async def approve_and_commit(
     """Show the current effect contract and require exact explicit confirmation."""
 
     settings = Settings.from_environment()
-    store = GoogleCloudStore(project_id=settings.project_id)
+    store = GoogleCloudStore(
+        project_id=settings.project_id,
+        topic_id=settings.event_topic_id,
+        collection_prefix=settings.collection_prefix,
+    )
     request_id = f"{proposal_id}-v{proposal_version}"
     request = await store.get("approval_requests", request_id)
     if request is None or request.get("runId") != run_id:

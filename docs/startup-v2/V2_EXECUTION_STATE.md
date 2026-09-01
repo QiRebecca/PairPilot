@@ -4,15 +4,14 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 10 — Unified UI refinement: `PARTIAL`
+Phase 11 — Closed-beta acceptance: `PARTIAL`
 
-The Request route is now a seven-tab workspace with Conversation as the default,
-the persistent Personal Agent remains the single chat surface, and Room-private
-Agent communication invokes that same live task-scoped conversation. Responsive
-Request/Admin layouts, reduced-motion support, explicit offline state, semantic
-controls, and route-level Operations were added. Phase 10 remains partial until
-all core routes are decomposed and the authenticated four-viewport visual,
-keyboard, screen-reader, and recovery-state matrix passes in a candidate.
+Candidate state now has a fail-closed physical collection prefix and independent
+Pub/Sub topology definition. A ten-user/three-Community/25-Post seeder and bounded
+acceptance driver exist and pass local static/unit gates. The driver uses generic
+Agent and authoritative lifecycle routes rather than writing outcomes directly.
+Phase 11 remains partial because no candidate revision is deployed, no cohort is
+seeded, and no live multi-user scenario has yet passed against Startup V2.
 
 ## Protected baselines
 
@@ -37,22 +36,22 @@ keyboard, screen-reader, and recovery-state matrix passes in a candidate.
 | 8 Product glue | PARTIAL | remaining inline decisions, all-action runtime enforcement, candidate acceptance |
 | 9 Safety and operations | PARTIAL | candidate moderation/DLQ/failure acceptance and provider metrics |
 | 10 Unified UI refinement | PARTIAL | remaining route decomposition and authenticated four-viewport visual/a11y QA |
-| 11 Closed-beta acceptance | NOT_IMPLEMENTED | ten controlled users and all ten scenarios |
+| 11 Closed-beta acceptance | PARTIAL | deploy isolated candidate, seed cohort, run all live/security/reliability scenarios |
 | 12 Deployment/promotion | NOT_IMPLEMENTED | no-traffic V2 candidate and migration gates |
 
 ## Immediate next work
 
-1. Create an isolated candidate namespace before controlled-cohort acceptance.
-2. Build the ten-user, three-Community controlled cohort without hardcoded outcomes.
-3. Run security, offline monitoring, failure, concurrency, and performance scenarios.
-4. Capture the authenticated four-viewport visual and accessibility matrix.
-5. Keep production migration apply disabled until backup and candidate gates pass.
+1. Commit the candidate-isolation and cohort tooling checkpoint.
+2. Deploy an immutable no-traffic candidate and verify its health/environment.
+3. Seed the ten-user, three-Community cohort and run bounded acceptance.
+4. Run remaining failure injection and authenticated visual/accessibility gates.
+5. Keep production traffic and migration apply unchanged until every gate passes.
 
 ## Known blockers
 
 - Production contains mixed legacy and V1 state vocabularies.
 - Twenty-six scanned historical records require explicit environment classification.
-- Candidate Pub/Sub isolation is absent.
+- Candidate Pub/Sub isolation is implemented in deployment tooling but not deployed.
 - The DLQ inspection subscription has 25 undelivered messages requiring
   classification; the production push worker itself has zero backlog.
 - Firestore has no composite indexes for the planned search filters.

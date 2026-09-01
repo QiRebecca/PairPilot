@@ -57,7 +57,11 @@ V2_ENTITY_COLLECTIONS = (
     "job_failures",
     "usage_quotas",
     "moderation_actions",
-    "audit_events_v2",
+    "operator_job_actions",
+    "dead_letter_messages",
+    "relationship_usage_events",
+    "memory_usage_events",
+    "audit_events",
 )
 
 

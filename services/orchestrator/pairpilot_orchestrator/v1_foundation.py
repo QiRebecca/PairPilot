@@ -9,6 +9,7 @@ from typing import Any
 
 from pairpilot_orchestrator.auth.authorization import require_verified_email
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
+from pairpilot_orchestrator.config import runtime_environment
 
 V1_SCHEMA_VERSION = 3
 DEFAULT_COMMUNITY_ID = "community_icml_seoul_2026"
@@ -61,7 +62,7 @@ async def ensure_v1_foundation(store: Any) -> None:
     communities = [
         {
             "schema_version": V1_SCHEMA_VERSION,
-            "namespace": "production",
+            "namespace": runtime_environment(),
             "community_id": DEFAULT_COMMUNITY_ID,
             "name": "ICML Seoul 2026",
             "description": (
@@ -81,7 +82,7 @@ async def ensure_v1_foundation(store: Any) -> None:
         },
         {
             "schema_version": V1_SCHEMA_VERSION,
-            "namespace": "production",
+            "namespace": runtime_environment(),
             "community_id": "community_hk_disney_buddies",
             "name": "Hong Kong Disneyland Buddies",
             "description": (
@@ -98,7 +99,7 @@ async def ensure_v1_foundation(store: Any) -> None:
         },
         {
             "schema_version": V1_SCHEMA_VERSION,
-            "namespace": "production",
+            "namespace": runtime_environment(),
             "community_id": "community_agent_builders",
             "name": "Agent Builders",
             "description": (
@@ -116,7 +117,7 @@ async def ensure_v1_foundation(store: Any) -> None:
         },
         {
             "schema_version": V1_SCHEMA_VERSION,
-            "namespace": "production",
+            "namespace": runtime_environment(),
             "community_id": "community_shanghai_weekend",
             "name": "Shanghai Weekend Plans",
             "description": (
@@ -181,7 +182,7 @@ async def join_community(
     existing = await store.get("community_memberships", membership_id)
     membership = {
         "schema_version": V1_SCHEMA_VERSION,
-        "namespace": "production",
+        "namespace": runtime_environment(),
         "membership_id": membership_id,
         "community_id": community_id,
         "owner_uid": principal.uid,
@@ -373,7 +374,7 @@ async def create_notification(
         }
     document = {
         "schema_version": V1_SCHEMA_VERSION,
-        "namespace": "production",
+        "namespace": runtime_environment(),
         "notification_id": notification_id,
         "owner_uid": owner_uid,
         "type": notification_type,

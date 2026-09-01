@@ -83,7 +83,7 @@ from pairpilot_orchestrator.auth.firebase_auth import (
     public_firebase_config,
     revoke_user_sessions,
 )
-from pairpilot_orchestrator.config import LIVE_MODE, Settings
+from pairpilot_orchestrator.config import LIVE_MODE, Settings, runtime_environment
 from pairpilot_orchestrator.domain import (
     AuthorityError,
     commit_approved_match,
@@ -371,7 +371,11 @@ class ConversationMessageBody(BaseModel):
 
 def _store() -> GoogleCloudStore:
     settings = Settings.from_environment()
-    return GoogleCloudStore(project_id=settings.project_id)
+    return GoogleCloudStore(
+        project_id=settings.project_id,
+        topic_id=settings.event_topic_id,
+        collection_prefix=settings.collection_prefix,
+    )
 
 
 def _clean(item: dict[str, Any]) -> dict[str, Any]:
@@ -822,6 +826,12 @@ async def _run_stream(run_id: UUID, source_intent_id: str) -> AsyncIterator[str]
 async def rate_limit(request: Request, call_next: Any) -> Any:
     """Apply a small per-instance abuse bound to public API traffic."""
 
+    if runtime_environment() != "production" and request.url.path.startswith(
+        ("/api/demo", "/api/os", "/api/intents")
+    ):
+        return JSONResponse(
+            {"detail": "Legacy demo surface is disabled."}, status_code=404
+        )
     if request.url.path.startswith("/api/"):
         forwarded = request.headers.get("x-forwarded-for", "")
         client = forwarded.split(",", 1)[0].strip() or (
@@ -847,6 +857,7 @@ async def health() -> dict[str, str]:
         "service": "pairpilot-orchestrator",
         "executionMode": settings.execution_mode,
         "exactModelId": settings.model_id,
+        "environment": settings.environment,
     }
 
 
@@ -1800,7 +1811,7 @@ async def app_get_task(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     task = await _store().get("task_workspaces", task_id)
-    if task is None or task.get("namespace") != "production":
+    if task is None or task.get("namespace") != PRODUCTION_NAMESPACE:
         raise HTTPException(404, "Task was not found.")
     require_task_owner(principal, task)
     private_intent = await _store().get("intent_private_data", str(task["intent_id"]))

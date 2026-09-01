@@ -35,6 +35,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="apply the reviewed plan; without this flag the command is read-only",
     )
+    parser.add_argument(
+        "--collection-prefix",
+        default="",
+        help="required for non-production environments (for example candidate_v2_)",
+    )
     parser.add_argument("--backup-uri", help="required GCS export URI for production")
     parser.add_argument(
         "--production-confirmation",
@@ -43,6 +48,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not args.project:
         parser.error("--project or GOOGLE_CLOUD_PROJECT is required")
+    if args.environment != "production" and not args.collection_prefix:
+        parser.error("--collection-prefix is required outside production")
+    if args.environment == "production" and args.collection_prefix:
+        parser.error("production migrations cannot use a collection prefix")
     return args
 
 
@@ -55,7 +64,10 @@ async def main() -> None:
     from pairpilot_orchestrator.infrastructure.google_cloud import GoogleCloudStore
     from pairpilot_orchestrator.startup_v2_migrations import run_migration
 
-    store = GoogleCloudStore(project_id=args.project)
+    store = GoogleCloudStore(
+        project_id=args.project,
+        collection_prefix=args.collection_prefix,
+    )
     result = await run_migration(
         store,
         migration_id=args.migration_id,

@@ -166,7 +166,11 @@ async def _public_members(
         if (
             user is None
             or user.get("account_status", "ACTIVE") != "ACTIVE"
-            or (uid != viewer_uid and _is_explicit_demo_identity(user))
+            or (
+                PRODUCTION_NAMESPACE == "production"
+                and uid != viewer_uid
+                and _is_explicit_demo_identity(user)
+            )
         ):
             continue
         privacy = privacy_by_uid.get(uid)
@@ -199,7 +203,10 @@ async def _public_members(
                     if post.get("community_id") == community_id
                     and post.get("owner_uid") == uid
                     and post.get("status") == "OPEN"
-                    and not is_explicit_demo_post(post)
+                    and (
+                        PRODUCTION_NAMESPACE != "production"
+                        or not is_explicit_demo_post(post)
+                    )
                 ),
                 "shared_connection": agent_id in connected_agents,
                 "is_viewer": is_viewer,
@@ -231,7 +238,7 @@ async def get_community_detail(
         for post in posts
         if post.get("namespace", PRODUCTION_NAMESPACE) == PRODUCTION_NAMESPACE
         and post.get("status") == "OPEN"
-        and not is_explicit_demo_post(post)
+        and (PRODUCTION_NAMESPACE != "production" or not is_explicit_demo_post(post))
     ]
     members: list[dict[str, Any]] = []
     rooms: list[dict[str, Any]] = []

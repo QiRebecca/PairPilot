@@ -17,7 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pairpilot_orchestrator.config import Settings
 from pairpilot_orchestrator.firestore_session_service import FirestoreSessionService
-from pairpilot_orchestrator.multi_user_platform import MultiUserStore, stable_id
+from pairpilot_orchestrator.multi_user_platform import (
+    PRODUCTION_NAMESPACE,
+    MultiUserStore,
+    stable_id,
+)
 
 PUBLIC_AGENT_POST_FIELDS = {
     "schema_version",
@@ -194,7 +198,7 @@ async def run_personal_agent_turn(
             "a2a_agent_turns",
             turn_id,
             {
-                "namespace": "production",
+                "namespace": PRODUCTION_NAMESPACE,
                 "turn_id": turn_id,
                 "owner_uid": owner_uid,
                 "owner_agent_id": agent_id,
@@ -219,7 +223,7 @@ async def run_personal_agent_turn(
             "a2a_agent_turns",
             turn_id,
             {
-                "namespace": "production",
+                "namespace": PRODUCTION_NAMESPACE,
                 "turn_id": turn_id,
                 "owner_uid": owner_uid,
                 "owner_agent_id": agent_id,

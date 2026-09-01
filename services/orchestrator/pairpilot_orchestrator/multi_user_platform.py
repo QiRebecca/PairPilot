@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -38,7 +39,7 @@ from pairpilot_orchestrator.v1_foundation import (
 )
 
 SCHEMA_VERSION = 3
-PRODUCTION_NAMESPACE = "production"
+PRODUCTION_NAMESPACE = os.getenv("PAIRPILOT_ENVIRONMENT", "production").strip()
 MAX_ACTIVE_TASKS_PER_USER = 3
 MAX_NEW_CONTACTS_PER_TASK = 5
 

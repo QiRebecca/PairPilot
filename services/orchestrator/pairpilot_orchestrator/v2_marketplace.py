@@ -247,7 +247,11 @@ async def search_marketplace(
         is_owner = post.get("owner_uid") == principal.uid
         if post.get("namespace") != PRODUCTION_NAMESPACE:
             continue
-        if not is_owner and is_explicit_demo_post(post):
+        if (
+            PRODUCTION_NAMESPACE == "production"
+            and not is_owner
+            and is_explicit_demo_post(post)
+        ):
             continue
         if not is_owner and (
             post.get("status") != DISCOVERABLE_STATUS
@@ -316,7 +320,7 @@ async def get_post_detail(
         raise LookupError("post was not found")
     is_owner = post.get("owner_uid") == principal.uid
     if not is_owner:
-        if is_explicit_demo_post(post):
+        if PRODUCTION_NAMESPACE == "production" and is_explicit_demo_post(post):
             raise LookupError("post was not found")
         if post.get("status") != DISCOVERABLE_STATUS:
             raise LookupError("post was not found")

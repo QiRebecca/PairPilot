@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from hashlib import sha256
@@ -88,13 +89,21 @@ class GoogleCloudStore:
         project_id: str,
         topic_id: str = "pairpilot-events",
         database_id: str = "(default)",
+        collection_prefix: str = "",
     ) -> None:
+        if collection_prefix and not re.fullmatch(
+            r"[a-z][a-z0-9_]{0,39}_", collection_prefix
+        ):
+            raise ValueError(
+                "collection_prefix must be a bounded Firestore-safe prefix"
+            )
         credentials, _ = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
         self._session = AuthorizedSession(credentials)  # type: ignore[no-untyped-call]
         self.project_id = project_id
         self.topic_id = topic_id
+        self.collection_prefix = collection_prefix
         self._documents = (
             "https://firestore.googleapis.com/v1/projects/"
             f"{project_id}/databases/{database_id}/documents"
@@ -105,14 +114,22 @@ class GoogleCloudStore:
         )
 
     def _document_url(self, collection: str, document_id: str) -> str:
-        return f"{self._documents}/{quote(collection)}/{quote(document_id)}"
+        return (
+            f"{self._documents}/{quote(self._physical_collection(collection))}/"
+            f"{quote(document_id)}"
+        )
+
+    def _physical_collection(self, collection: str) -> str:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,79}", collection):
+            raise ValueError("collection name is invalid")
+        return f"{self.collection_prefix}{collection}"
 
     def document_name(self, collection: str, document_id: str) -> str:
         """Return the canonical resource name used in commit writes."""
 
         return (
             f"projects/{self.project_id}/databases/(default)/documents/"
-            f"{collection}/{document_id}"
+            f"{self._physical_collection(collection)}/{document_id}"
         )
 
     async def get(self, collection: str, document_id: str) -> dict[str, Any] | None:
@@ -149,7 +166,7 @@ class GoogleCloudStore:
             page_token = ""
             while len(items) < max_documents:
                 response = self._session.get(
-                    f"{self._documents}/{quote(collection)}",
+                    f"{self._documents}/{quote(self._physical_collection(collection))}",
                     params={
                         "pageSize": min(1_000, max_documents - len(items)),
                         **({"pageToken": page_token} if page_token else {}),
@@ -206,7 +223,7 @@ class GoogleCloudStore:
 
         def read() -> list[dict[str, Any]]:
             query: dict[str, Any] = {
-                "from": [{"collectionId": collection}],
+                "from": [{"collectionId": self._physical_collection(collection)}],
                 "limit": limit,
             }
             if where is not None:
@@ -253,7 +270,7 @@ class GoogleCloudStore:
 
         def write() -> bool:
             response = self._session.post(
-                f"{self._documents}/{quote(collection)}",
+                f"{self._documents}/{quote(self._physical_collection(collection))}",
                 params={"documentId": document_id},
                 json={"fields": encode_fields(data)},
                 timeout=15,

@@ -25,7 +25,11 @@ async def run(*, source_intent_id: str, run_id: UUID | None = None) -> dict[str,
 
     settings = Settings.from_environment()
     peer_base_url = os.environ["PAIRPILOT_PEER_BASE_URL"]
-    store = GoogleCloudStore(project_id=settings.project_id)
+    store = GoogleCloudStore(
+        project_id=settings.project_id,
+        topic_id=settings.event_topic_id,
+        collection_prefix=settings.collection_prefix,
+    )
     runtime = GoldenPathRuntime(
         store=store,
         peer_base_url=peer_base_url,

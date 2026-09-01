@@ -43,5 +43,5 @@ are valid completion states.
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
 | Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
 | Responsive/accessibility acceptance | PARTIAL | New route semantics, focus, reduced-motion, offline announcement, tablet/mobile layouts and 9 frontend tests pass; authenticated four-viewport visual/keyboard/screen-reader acceptance remains |
-| Ten-user/three-Community V2 acceptance | NOT_IMPLEMENTED | Data volume exists; the required V2 scenario matrix has not run |
-| Candidate deployment and production promotion | NOT_IMPLEMENTED | No Startup V2 candidate exists |
+| Ten-user/three-Community V2 acceptance | PARTIAL | Fail-closed isolated seeder/driver defines 10 auth users, 3 Communities, 25 Posts, 5 types, 8 Agent Rooms, 4 completed and 3 cancelled plans; candidate run has not started |
+| Candidate deployment and production promotion | PARTIAL | Collection-prefix/topic/subscription no-traffic deploy tooling and startup guards pass locally; candidate not deployed and production unchanged |
