@@ -568,12 +568,37 @@ async def activate_backup(
     match = await _owned_match(store, principal, match_id)
     if canonical_match_state(match) != MatchState.CANCELLED:
         raise ValueError("backup activation requires a cancelled match")
-    candidates = await store.query_documents(
-        "candidate_assessments", filters=[("owner_uid", "EQUAL", principal.uid)]
+    tasks, candidates = await asyncio.gather(
+        store.query_documents(
+            "task_workspaces", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "candidate_assessments", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
     )
-    backups = [item for item in candidates if item.get("state") == "BACKUP"]
+    matched_intent_ids = {
+        str(match.get("source_intent_id") or ""),
+        str(match.get("target_intent_id") or ""),
+    }
+    matched_task = next(
+        (
+            task
+            for task in tasks
+            if str(task.get("intent_id") or "") in matched_intent_ids
+        ),
+        None,
+    )
+    if matched_task is None:
+        raise LookupError("the participant's matched request was not found")
+    matched_task_id = str(matched_task["task_id"])
+    backups = [
+        item
+        for item in candidates
+        if item.get("state") == "BACKUP"
+        and str(item.get("task_id") or "") == matched_task_id
+    ]
     if not backups:
-        raise LookupError("no backup candidate is available")
+        raise LookupError("no backup candidate is available for this request")
     selected = sorted(backups, key=lambda item: int(item.get("current_rank", 9999)))[0]
     clean_candidate = _clean(selected)
     clean_candidate.update(state="CONTACTING", updated_at=datetime.now(UTC))
@@ -588,6 +613,7 @@ async def activate_backup(
         producer=principal.uid,
         payload={
             "matchId": match_id,
+            "taskId": matched_task_id,
             "candidateIntentId": selected.get("candidate_intent_id"),
         },
         idempotency_key=f"match:{match_id}:backup:{candidate_id}",

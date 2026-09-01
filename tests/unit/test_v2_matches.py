@@ -78,6 +78,8 @@ async def seed_match(
             "match_id": "match_pair",
             "proposal_id": "proposal_pair",
             "proposal_version": 1,
+            "source_intent_id": "intent_viewer",
+            "target_intent_id": "intent_peer",
             "participant_uids": ["viewer", "peer"],
             "participant_agent_ids": ["agent_viewer", "agent_peer"],
             "community_id": "community_builders",
@@ -91,6 +93,16 @@ async def seed_match(
                 "expenses": "Individual",
             },
             "committed_at": datetime(2026, 9, 1, tzinfo=UTC),
+        },
+    )
+    await store.create(
+        "task_workspaces",
+        "task_viewer",
+        {
+            "namespace": "production",
+            "task_id": "task_viewer",
+            "intent_id": "intent_viewer",
+            "owner_uid": "viewer",
         },
     )
 
@@ -224,13 +236,14 @@ async def test_backup_activation_requires_cancelled_match_and_uses_best_backup()
         reason="Peer unavailable.",
         reopen_candidate_pool=False,
     )
-    for rank in (2, 1):
+    for rank, task_id in ((2, "task_viewer"), (1, "unrelated_task")):
         await store.create(
             "candidate_assessments",
             f"candidate_{rank}",
             {
                 "assessment_id": f"candidate_{rank}",
                 "owner_uid": "viewer",
+                "task_id": task_id,
                 "candidate_intent_id": f"intent_backup_{rank}",
                 "candidate_display_name": f"Backup {rank}",
                 "current_rank": rank,
@@ -238,7 +251,7 @@ async def test_backup_activation_requires_cancelled_match_and_uses_best_backup()
             },
         )
     activated = await activate_backup(store, principal("viewer"), match_id="match_pair")
-    assert activated["candidate"]["candidate_intent_id"] == "intent_backup_1"
+    assert activated["candidate"]["candidate_intent_id"] == "intent_backup_2"
     assert activated["candidate"]["state"] == "CONTACTING"
 
 
