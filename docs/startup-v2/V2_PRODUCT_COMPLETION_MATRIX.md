@@ -23,8 +23,8 @@ are valid completion states.
 | Community Agent | IMPLEMENTED_UNVERIFIED | Logical safe-scope Agent answers rules and surfaces only public Posts |
 | Candidate Pool and dynamic ranking | LIVE_VERIFIED | Multiple candidates, rank events, real A2A acceptance |
 | Continuous offline monitoring | IMPLEMENTED_UNVERIFIED | Pub/Sub/reconciliation exists; required browser-closed scenario not accepted |
-| Room lifecycle and summary | PARTIAL | Real Rooms/messages exist; V2 state machine and summary panel missing |
-| Three-channel isolation | PARTIAL | Private Agent and Agents-only controls exist; complete shared-channel UX/audit missing |
+| Room lifecycle and summary | IMPLEMENTED_UNVERIFIED | Participant-scoped list/detail, V2 mapping, header facts and summary panel pass local tests/build |
+| Three-channel isolation | IMPLEMENTED_UNVERIFIED | Server-isolated private, redacted read-only Agents-only, and consent-gated Shared channels exist |
 | Dual-human approval | LIVE_VERIFIED | Version-bound atomic commit tests and live two-user acceptance |
 | Match Detail and executable plan | PARTIAL | Match list/shared Room/contact/outcome exist; detail route and plan operations missing |
 | Calendar `.ics` export | NOT_IMPLEMENTED | No route or artifact generation |

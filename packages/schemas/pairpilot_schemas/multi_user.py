@@ -180,3 +180,16 @@ class CommunityAgentQueryInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(min_length=1, max_length=500)
+
+
+class RoomChannelMessageInput(BaseModel):
+    """One explicitly selected Room channel; no implicit visibility fallback."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1, max_length=4_000)
+    authorship: Literal["HUMAN_WRITTEN", "AGENT_DRAFTED_HUMAN_APPROVED"] = (
+        "HUMAN_WRITTEN"
+    )
+    idempotency_key: str = Field(min_length=8, max_length=100)
+    reply_to: str | None = Field(default=None, max_length=200)

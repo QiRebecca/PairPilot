@@ -1087,6 +1087,7 @@ async def send_user_room_message(
         or room.get("human_participation_available") is not True
     ):
         raise PermissionError("SHARED_ROOM_NOT_UNLOCKED")
+    OutboundPrivacyGuard().validate(natural_language=content, references=[])
     message_id = stable_id("room_message", room_id, principal.uid, idempotency_key)
     message = {
         "schema_version": SCHEMA_VERSION,

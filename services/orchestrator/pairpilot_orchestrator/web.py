@@ -50,6 +50,7 @@ from pairpilot_schemas import (
     PresentationMode,
     PublishUserPostInput,
     ReportInput,
+    RoomChannelMessageInput,
     RoomMessage,
     SavePostInput,
     SaveSearchInput,
@@ -94,7 +95,6 @@ from pairpilot_orchestrator.multi_user_platform import (
     create_user_report,
     create_user_task,
     export_account_data,
-    get_user_room,
     leave_user_room,
     provision_user,
     publish_user_post,
@@ -151,6 +151,12 @@ from pairpilot_orchestrator.v2_marketplace import (
     save_post,
     search_marketplace,
     unsave_post,
+)
+from pairpilot_orchestrator.v2_rooms import (
+    get_room_workspace,
+    list_rooms_for_user,
+    send_room_channel_message,
+    set_room_muted,
 )
 
 logger = logging.getLogger(__name__)
@@ -1516,13 +1522,20 @@ async def app_approve_proposal(
     return result
 
 
+@app.get("/api/app/rooms")
+async def app_list_rooms(
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await list_rooms_for_user(_store(), principal)
+
+
 @app.get("/api/app/rooms/{room_id}")
 async def app_get_room(
     room_id: str,
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     try:
-        return await get_user_room(_store(), principal, room_id)
+        return await get_room_workspace(_store(), principal, room_id)
     except LookupError as exc:
         raise HTTPException(404, "Room was not found.") from exc
 
@@ -1549,7 +1562,66 @@ async def app_send_room_message(
             403,
             detail={"code": str(exc), "message": "The shared room is locked."},
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     return {"message": message}
+
+
+@app.post("/api/app/rooms/{room_id}/channels/{channel}/messages")
+async def app_send_room_channel_message(
+    room_id: str,
+    channel: Literal["PRIVATE_USER_AGENT", "AGENTS_ONLY", "SHARED_ROOM"],
+    body: RoomChannelMessageInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        message = await send_room_channel_message(
+            _store(),
+            principal,
+            room_id=room_id,
+            channel=channel,
+            content=body.content,
+            authorship=body.authorship,
+            idempotency_key=body.idempotency_key,
+            reply_to=body.reply_to,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"message": message}
+
+
+@app.put("/api/app/rooms/{room_id}/muted")
+async def app_mute_room(
+    room_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return {
+            "preference": await set_room_muted(
+                _store(), principal, room_id=room_id, muted=True
+            )
+        }
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
+
+
+@app.delete("/api/app/rooms/{room_id}/muted")
+async def app_unmute_room(
+    room_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return {
+            "preference": await set_room_muted(
+                _store(), principal, room_id=room_id, muted=False
+            )
+        }
+    except LookupError as exc:
+        raise HTTPException(404, "Room was not found.") from exc
 
 
 @app.post("/api/app/blocks")

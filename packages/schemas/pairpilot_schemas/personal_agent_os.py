@@ -111,6 +111,8 @@ class SpeakerType(StrEnum):
     HUMAN = "HUMAN"
     PERSONAL_AGENT = "PERSONAL_AGENT"
     INTERNAL_WORKER = "INTERNAL_WORKER"
+    COMMUNITY_AGENT = "COMMUNITY_AGENT"
+    SYSTEM = "SYSTEM"
 
 
 class MessageAuthorship(StrEnum):

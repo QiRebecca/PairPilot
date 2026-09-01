@@ -4,15 +4,14 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 3 — Communities: `PARTIAL`
+Phase 4 — Rooms: `PARTIAL`
 
-Operational Community Detail, five scoped tabs, membership-policy enforcement,
-public member/Agent projections, Community-visible Room filtering, and a
-privacy-bounded logical Community Agent exist. Local authenticated browser
-acceptance exposed and fixed slow member reads, blank empty states, and
-controlled-test directory leakage. Phase 3 remains partial until moderation
-actions, rule enforcement at every publish/contact path, candidate deployment,
-and multi-user acceptance pass.
+Participant-scoped Room list/detail read models, canonical state mapping, a live
+summary panel, three server-isolated channels, Agent-only transcript redaction,
+Shared Room disclosure checks, leave, and owner-scoped mute controls exist.
+Phase 4 remains partial until private Agent instructions trigger a live Agent
+turn, draft/approve/send is complete, proposal-version UX is connected, and
+candidate multi-user browser acceptance passes.
 
 ## Protected baselines
 
@@ -30,7 +29,7 @@ and multi-user acceptance pass.
 | 1 Unified domain model | PARTIAL | Remaining lifecycle migrations and candidate apply |
 | 2 Explore and Post Detail | PARTIAL | Vector index/backfill, monitoring worker, candidate acceptance |
 | 3 Communities | PARTIAL | moderation actions, cross-path rule enforcement, candidate acceptance |
-| 4 Rooms | PARTIAL | V2 lifecycle, summary, three-channel acceptance |
+| 4 Rooms | PARTIAL | live private-Agent turn, draft/approve/send, candidate acceptance |
 | 5 Matches | PARTIAL | plan detail/change/cancel/calendar/backup |
 | 6 Connections | PARTIAL | list/detail/provenance/reuse acceptance |
 | 7 Memory | PARTIAL | types, scope, usage events, contradiction handling |
@@ -42,10 +41,10 @@ and multi-user acceptance pass.
 
 ## Immediate next work
 
-1. Build V2 Room state, summary, and three strictly separated channels.
-2. Implement the remaining lifecycle normalization migrations.
-3. Add candidate-environment feature and namespace configuration.
-4. Create candidate vector index and public-Post embedding backfill.
+1. Build Match Detail, versioned plan changes, cancellation, backup, and ICS export.
+2. Connect private Room instructions to live Personal Agent turns and shared drafts.
+3. Implement the remaining lifecycle normalization migrations.
+4. Add candidate-environment feature and namespace configuration.
 5. Keep production migration apply disabled until backup and candidate gates pass.
 
 ## Known blockers
