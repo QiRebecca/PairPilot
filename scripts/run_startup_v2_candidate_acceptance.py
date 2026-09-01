@@ -456,7 +456,12 @@ def _personal_agent_two_turn_gate(
     user = users[-1]
     task = states[user.index]["tasks"][0]
     task_id = str(task["task_id"])
-    conversation_id = str(task["conversation_id"])
+    global_conversation = next(
+        item
+        for item in states[user.index]["conversations"]
+        if item.get("kind") == "GLOBAL_PERSONAL_AGENT"
+    )
+    conversation_id = str(global_conversation["conversation_id"])
     first = _stream_chat_turn(
         user,
         conversation_id=conversation_id,
@@ -486,6 +491,20 @@ def _personal_agent_two_turn_gate(
         second["tool_names"]
     ):
         raise RuntimeError("second Personal Agent turn did not revise the Post draft")
+    third = _stream_chat_turn(
+        user,
+        conversation_id=conversation_id,
+        task_id=task_id,
+        content=(
+            "I reviewed the revised draft and explicitly approve publishing it now. "
+            "Use publish_intent_post with the exact revised title, summary, and "
+            "requirements, and pass the confirmation PUBLISH THIS POST."
+        ),
+    )
+    if "publish_intent_post" not in third["tool_names"]:
+        raise RuntimeError(
+            "third Personal Agent turn did not publish the approved Post"
+        )
     task_detail = _api(
         user, "GET", f"/api/app/tasks/{task_id}", retry_transport=True
     )
@@ -497,13 +516,26 @@ def _personal_agent_two_turn_gate(
         or "public venue" not in serialized_draft
     ):
         raise RuntimeError("the authoritative Post draft did not retain the revision")
+    post = next(
+        item
+        for item in _api(
+            user, "GET", "/api/app/bootstrap", retry_transport=True
+        )["myPosts"]
+        if item.get("task_id") == task_id
+    )
+    if post.get("status") != "OPEN" or "professional ai" not in str(
+        post.get("public_title") or ""
+    ).casefold():
+        raise RuntimeError("the approved Post was not authoritatively published")
     return {
         "same_conversation_id": conversation_id,
-        "turns_completed": 2,
+        "conversation_kind": "GLOBAL_PERSONAL_AGENT",
+        "turns_completed": 3,
         "first": first,
         "second": second,
+        "third": third,
         "authoritative_draft_verified": True,
-        "published": False,
+        "published": True,
     }
 
 
