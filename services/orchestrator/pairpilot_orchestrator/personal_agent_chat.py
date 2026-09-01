@@ -56,6 +56,36 @@ class PersonalAgentChatError(Exception):
     """An honest, user-visible Personal Agent turn failure."""
 
 
+def authoritative_tool_recovery_message(
+    completed_tools: list[dict[str, Any]],
+) -> str:
+    """Report only durable tool outcomes when a post-tool model call is exhausted."""
+
+    names = {str(item.get("name") or "") for item in completed_tools}
+    statuses = {
+        str(dict(item.get("result") or {}).get("status") or "").upper()
+        for item in completed_tools
+        if isinstance(item.get("result"), dict)
+    }
+    if "publish_intent_post" in names and "PUBLISHED" in statuses:
+        return (
+            "Your approved Post is published and open for matching. The model "
+            "response was interrupted after the authoritative publish succeeded, "
+            "so I preserved the completed action and this conversation can continue."
+        )
+    if names & {"draft_intent_post", "revise_intent_post"}:
+        return (
+            "I saved the requested Post draft update and added its review card. "
+            "The model response was interrupted after the authoritative save "
+            "succeeded, so no action was lost and this conversation can continue."
+        )
+    return (
+        "I completed the requested authoritative action before the model response "
+        "was interrupted. The saved result is preserved and this conversation can "
+        "continue."
+    )
+
+
 def _optional_identifier(value: Any) -> str | None:
     """Normalize nullable persisted identifiers without turning null into "None"."""
 
@@ -1125,6 +1155,14 @@ def _agent(
             "project": settings.project_id,
             "location": settings.model_location,
         },
+        retry_options=genai.types.HttpRetryOptions(
+            attempts=6,
+            initial_delay=1,
+            max_delay=12,
+            exp_base=2,
+            jitter=0.5,
+            http_status_codes=[408, 429, 500, 502, 503, 504],
+        ),
     )
     instruction = (
         "You are the persistent PairPilot Personal Agent owned by the authenticated "
@@ -1226,11 +1264,14 @@ async def stream_personal_agent_turn(
     }
     lease = None
     tool_call_ids: list[str] = []
+    completed_tools: list[dict[str, Any]] = []
     directive_ids: list[str] = []
     input_tokens: int | None = None
     output_tokens: int | None = None
     partial_fragments: list[str] = []
     final_text = ""
+    completion_mode = "LIVE_MODEL"
+    recovered_model_error: str | None = None
     try:
         lease = await acquire_execution_lease(
             store,
@@ -1296,6 +1337,18 @@ async def stream_personal_agent_turn(
             if output_count is not None:
                 output_tokens = max(output_tokens or 0, output_count)
             if event.error_code or event.error_message:
+                if completed_tools:
+                    recovered_model_error = str(
+                        event.error_code or "MODEL_RESPONSE_INTERRUPTED"
+                    )
+                    completion_mode = "AUTHORITATIVE_TOOL_RECOVERY"
+                    final_text = authoritative_tool_recovery_message(completed_tools)
+                    yield {
+                        "type": "agent.text.delta",
+                        "invocation_id": invocation_id,
+                        "delta": "\n\n" + final_text,
+                    }
+                    break
                 raise PersonalAgentChatError(
                     event.error_message or event.error_code or "model error"
                 )
@@ -1316,6 +1369,12 @@ async def stream_personal_agent_turn(
                 if part.function_response:
                     call_id = str(part.function_response.id or "")
                     response = part.function_response.response
+                    completed_tools.append(
+                        {
+                            "name": str(part.function_response.name or ""),
+                            "result": response,
+                        }
+                    )
                     if isinstance(response, dict):
                         directive_id = response.get("presentation_directive_id")
                         if directive_id and str(directive_id) not in directive_ids:
@@ -1369,7 +1428,11 @@ async def stream_personal_agent_turn(
             "author_id": agent_id,
             "content": final_text,
             "visibility": "PRIVATE_USER_AGENT",
-            "message_classification": "FRESH_LIVE_GEMINI_RESPONSE",
+            "message_classification": (
+                "FRESH_LIVE_GEMINI_RESPONSE"
+                if completion_mode == "LIVE_MODEL"
+                else "AUTHORITATIVE_TOOL_RECOVERY"
+            ),
             "adk_session_id": session_id,
             "adk_invocation_id": invocation_id,
             "model_id": settings.model_id,
@@ -1382,6 +1445,8 @@ async def stream_personal_agent_turn(
             "tool_call_ids": tool_call_ids,
             "presentation_directive_ids": directive_ids,
             "error_status": None,
+            "completion_mode": completion_mode,
+            "recovered_model_error": recovered_model_error,
             "created_at": completed,
         }
         await store.create("conversation_messages", assistant_message_id, message)
@@ -1393,6 +1458,8 @@ async def stream_personal_agent_turn(
             output_token_count=output_tokens,
             tool_call_ids=tool_call_ids,
             presentation_directive_ids=directive_ids,
+            completion_mode=completion_mode,
+            recovered_model_error=recovered_model_error,
         )
         await store.upsert("agent_invocations", invocation_id, invocation)
         yield {

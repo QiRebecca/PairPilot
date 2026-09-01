@@ -69,7 +69,7 @@ runtime and server-authoritative routes.
 
 ## Local verification
 
-- Python suite: 161 passed; zero failed; dependency deprecation warnings only.
+- Python suite: 163 passed; zero failed; dependency deprecation warnings only.
 - Candidate isolation/config tests: passed.
 - Candidate seeder plan: passed.
 - Candidate deploy shell syntax: passed.
