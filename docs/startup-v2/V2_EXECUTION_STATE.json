@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "product": "PairPilot Startup V2",
+  "updated_at": "2026-09-01T18:30:00+08:00",
+  "current_phase": 0,
+  "current_phase_name": "Audit and protection",
+  "current_phase_status": "IMPLEMENTED_UNVERIFIED",
+  "submission": {
+    "commit": "7d3d6f6f4b830688e7d522c2a9517cf8833d27ae",
+    "tag": "hackathon-submission-final",
+    "orchestrator_revision": "pairpilot-orchestrator-00045-tig",
+    "image_digest": "sha256:4aded86e939fe18e8beffa9d9a1a2ee731436cb8509c6d5631252e7123e2fb1a"
+  },
+  "startup_branch": "startup-v2",
+  "production": {
+    "url": "https://pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
+    "orchestrator_revision": "pairpilot-orchestrator-00050-qiq",
+    "peer_revision": "pairpilot-peer-agents-00022-seh",
+    "image_digest": "sha256:8023ad23b8b9a4bd77e397682ccf96e02a8dfd0e88293bba0a17a72274d32d35",
+    "model_id": "gemini-3.7-flash"
+  },
+  "baseline": {
+    "firebase_users": 89,
+    "controlled_test_accounts": 14,
+    "firestore_collections": 63,
+    "tasks": 90,
+    "posts": 84,
+    "rooms": 114,
+    "matches": 26,
+    "connections_legacy_relationships": 42,
+    "memories": 68,
+    "job_failures": 42,
+    "worker_undelivered_messages": 0,
+    "dlq_undelivered_messages": 25,
+    "python_tests": 103,
+    "frontend_tests": 7
+  },
+  "phases": {
+    "0": "IMPLEMENTED_UNVERIFIED",
+    "1": "PARTIAL",
+    "2": "PARTIAL",
+    "3": "PARTIAL",
+    "4": "PARTIAL",
+    "5": "PARTIAL",
+    "6": "PARTIAL",
+    "7": "PARTIAL",
+    "8": "PARTIAL",
+    "9": "PARTIAL",
+    "10": "NOT_IMPLEMENTED",
+    "11": "NOT_IMPLEMENTED",
+    "12": "NOT_IMPLEMENTED"
+  },
+  "next_actions": [
+    "Implement schema migration registry and dry-run runner",
+    "Add V2 state validators and migration mappings",
+    "Add isolated candidate environment and Pub/Sub route",
+    "Create versioned V2 API projections"
+  ],
+  "known_blockers": [
+    "Mixed legacy and V1 lifecycle states in production",
+    "No candidate Pub/Sub isolation",
+    "Non-empty DLQ inspection backlog",
+    "No Firestore composite indexes for planned search",
+    "Monolithic authenticated frontend",
+    "V2 offline monitoring and browser acceptance not run"
+  ]
+}
