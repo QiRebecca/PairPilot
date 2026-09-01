@@ -53,6 +53,53 @@ describe("PersonalAgentChat", () => {
     expect(screen.queryByText("A convenient fallback answer")).not.toBeInTheDocument();
   });
 
+  it("allows two consecutive turns in the same persistent global conversation", async () => {
+    const completedStream = () => [
+      "event: message.accepted",
+      'data: {"type":"message.accepted","invocation_id":"invocation-test"}',
+      "",
+      "event: agent.text.delta",
+      'data: {"type":"agent.text.delta","invocation_id":"invocation-test","delta":"Understood."}',
+      "",
+      "event: agent.completed",
+      'data: {"type":"agent.completed","invocation_id":"invocation-test","message":{"content":"Understood."}}',
+      "",
+    ].join("\n");
+    authMocks.streamRequest
+      .mockResolvedValueOnce(new Response(completedStream(), { status: 200 }))
+      .mockResolvedValueOnce(new Response(completedStream(), { status: 200 }));
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PersonalAgentChat
+        conversation={{ conversation_id: "user:uid-a:global", task_id: null }}
+        messages={[]}
+        refresh={refresh}
+      />,
+    );
+    const textbox = screen.getByRole("textbox", {
+      name: "Message My Personal Agent",
+    });
+
+    fireEvent.change(textbox, { target: { value: "First turn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(authMocks.streamRequest).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeDisabled());
+
+    fireEvent.change(textbox, { target: { value: "Second turn" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(authMocks.streamRequest).toHaveBeenCalledTimes(2));
+
+    const firstBody = JSON.parse(
+      String(authMocks.streamRequest.mock.calls[0][1]?.body),
+    ) as { client_message_id: string; content: string; task_id: string | null };
+    const secondBody = JSON.parse(
+      String(authMocks.streamRequest.mock.calls[1][1]?.body),
+    ) as { client_message_id: string; content: string; task_id: string | null };
+    expect(firstBody).toMatchObject({ content: "First turn", task_id: null });
+    expect(secondBody).toMatchObject({ content: "Second turn", task_id: null });
+    expect(secondBody.client_message_id).not.toBe(firstBody.client_message_id);
+  });
+
   it("renders an Agent directive as a real clickable task card", () => {
     const navigate = vi.fn();
     render(

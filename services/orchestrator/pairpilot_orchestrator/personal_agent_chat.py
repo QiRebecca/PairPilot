@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, date, datetime
@@ -39,21 +40,27 @@ from pairpilot_orchestrator.multi_user_platform import (
     stable_id,
 )
 from pairpilot_orchestrator.v1_foundation import (
+    active_community_ids,
     memory_is_confirmed,
     normalize_intent_type,
 )
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
+logger = logging.getLogger(__name__)
 
 
 class PersonalAgentChatError(Exception):
     """An honest, user-visible Personal Agent turn failure."""
 
 
-def resolve_task_intent_type(
-    requested_type: str, *, event: str, goal: str
-) -> str:
+def _optional_identifier(value: Any) -> str | None:
+    """Normalize nullable persisted identifiers without turning null into "None"."""
+
+    return str(value) if value not in (None, "") else None
+
+
+def resolve_task_intent_type(requested_type: str, *, event: str, goal: str) -> str:
     """Resolve the canonical V1 type without letting a stale model value abort chat."""
 
     if requested_type.strip():
@@ -166,7 +173,7 @@ async def _scoped_context(
     principal: AuthenticatedPrincipal,
     conversation: dict[str, Any],
 ) -> dict[str, Any]:
-    task_id = str(conversation.get("task_id", "")) or None
+    task_id = _optional_identifier(conversation.get("task_id"))
     tasks = await store.query_documents(
         "task_workspaces", filters=[("owner_uid", "EQUAL", principal.uid)]
     )
@@ -180,6 +187,7 @@ async def _scoped_context(
         "relationships", filters=[("owner_uid", "EQUAL", principal.uid)]
     )
     autonomy = await store.get("user_autonomy_configs", principal.uid) or {}
+    memberships = await active_community_ids(store, principal.uid)
     task_index = [
         {
             "task_id": item.get("task_id"),
@@ -223,6 +231,7 @@ async def _scoped_context(
             for item in relationships[:MAX_CONTEXT_ITEMS]
         ],
         "autonomyMode": autonomy.get("default_mode", "COPILOT"),
+        "activeCommunityIds": sorted(memberships),
     }
     if task_id is None:
         return context
@@ -273,7 +282,7 @@ def _build_tools(
     authorizing_user_content: str,
 ) -> list[Callable[..., Any]]:
     conversation_id = str(conversation["conversation_id"])
-    scoped_task_id = str(conversation.get("task_id", "")) or None
+    scoped_task_id = _optional_identifier(conversation.get("task_id"))
 
     async def create_task_workspace(
         title: str,
@@ -286,11 +295,28 @@ def _build_tools(
         maximum_additional_cost_usd: int = 0,
         partial_date_overlap_allowed: bool = True,
         intent_type: str = "",
+        community_id: str = "",
     ) -> dict[str, Any]:
-        """Create a private task after details exist using a canonical V1 type."""
+        """Create a private task in one active community after details exist."""
 
         if scoped_task_id is not None:
             return {"status": "REJECTED", "reason": "use global conversation"}
+        memberships = await active_community_ids(store, principal.uid)
+        profile = await store.get("users", principal.uid) or {}
+        preferred = [
+            str(item)
+            for item in profile.get("community_ids", [])
+            if str(item) in memberships
+        ]
+        selected_community_id = community_id or next(
+            iter(preferred or sorted(memberships)), ""
+        )
+        if selected_community_id not in memberships:
+            return {
+                "status": "REJECTED",
+                "reason": "COMMUNITY_MEMBERSHIP_REQUIRED",
+                "available_community_ids": sorted(memberships),
+            }
         body = CreateUserTaskInput(
             title=title,
             task_type=resolve_task_intent_type(
@@ -306,6 +332,7 @@ def _build_tools(
             public_requirements=public_requirements,
             maximum_additional_cost_usd=maximum_additional_cost_usd,
             partial_date_overlap_allowed=partial_date_overlap_allowed,
+            community_id=selected_community_id,
         )
         task = await create_user_task(store, principal, body)
         directive = await _directive(
@@ -1028,7 +1055,7 @@ async def stream_personal_agent_turn(
 
     settings = Settings.from_environment()
     conversation_id = str(conversation["conversation_id"])
-    task_id = str(conversation.get("task_id", "")) or None
+    task_id = _optional_identifier(conversation.get("task_id"))
     agent_id = str(conversation["principal_agent_id"])
     session_id = str(
         conversation.get("adk_session_id")
@@ -1246,6 +1273,17 @@ async def stream_personal_agent_turn(
             "message": message,
         }
     except Exception as exc:
+        logger.exception(
+            "personal_agent_turn_failed",
+            extra={
+                "invocation_id": invocation_id,
+                "conversation_id": conversation_id,
+                "task_id": task_id,
+                "owner_uid": principal.uid,
+                "model_id": settings.model_id,
+                "error_type": type(exc).__name__,
+            },
+        )
         completed = datetime.now(UTC)
         invocation.update(
             status="FAILED",

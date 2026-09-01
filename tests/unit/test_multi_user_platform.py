@@ -34,6 +34,7 @@ from pairpilot_orchestrator.multi_user_platform import (
 )
 from pairpilot_orchestrator.personal_agent_chat import (
     _build_tools,
+    _scoped_context,
     resolve_task_intent_type,
 )
 from pairpilot_orchestrator.v1_candidate_pool import (
@@ -233,9 +234,27 @@ def _agent_messages_for_test() -> dict[str, str]:
 def test_personal_agent_resolves_all_v1_intent_types(
     requested: str, event: str, goal: str, expected: str
 ) -> None:
-    assert (
-        resolve_task_intent_type(requested, event=event, goal=goal) == expected
+    assert resolve_task_intent_type(requested, event=event, goal=goal) == expected
+
+
+@pytest.mark.asyncio
+async def test_personal_agent_global_context_treats_explicit_null_as_unscoped() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-a")
+    await provision_user(store, user)
+
+    context = await _scoped_context(
+        store,
+        user,
+        {
+            "conversation_id": "user:uid-a:global",
+            "kind": "GLOBAL_PERSONAL_AGENT",
+            "task_id": None,
+        },
     )
+
+    assert context["conversationKind"] == "GLOBAL_PERSONAL_AGENT"
+    assert "selectedTask" not in context
 
 
 @pytest.mark.asyncio
@@ -263,6 +282,41 @@ async def test_personal_agent_task_tool_no_longer_uses_legacy_type() -> None:
     )
     created = store.collections["task_workspaces"][str(result["task_id"])]
     assert created["task_type"] == "EVENT_BUDDY"
+
+
+@pytest.mark.asyncio
+async def test_personal_agent_task_tool_uses_users_active_community() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-community")
+    await provision_user(store, user)
+    await complete_onboarding(
+        store,
+        user,
+        onboarding("Community User").model_copy(
+            update={"community_ids": ["community_agent_builders"]}
+        ),
+    )
+    conversation = await store.get("conversations", "user:uid-community:global")
+    assert conversation is not None
+    tool = _build_tools(
+        store,
+        user,
+        conversation,
+        authorizing_user_content="Find an agent builder for a production review.",
+    )[0]
+
+    result = await tool(
+        title="Agent production review",
+        goal="Find an adult agent builder for a hands-on production readiness review.",
+        event="Agentic Systems Review",
+        location="Remote",
+        date_start="2026-09-10",
+        date_end="2026-09-10",
+        public_requirements=["Adult AI builder", "Google ADK experience"],
+    )
+
+    created = store.collections["task_workspaces"][str(result["task_id"])]
+    assert created["community_id"] == "community_agent_builders"
 
 
 @pytest.mark.asyncio
@@ -967,7 +1021,9 @@ def test_real_personal_agent_stream_is_authenticated_idempotent_and_replayable(
         }
 
     monkeypatch.setattr(web, "_store", lambda: store)
-    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "auth_token_verifier", ApiVerifier(), raising=False
+    )
     monkeypatch.setattr(
         web.app.state, "personal_agent_turn_runner", fake_turn, raising=False
     )
@@ -1032,7 +1088,9 @@ def test_model_failure_stream_is_honest_and_saves_no_assistant(monkeypatch) -> N
         raise RuntimeError("simulated Vertex failure")
 
     monkeypatch.setattr(web, "_store", lambda: store)
-    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "auth_token_verifier", ApiVerifier(), raising=False
+    )
     monkeypatch.setattr(
         web.app.state, "personal_agent_turn_runner", failing_turn, raising=False
     )
@@ -1082,18 +1140,23 @@ def test_global_conversation_can_focus_an_owned_task_without_switching_threads(
         }
 
     monkeypatch.setattr(web, "_store", lambda: store)
-    monkeypatch.setattr(web.app.state, "auth_token_verifier", ApiVerifier())
+    monkeypatch.setattr(
+        web.app.state, "auth_token_verifier", ApiVerifier(), raising=False
+    )
     monkeypatch.setattr(
         web.app.state, "personal_agent_turn_runner", focused_turn, raising=False
     )
     client = TestClient(web.app)
     headers = {"Authorization": "Bearer user-a"}
     assert client.post("/api/app/provision", headers=headers).status_code == 200
-    assert client.put(
-        "/api/app/onboarding",
-        headers=headers,
-        json=onboarding("Alex").model_dump(mode="json"),
-    ).status_code == 200
+    assert (
+        client.put(
+            "/api/app/onboarding",
+            headers=headers,
+            json=onboarding("Alex").model_dump(mode="json"),
+        ).status_code
+        == 200
+    )
     task_response = client.post(
         "/api/app/tasks",
         headers=headers,
@@ -1112,9 +1175,62 @@ def test_global_conversation_can_focus_an_owned_task_without_switching_threads(
     assert response.status_code == 200
     assert observed_task_ids == [task_id]
     assert (
-        store.collections["conversations"]["user:uid-a:global"].get("task_id")
-        is None
+        store.collections["conversations"]["user:uid-a:global"].get("task_id") is None
     )
+
+
+def test_global_conversation_accepts_explicit_null_task_id_on_followup(
+    monkeypatch,
+) -> None:
+    store = MemoryMultiUserStore()
+    observed_task_ids: list[str | None] = []
+
+    async def successful_turn(
+        _store,
+        _principal,
+        *,
+        conversation,
+        content,
+        client_message_id,
+        invocation_id,
+    ):
+        del _store, _principal, content, client_message_id
+        observed_task_ids.append(conversation.get("task_id"))
+        yield {"type": "message.accepted", "invocation_id": invocation_id}
+        yield {
+            "type": "agent.completed",
+            "invocation_id": invocation_id,
+            "assistant_message_id": f"assistant-{len(observed_task_ids)}",
+            "message": {"content": "The global conversation is still available."},
+        }
+
+    monkeypatch.setattr(web, "_store", lambda: store)
+    monkeypatch.setattr(
+        web.app.state, "auth_token_verifier", ApiVerifier(), raising=False
+    )
+    monkeypatch.setattr(
+        web.app.state, "personal_agent_turn_runner", successful_turn, raising=False
+    )
+    client = TestClient(web.app)
+    headers = {"Authorization": "Bearer user-a"}
+    assert client.post("/api/app/provision", headers=headers).status_code == 200
+    conversation = store.collections["conversations"]["user:uid-a:global"]
+    conversation["task_id"] = None
+
+    for index in (1, 2):
+        response = client.post(
+            "/api/v1/conversations/user:uid-a:global/messages",
+            headers=headers,
+            json={
+                "content": f"Global follow-up {index}",
+                "client_message_id": f"global-null-followup-{index}",
+            },
+        )
+        assert response.status_code == 200
+        assert "event: agent.completed" in response.text
+        assert "Task was not found" not in response.text
+
+    assert observed_task_ids == [None, None]
 
 
 @pytest.mark.asyncio

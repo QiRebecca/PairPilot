@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator
@@ -136,6 +137,8 @@ from pairpilot_orchestrator.v1_relationships import (
     revoke_contact_card,
     submit_outcome_check_in,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_PUBLIC_RUNS_PER_UTC_DAY = 12
 MAX_REQUESTS_PER_MINUTE = 120
@@ -630,6 +633,16 @@ async def _execute_personal_agent_request(
                 )
                 break
     except Exception as exc:
+        logger.exception(
+            "personal_agent_request_failed",
+            extra={
+                "request_id": request_id,
+                "invocation_id": invocation_id,
+                "conversation_id": str(conversation["conversation_id"]),
+                "owner_uid": principal.uid,
+                "error_type": type(exc).__name__,
+            },
+        )
         sequence += 1
         event = {
             "type": "agent.error",
@@ -810,7 +823,12 @@ async def send_personal_agent_message(
     """Accept one user turn and stream its durable Personal Agent execution."""
 
     conversation = await _owned_conversation(conversation_id, principal)
-    conversation_task_id = str(conversation.get("task_id", "")) or None
+    raw_conversation_task_id = conversation.get("task_id")
+    conversation_task_id = (
+        str(raw_conversation_task_id)
+        if raw_conversation_task_id not in (None, "")
+        else None
+    )
     if (
         body.task_id is not None
         and conversation_task_id is not None
