@@ -15,6 +15,7 @@ import json
 import os
 import secrets
 import sys
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -176,17 +177,29 @@ def _api(
     body: dict[str, Any] | None = None,
     *,
     expected: tuple[int, ...] = (200,),
+    retry_transport: bool = False,
 ) -> dict[str, Any]:
-    response = requests.request(
-        method,
-        BASE_URL + path,
-        headers={
-            "Authorization": f"Bearer {user.token}",
-            "Content-Type": "application/json",
-        },
-        json=body,
-        timeout=180,
-    )
+    attempts = 3 if retry_transport else 1
+    response: requests.Response | None = None
+    for attempt in range(attempts):
+        try:
+            response = requests.request(
+                method,
+                BASE_URL + path,
+                headers={
+                    "Authorization": f"Bearer {user.token}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+                timeout=45,
+            )
+            break
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(2**attempt)
+    if response is None:  # pragma: no cover - defensive assertion
+        raise RuntimeError("candidate request did not produce a response")
     if response.status_code not in expected:
         raise RuntimeError(
             f"user-{user.index:02d} {method} {path}: "
@@ -273,7 +286,7 @@ def _provision(user: ControlledUser, api_key: str) -> None:
         )
     user.uid = record.uid
     user.token = _sign_in(user.email, user.password, api_key)
-    _api(user, "POST", "/api/app/provision", {})
+    _api(user, "POST", "/api/app/provision", {}, retry_transport=True)
     _api(
         user,
         "PUT",
@@ -296,6 +309,7 @@ def _provision(user: ControlledUser, api_key: str) -> None:
             "default_agent_visibility": "MINIMUM_NECESSARY",
             "notification_preference": "IN_APP",
         },
+        retry_transport=True,
     )
     for community in COMMUNITIES:
         _api(
@@ -303,6 +317,7 @@ def _provision(user: ControlledUser, api_key: str) -> None:
             "POST",
             f"/api/app/communities/{community['community_id']}/join",
             {},
+            retry_transport=True,
         )
 
 
@@ -340,7 +355,10 @@ def _task_spec(index: int) -> dict[str, Any]:
 def _seed_posts(users: list[ControlledUser]) -> list[dict[str, Any]]:
     posts: list[dict[str, Any]] = []
     state_by_user = {
-        user.index: _api(user, "GET", "/api/app/bootstrap") for user in users
+        user.index: _api(
+            user, "GET", "/api/app/bootstrap", retry_transport=True
+        )
+        for user in users
     }
     for index in range(25):
         user = users[index % len(users)]
@@ -371,6 +389,7 @@ def _seed_posts(users: list[ControlledUser]) -> list[dict[str, Any]]:
                     "public_summary": spec["goal"],
                     "public_requirements": spec["public_requirements"],
                 },
+                retry_transport=True,
             )
             published_post = published.get("post", {})
             state["myPosts"].append(published_post)
@@ -411,6 +430,7 @@ def main() -> None:
     users = _users(session)
     for user in users:
         _provision(user, api_key)
+        print(f"provisioned controlled user {user.index:02d}/10", file=sys.stderr)
     posts = _seed_posts(users)
     print(
         json.dumps(
