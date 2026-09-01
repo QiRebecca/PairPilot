@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 # Make both the application packages and the sibling seeder importable when the
 # driver is launched directly from a clean checkout.
@@ -385,6 +386,127 @@ def _non_model_load(
     }
 
 
+def _stream_chat_turn(
+    user: ControlledUser,
+    *,
+    conversation_id: str,
+    task_id: str,
+    content: str,
+) -> dict[str, Any]:
+    response = requests.post(
+        BASE_URL
+        + "/api/v1/conversations/"
+        + requests.utils.quote(conversation_id, safe="")
+        + "/messages",
+        headers={
+            "Authorization": f"Bearer {user.token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "content": content,
+            "client_message_id": f"candidate-chat-{uuid4().hex}",
+            "task_id": task_id,
+            "retry_of": None,
+        },
+        timeout=(30, 330),
+        stream=True,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Personal Agent chat returned HTTP {response.status_code}: "
+            f"{response.text[:500]}"
+        )
+    events: list[dict[str, Any]] = []
+    for line in response.iter_lines(decode_unicode=True):
+        if not line or not line.startswith("data: "):
+            continue
+        event = json.loads(line.removeprefix("data: "))
+        events.append(event)
+    terminal = next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("type") in {"agent.completed", "agent.error"}
+        ),
+        None,
+    )
+    if terminal is None:
+        raise RuntimeError("Personal Agent stream ended without a terminal event")
+    if terminal.get("type") == "agent.error":
+        raise RuntimeError(
+            f"Personal Agent turn failed: {terminal.get('error_type', 'unknown')}"
+        )
+    return {
+        "invocation_id": str(terminal["invocation_id"]),
+        "event_count": len(events),
+        "tool_names": sorted(
+            {
+                str(event["tool_name"])
+                for event in events
+                if event.get("type") == "tool.completed" and event.get("tool_name")
+            }
+        ),
+        "assistant_message_id": str(terminal.get("assistant_message_id") or ""),
+    }
+
+
+def _personal_agent_two_turn_gate(
+    users: list[ControlledUser], states: dict[int, dict[str, Any]]
+) -> dict[str, Any]:
+    user = users[-1]
+    task = states[user.index]["tasks"][0]
+    task_id = str(task["task_id"])
+    conversation_id = str(task["conversation_id"])
+    first = _stream_chat_turn(
+        user,
+        conversation_id=conversation_id,
+        task_id=task_id,
+        content=(
+            "For this existing Request, use draft_intent_post to draft a refreshed "
+            "public Post titled 'Professional AI builders coffee chat'. Say that I "
+            "want a focused 60-minute conversation in a public venue and list "
+            "individual expenses plus respectful professional conversation as "
+            "requirements. Do not publish it."
+        ),
+    )
+    second = _stream_chat_turn(
+        user,
+        conversation_id=conversation_id,
+        task_id=task_id,
+        content=(
+            "Continue in this same conversation. Use revise_intent_post to revise "
+            "that draft so it also requires an interest in production AI agents, "
+            "keeps the public venue and individual-expenses requirements, and sets "
+            "maximum additional cost to 40 USD. Do not publish it."
+        ),
+    )
+    if "draft_intent_post" not in first["tool_names"]:
+        raise RuntimeError("first Personal Agent turn did not persist a Post draft")
+    if not {"revise_intent_post", "draft_intent_post"} & set(
+        second["tool_names"]
+    ):
+        raise RuntimeError("second Personal Agent turn did not revise the Post draft")
+    task_detail = _api(
+        user, "GET", f"/api/app/tasks/{task_id}", retry_transport=True
+    )
+    private_intent = task_detail.get("privateIntent") or {}
+    draft = private_intent.get("public_draft") or {}
+    serialized_draft = json.dumps(draft).casefold()
+    if (
+        "production ai agents" not in serialized_draft
+        or "public venue" not in serialized_draft
+    ):
+        raise RuntimeError("the authoritative Post draft did not retain the revision")
+    return {
+        "same_conversation_id": conversation_id,
+        "turns_completed": 2,
+        "first": first,
+        "second": second,
+        "authoritative_draft_verified": True,
+        "published": False,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-agent-flows", action="store_true")
@@ -392,6 +514,11 @@ def main() -> None:
         "--skip-load",
         action="store_true",
         help="reuse a separately recorded load gate and avoid rate-limit overlap",
+    )
+    parser.add_argument(
+        "--check-chat",
+        action="store_true",
+        help="run two consecutive live Personal Agent turns in one conversation",
     )
     args = parser.parse_args()
     _assert_candidate_target()
@@ -413,6 +540,8 @@ def main() -> None:
         else _non_model_load(users)
     )
     report["memory_volume"] = len(asyncio.run(_seed_memory_volume(users)))
+    if args.check_chat:
+        report["personal_agent_chat"] = _personal_agent_two_turn_gate(users, states)
     if not args.skip_agent_flows:
         pairs = _pair_candidates(users, states)
         assessments = _contact_pairs(pairs)
