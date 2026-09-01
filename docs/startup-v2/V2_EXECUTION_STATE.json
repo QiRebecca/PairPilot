@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T18:30:00+08:00",
-  "current_phase": 0,
-  "current_phase_name": "Audit and protection",
-  "current_phase_status": "IMPLEMENTED_UNVERIFIED",
+  "updated_at": "2026-09-01T18:41:00+08:00",
+  "current_phase": 1,
+  "current_phase_name": "Unified domain model",
+  "current_phase_status": "PARTIAL",
   "submission": {
     "commit": "7d3d6f6f4b830688e7d522c2a9517cf8833d27ae",
     "tag": "hackathon-submission-final",
@@ -32,7 +32,7 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 103,
+    "python_tests": 115,
     "frontend_tests": 7
   },
   "phases": {
@@ -50,14 +50,25 @@
     "11": "NOT_IMPLEMENTED",
     "12": "NOT_IMPLEMENTED"
   },
+  "migration_dry_run": {
+    "migration_id": "V2_001_schema_registry_and_environment",
+    "environment": "production",
+    "scanned": 3093,
+    "would_mutate": 3093,
+    "written": 0,
+    "blocking_count": 0,
+    "review_required": 26,
+    "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
+  },
   "next_actions": [
-    "Implement schema migration registry and dry-run runner",
-    "Add V2 state validators and migration mappings",
+    "Implement remaining lifecycle normalization migrations",
     "Add isolated candidate environment and Pub/Sub route",
-    "Create versioned V2 API projections"
+    "Create versioned V2 API projections",
+    "Build server-side Explore, saved searches, and Post Detail"
   ],
   "known_blockers": [
     "Mixed legacy and V1 lifecycle states in production",
+    "Twenty-six historical records require explicit environment classification",
     "No candidate Pub/Sub isolation",
     "Non-empty DLQ inspection backlog",
     "No Firestore composite indexes for planned search",

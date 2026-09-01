@@ -132,22 +132,40 @@ class GoogleCloudStore:
 
         return await asyncio.to_thread(read)
 
-    async def list_documents(self, collection: str) -> list[dict[str, Any]]:
-        """List a bounded collection and retain document IDs."""
+    async def list_documents(
+        self, collection: str, *, max_documents: int = 10_000
+    ) -> list[dict[str, Any]]:
+        """List a collection with pagination and retain document IDs.
+
+        The explicit cap prevents an accidental unbounded administrative scan.
+        Product request paths should continue to use ``query_documents``.
+        """
+
+        if not 1 <= max_documents <= 100_000:
+            raise ValueError("max_documents must be between 1 and 100000")
 
         def read() -> list[dict[str, Any]]:
-            response = self._session.get(
-                f"{self._documents}/{quote(collection)}",
-                params={"pageSize": 100},
-                timeout=15,
-            )
-            response.raise_for_status()
-            items = []
-            for document in response.json().get("documents", []):
-                item = decode_fields(document.get("fields", {}))
-                item["_id"] = document["name"].rsplit("/", 1)[-1]
-                item["_updateTime"] = document.get("updateTime")
-                items.append(item)
+            items: list[dict[str, Any]] = []
+            page_token = ""
+            while len(items) < max_documents:
+                response = self._session.get(
+                    f"{self._documents}/{quote(collection)}",
+                    params={
+                        "pageSize": min(1_000, max_documents - len(items)),
+                        **({"pageToken": page_token} if page_token else {}),
+                    },
+                    timeout=20,
+                )
+                response.raise_for_status()
+                body = response.json()
+                for document in body.get("documents", []):
+                    item = decode_fields(document.get("fields", {}))
+                    item["_id"] = document["name"].rsplit("/", 1)[-1]
+                    item["_updateTime"] = document.get("updateTime")
+                    items.append(item)
+                page_token = str(body.get("nextPageToken", ""))
+                if not page_token:
+                    break
             return items
 
         return await asyncio.to_thread(read)

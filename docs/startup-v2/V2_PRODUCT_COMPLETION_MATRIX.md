@@ -10,8 +10,8 @@ are valid completion states.
 | Submission snapshot and rollback | LIVE_VERIFIED | Git tag, submitted revision, digest, rollback command recorded |
 | Persistent Personal Agent multi-turn chat | LIVE_VERIFIED | Production real-Gemini two-turn and multi-user acceptance |
 | Authenticated multi-user isolation | LIVE_VERIFIED | Firebase principals, owner checks, deny-all Firestore browser rules, tests |
-| Unified V2 schema and state machines | PARTIAL | V1 entities exist; lifecycle vocabularies and version history are inconsistent |
-| Versioned migration framework | NOT_IMPLEMENTED | No schema registry, dry-run runner, export gate, or migration report |
+| Unified V2 schema and state machines | PARTIAL | Canonical Post, Room, Match, Connection, Memory, Decision, Notification, and action-autonomy vocabularies plus validators exist; legacy Room/Match/Connection runtime writes still need migration |
+| Versioned migration framework | IMPLEMENTED_UNVERIFIED | Registry, checksums, pagination, dry-run, optimistic concurrency, environment/backup guards, migration report, and real 3,093-record dry-run pass; candidate apply is still gated |
 | Request workspace tabs and activity | PARTIAL | Request route works; required tabbed workspace and material-change invalidation missing |
 | Explore natural-language and structured search | PARTIAL | Keyword/tag client filter and public feed exist; no server hybrid retrieval or filters |
 | Saved Posts and saved searches | NOT_IMPLEMENTED | No authoritative entities or routes |
@@ -36,7 +36,7 @@ are valid completion states.
 | Decision Inbox | PARTIAL | Decision records and badges exist; no unified route/filter/action product |
 | In-app notifications | PARTIAL | Notifications exist; read state, category filters, mark-all-read and routing incomplete |
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |
-| Action-specific Autonomy Center | NOT_IMPLEMENTED | Current coarse mode cannot express per-action policies |
+| Action-specific Autonomy Center | PARTIAL | Typed per-action authority contract defaults to ask-first and forbids automatic final commitment; persistence, runtime enforcement, and UI remain |
 | Admin authorization | LIVE_VERIFIED | Explicit admin claim enforced server-side |
 | Admin operations console | PARTIAL | Dashboard exists; DLQ retry, model usage, moderation and lifecycle analytics incomplete |
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |
@@ -45,4 +45,3 @@ are valid completion states.
 | Responsive/accessibility acceptance | NOT_IMPLEMENTED | No four-viewport visual and keyboard acceptance for V2 |
 | Ten-user/three-Community V2 acceptance | NOT_IMPLEMENTED | Data volume exists; the required V2 scenario matrix has not run |
 | Candidate deployment and production promotion | NOT_IMPLEMENTED | No Startup V2 candidate exists |
-

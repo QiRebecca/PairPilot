@@ -4,12 +4,13 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 0 — Audit and protection: `IMPLEMENTED_UNVERIFIED`
+Phase 1 — Unified domain model: `PARTIAL`
 
-The submission snapshot, rollback revision, V2 branch, baseline inventory, gap
-matrix, and migration plan exist. Phase 0 becomes `LIVE_VERIFIED` only after the
-new audit artifacts pass repository checks and the privacy-safe inventory is rerun
-successfully from the clean V2 branch.
+Canonical lifecycle contracts, server-side Post transition enforcement, the
+versioned migration registry, environment/backup/write guards, paginated scanning,
+and the first privacy-safe production dry-run exist. Phase 1 remains partial
+until legacy Room, Match, Connection, Decision, Notification, Memory, and
+Autonomy records are normalized in an isolated candidate environment.
 
 ## Protected baselines
 
@@ -23,8 +24,8 @@ successfully from the clean V2 branch.
 
 | Phase | Status | Next authoritative gate |
 |---|---|---|
-| 0 Audit and protection | IMPLEMENTED_UNVERIFIED | Clean tests, inventory rerun, audit commit |
-| 1 Unified domain model | PARTIAL | V2 state validators and dry-run migration framework |
+| 0 Audit and protection | IMPLEMENTED_UNVERIFIED | Candidate environment gate required for LIVE_VERIFIED |
+| 1 Unified domain model | PARTIAL | Remaining lifecycle migrations and candidate apply |
 | 2 Explore and Post Detail | PARTIAL | Server search contract and direct Post route |
 | 3 Communities | PARTIAL | Community Detail/rules/roles/Community Agent |
 | 4 Rooms | PARTIAL | V2 lifecycle, summary, three-channel acceptance |
@@ -39,15 +40,16 @@ successfully from the clean V2 branch.
 
 ## Immediate next work
 
-1. Implement schema migration registry and dry-run runner.
-2. Add V2 enums and server-side transition validators without changing production.
-3. Add candidate-environment feature and namespace configuration.
-4. Normalize public API projections behind versioned V2 contracts.
-5. Begin Explore/Post Detail only after the domain gates pass.
+1. Implement the remaining lifecycle normalization migrations.
+2. Add candidate-environment feature and namespace configuration.
+3. Normalize public API projections behind versioned V2 contracts.
+4. Build server-side Explore search, saved searches, and Post Detail.
+5. Keep production migration apply disabled until backup and candidate gates pass.
 
 ## Known blockers
 
 - Production contains mixed legacy and V1 state vocabularies.
+- Twenty-six scanned historical records require explicit environment classification.
 - Candidate Pub/Sub isolation is absent.
 - The DLQ inspection subscription has 25 undelivered messages requiring
   classification; the production push worker itself has zero backlog.

@@ -12,8 +12,10 @@ from uuid import uuid4
 
 from pairpilot_schemas import (
     CreateUserTaskInput,
+    IntentPostState,
     OnboardingInput,
     UpdateAccountSettingsInput,
+    validate_intent_post_transition,
 )
 
 from pairpilot_orchestrator.auth.authorization import (
@@ -847,9 +849,7 @@ async def publish_user_post(
     clean_summary = public_summary.strip() or clean_title
     clean_requirements = [item.strip() for item in public_requirements if item.strip()]
     OutboundPrivacyGuard().validate(
-        natural_language="\n".join(
-            [clean_title, clean_summary, *clean_requirements]
-        ),
+        natural_language="\n".join([clean_title, clean_summary, *clean_requirements]),
         references=[],
     )
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
@@ -899,6 +899,8 @@ async def publish_user_post(
         writes.append(_create_write(store, "intent_posts", intent_id, post))
     else:
         require_resource_owner(principal, existing_post)
+        current_state = IntentPostState(str(existing_post.get("status", "")))
+        validate_intent_post_transition(current_state, IntentPostState.OPEN)
         writes.append(
             _update_write(
                 store,
@@ -990,17 +992,24 @@ async def set_user_post_status(
     intent_id: str,
     status: str,
 ) -> dict[str, Any]:
-    if status not in {"OPEN", "PAUSED", "CLOSED"}:
+    if status not in {
+        IntentPostState.OPEN.value,
+        IntentPostState.PAUSED.value,
+        IntentPostState.CLOSED.value,
+    }:
         raise ValueError("unsupported post status")
-    if status == "OPEN":
+    target_state = IntentPostState(status)
+    if target_state == IntentPostState.OPEN:
         require_verified_email(principal)
     post = await store.get("intent_posts", intent_id)
     if post is None:
         raise LookupError("post was not found")
     require_resource_owner(principal, post)
+    current_state = IntentPostState(str(post.get("status", "")))
+    validate_intent_post_transition(current_state, target_state)
     clean = _clean(post)
-    clean.update(status=status, updated_at=datetime.now(UTC))
-    if status == "CLOSED":
+    clean.update(status=target_state.value, updated_at=datetime.now(UTC))
+    if target_state == IntentPostState.CLOSED:
         clean["closed_to_new_contacts"] = True
     await store.upsert("intent_posts", intent_id, clean)
     await store.write_event(
