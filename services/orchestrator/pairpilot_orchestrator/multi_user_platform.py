@@ -236,6 +236,20 @@ async def provision_user(
                 "namespace": PRODUCTION_NAMESPACE,
                 "owner_uid": principal.uid,
                 "default_mode": "COPILOT",
+                "action_levels": {
+                    "DRAFT_POST": "AUTOMATIC",
+                    "PUBLISH_POST": "ASK_FIRST",
+                    "SEARCH_POSTS": "AUTOMATIC",
+                    "CONTACT_PERSONAL_AGENTS": "ASK_FIRST",
+                    "ASK_COMPATIBILITY_QUESTIONS": "AUTOMATIC",
+                    "NEGOTIATE_SOFT_PREFERENCES": "AUTOMATIC",
+                    "PLACE_TEMPORARY_HOLDS": "ASK_FIRST",
+                    "OPEN_AGENT_ROOMS": "AUTOMATIC",
+                    "DRAFT_SHARED_MESSAGES": "AUTOMATIC",
+                    "SEND_SHARED_MESSAGES": "ASK_FIRST",
+                    "SHARE_PROTECTED_INFORMATION": "NEVER",
+                    "APPROVE_FINAL_COMMITMENT": "ASK_FIRST",
+                },
                 "always_ask_policy": (
                     "Publishing, identity disclosure, booking, payment, and "
                     "commitment require human approval."

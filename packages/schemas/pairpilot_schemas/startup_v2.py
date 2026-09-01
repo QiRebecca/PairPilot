@@ -48,6 +48,17 @@ class ConnectionState(StrEnum):
 class AutonomyAction(StrEnum):
     DRAFT_POST = "DRAFT_POST"
     PUBLISH_POST = "PUBLISH_POST"
+    SEARCH_POSTS = "SEARCH_POSTS"
+    CONTACT_PERSONAL_AGENTS = "CONTACT_PERSONAL_AGENTS"
+    ASK_COMPATIBILITY_QUESTIONS = "ASK_COMPATIBILITY_QUESTIONS"
+    NEGOTIATE_SOFT_PREFERENCES = "NEGOTIATE_SOFT_PREFERENCES"
+    PLACE_TEMPORARY_HOLDS = "PLACE_TEMPORARY_HOLDS"
+    OPEN_AGENT_ROOMS = "OPEN_AGENT_ROOMS"
+    DRAFT_SHARED_MESSAGES = "DRAFT_SHARED_MESSAGES"
+    SEND_SHARED_MESSAGES = "SEND_SHARED_MESSAGES"
+    SHARE_PROTECTED_INFORMATION = "SHARE_PROTECTED_INFORMATION"
+    APPROVE_FINAL_COMMITMENT = "APPROVE_FINAL_COMMITMENT"
+    # Legacy aliases retained until migration normalizes stored policies.
     EVALUATE_CANDIDATE = "EVALUATE_CANDIDATE"
     CONTACT_AGENT = "CONTACT_AGENT"
     NEGOTIATE_WITHIN_BOUNDS = "NEGOTIATE_WITHIN_BOUNDS"
@@ -60,6 +71,7 @@ class AutonomyAction(StrEnum):
 class AutonomyLevel(StrEnum):
     NEVER = "NEVER"
     ASK_FIRST = "ASK_FIRST"
+    AUTOMATIC = "AUTOMATIC"
     ALLOW = "ALLOW"
 
 
@@ -101,8 +113,15 @@ class AutonomyPolicy(BaseModel):
 
     @model_validator(mode="after")
     def protect_irreversible_actions(self) -> AutonomyPolicy:
-        for action in (AutonomyAction.ACCEPT_PROPOSAL, AutonomyAction.COMMIT_MATCH):
-            if self.action_levels.get(action) == AutonomyLevel.ALLOW:
+        for action in (
+            AutonomyAction.ACCEPT_PROPOSAL,
+            AutonomyAction.COMMIT_MATCH,
+            AutonomyAction.APPROVE_FINAL_COMMITMENT,
+        ):
+            if self.action_levels.get(action) in {
+                AutonomyLevel.ALLOW,
+                AutonomyLevel.AUTOMATIC,
+            }:
                 raise ValueError(f"{action.value} cannot be fully automated")
         return self
 

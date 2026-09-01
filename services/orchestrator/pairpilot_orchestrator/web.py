@@ -26,6 +26,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
+    AutonomyPolicyUpdateInput,
     BlockUserInput,
     CancelMatchInput,
     CommunityAgentQueryInput,
@@ -34,6 +35,7 @@ from pairpilot_schemas import (
     ContactCardInput,
     ConversationRole,
     CreateUserTaskInput,
+    DecisionResolutionInput,
     DeleteAccountInput,
     ExploreSearchInput,
     FieldSource,
@@ -48,6 +50,7 @@ from pairpilot_schemas import (
     MessageAuthorship,
     MessageVisibility,
     NegotiationBoundaries,
+    NotificationSettingsV2Input,
     OnboardingInput,
     OutcomeCheckInInput,
     PersonalAgentIntent,
@@ -177,6 +180,16 @@ from pairpilot_orchestrator.v2_memory import (
     apply_memory_action,
     get_memory_detail,
     list_memory_workspace,
+)
+from pairpilot_orchestrator.v2_product_glue import (
+    get_autonomy_center,
+    list_decision_inbox,
+    list_notifications,
+    mark_all_notifications_read,
+    resolve_decision,
+    set_notification_state,
+    update_autonomy_policy,
+    update_notification_settings,
 )
 from pairpilot_orchestrator.v2_rooms import (
     get_room_workspace,
@@ -1078,6 +1091,108 @@ async def app_list_matches(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     return await list_matches_for_user(_store(), principal)
+
+
+@app.get("/api/app/decisions")
+async def app_list_decisions(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await list_decision_inbox(_store(), principal)
+
+
+@app.post("/api/app/decisions/{decision_id}/resolve")
+async def app_resolve_decision(
+    decision_id: str,
+    body: DecisionResolutionInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        decision = await resolve_decision(
+            _store(),
+            principal,
+            decision_id=decision_id,
+            outcome=body.outcome,
+            confirmation=body.confirmation,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Decision was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, "Decision is not owned by this account.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"decision": decision}
+
+
+@app.get("/api/app/notifications")
+async def app_list_notifications(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await list_notifications(_store(), principal)
+
+
+@app.put("/api/app/notifications/read-all")
+async def app_read_all_notifications(
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await mark_all_notifications_read(_store(), principal)
+
+
+@app.put("/api/app/notifications/{notification_id}/read")
+async def app_read_notification(
+    notification_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        notification = await set_notification_state(
+            _store(), principal, notification_id=notification_id, state="READ"
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Notification was not found.") from exc
+    return {"notification": notification}
+
+
+@app.put("/api/app/notifications/{notification_id}/archived")
+async def app_archive_notification(
+    notification_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        notification = await set_notification_state(
+            _store(), principal, notification_id=notification_id, state="ARCHIVED"
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Notification was not found.") from exc
+    return {"notification": notification}
+
+
+@app.put("/api/app/notification-settings")
+async def app_update_notification_settings_v2(
+    body: NotificationSettingsV2Input,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    settings = await update_notification_settings(
+        _store(), principal, values=body.model_dump()
+    )
+    return {"settings": settings}
+
+
+@app.get("/api/app/autonomy")
+async def app_get_autonomy(principal: AuthenticatedUser) -> dict[str, Any]:
+    return await get_autonomy_center(_store(), principal)
+
+
+@app.put("/api/app/autonomy")
+async def app_update_autonomy(
+    body: AutonomyPolicyUpdateInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await update_autonomy_policy(
+            _store(),
+            principal,
+            action_levels=body.action_levels,
+            task_id=body.task_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Task was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @app.get("/api/app/connections")

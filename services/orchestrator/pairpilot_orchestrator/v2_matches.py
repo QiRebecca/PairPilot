@@ -391,6 +391,7 @@ async def propose_match_change(
                 "owner_uid": str(uid),
                 "match_id": match_id,
                 "change_id": change_id,
+                "version": version,
                 "type": "APPROVE_MATCH_CHANGE",
                 "status": "OPEN",
                 "title": "Review a proposed plan change",

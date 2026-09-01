@@ -232,3 +232,33 @@ class ConnectionUsageInput(BaseModel):
         "REQUEST_WARM_INTRODUCTION",
         "ADAPT_COMMUNICATION",
     ]
+
+
+class DecisionResolutionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome: Literal["APPROVE", "REJECT"]
+    confirmation: str | None = Field(default=None, max_length=100)
+
+
+class NotificationSettingsV2Input(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    in_app_enabled: bool = True
+    browser_push_enabled: bool = False
+    meaningful_events_only: bool = True
+    quiet_hours_start: str | None = Field(
+        default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$"
+    )
+    quiet_hours_end: str | None = Field(
+        default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$"
+    )
+
+
+class AutonomyPolicyUpdateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action_levels: dict[str, Literal["AUTOMATIC", "ASK_FIRST", "NEVER"]] = Field(
+        min_length=1, max_length=20
+    )
+    task_id: str | None = Field(default=None, pattern=r"^task_[a-z0-9_-]+$")

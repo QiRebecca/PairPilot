@@ -37,6 +37,11 @@ import {
   MemoryDetailPage,
   MemoryPage as V2MemoryPage,
 } from "./pages/MemoryPages";
+import {
+  AutonomyCenterPage,
+  DecisionInboxPage,
+  NotificationsPage as V2NotificationsPage,
+} from "./pages/ProductGluePages";
 import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
 
@@ -95,8 +100,12 @@ function BetaShell({
   const openDecisions = data.decisions.filter(
     (item) => item.status === "OPEN",
   ).length;
+  const unreadNotifications = data.notifications.filter(
+    (item) => item.status === "UNREAD",
+  ).length;
   const links = [
     ["/app/agent", Bot, "My Agent"],
+    ["/app/decisions", CheckCircle2, "Decisions"],
     ["/app/requests", LayoutList, "Requests"],
     ["/app/explore", Compass, "Explore"],
     ["/app/communities", Building2, "Communities"],
@@ -146,8 +155,11 @@ function BetaShell({
             >
               <Icon size={17} />
               <span>{label}</span>
-              {label === "Requests" && openDecisions ? (
+              {label === "Decisions" && openDecisions ? (
                 <b>{openDecisions}</b>
+              ) : null}
+              {label === "Notifications" && unreadNotifications ? (
+                <b>{unreadNotifications}</b>
               ) : null}
             </button>
           ))}
@@ -315,6 +327,9 @@ function AgentHome({
         posts={data.myPosts}
         decisions={data.decisions}
         rooms={data.rooms}
+        matches={data.matches}
+        connections={data.relationships}
+        communities={data.communities}
         memories={data.memories}
         navigate={navigate}
       />
@@ -606,6 +621,9 @@ function RequestDetail({
         posts={data.myPosts}
         decisions={data.decisions}
         rooms={data.rooms}
+        matches={data.matches}
+        connections={data.relationships}
+        communities={data.communities}
         memories={data.memories}
         navigate={navigate}
       />
@@ -1070,7 +1088,7 @@ export function MemoryPage({
   );
 }
 
-function Notifications({ data }: { data: BetaBootstrap }) {
+export function Notifications({ data }: { data: BetaBootstrap }) {
   const items = [...data.notifications].sort((a, b) =>
     asString(b.created_at).localeCompare(asString(a.created_at)),
   );
@@ -1519,9 +1537,11 @@ export function NetworkPage({ data }: { data: BetaBootstrap }) {
 function SettingsPage({
   data,
   onSignOut,
+  navigate,
 }: {
   data: BetaBootstrap;
   onSignOut: () => void;
+  navigate: (path: string) => void;
 }) {
   const { request } = useAuth();
   const [notice, setNotice] = useState("");
@@ -1619,6 +1639,12 @@ function SettingsPage({
             identity/contact details, paying, booking, or committing you to a
             plan.
           </p>
+          <button
+            className="secondary-button"
+            onClick={() => navigate("/app/settings/autonomy")}
+          >
+            Open action-specific Autonomy Center
+          </button>
         </section>
         <section>
           <h2>Privacy</h2>
@@ -1812,11 +1838,17 @@ export function BetaApp() {
       page = <V2MemoryPage navigate={navigate} />;
     else if (memoryId)
       page = <MemoryDetailPage memoryId={memoryId} navigate={navigate} />;
+    else if (path === "/app/decisions")
+      page = <DecisionInboxPage navigate={navigate} />;
     else if (path === "/app/notifications")
-      page = <Notifications data={data} />;
+      page = <V2NotificationsPage navigate={navigate} />;
     else if (path === "/app/admin") page = <AdminPage />;
+    else if (path === "/app/settings/autonomy")
+      page = <AutonomyCenterPage tasks={data.tasks} />;
     else if (path === "/app/settings")
-      page = <SettingsPage data={data} onSignOut={signOutNow} />;
+      page = (
+        <SettingsPage data={data} onSignOut={signOutNow} navigate={navigate} />
+      );
     else page = <AgentHome data={data} refresh={refresh} navigate={navigate} />;
   }
   if (loading) return <Loading />;

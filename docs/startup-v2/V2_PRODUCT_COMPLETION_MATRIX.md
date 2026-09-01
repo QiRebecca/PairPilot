@@ -33,10 +33,10 @@ are valid completion states.
 | Connections list/detail | IMPLEMENTED_UNVERIFIED | Owner-scoped list, eight views, direct detail, dimensions, plan/Room links, provenance, controls, and secondary Graph pass local tests/build |
 | Connection reuse | IMPLEMENTED_UNVERIFIED | Personal Agent inspection/warm-introduction is task-context checked and usage-audited; candidate future-task acceptance remains |
 | Memory lifecycle | IMPLEMENTED_UNVERIFIED | Typed grouped list/detail, confirmed-only scoped retrieval, usage events, Why-used provenance, task exceptions, contradiction review, and full controls pass local tests/build |
-| Decision Inbox | PARTIAL | Decision records and badges exist; no unified route/filter/action product |
-| In-app notifications | PARTIAL | Notifications exist; read state, category filters, mark-all-read and routing incomplete |
+| Decision Inbox | PARTIAL | Owner-scoped unified route, badges, exact entity routing, reject, and safe inline approval for supported types pass locally; remaining types need inline handlers |
+| In-app notifications | IMPLEMENTED_UNVERIFIED | Read/unread, categories, entity routing, archive, mark-all-read, quiet hours, and preferences pass local tests/build |
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |
-| Action-specific Autonomy Center | PARTIAL | Typed per-action authority contract defaults to ask-first and forbids automatic final commitment; persistence, runtime enforcement, and UI remain |
+| Action-specific Autonomy Center | PARTIAL | Twelve-action global/task UI, persistence, locked final commitment, history, and Post-publish enforcement exist; remaining Agent actions need common enforcement |
 | Admin authorization | LIVE_VERIFIED | Explicit admin claim enforced server-side |
 | Admin operations console | PARTIAL | Dashboard exists; DLQ retry, model usage, moderation and lifecycle analytics incomplete |
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |

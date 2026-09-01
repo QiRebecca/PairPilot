@@ -92,6 +92,9 @@ export function PersonalAgentChat({
   posts = [],
   decisions = [],
   rooms = [],
+  matches = [],
+  connections = [],
+  communities = [],
   memories = [],
   navigate,
 }: {
@@ -105,6 +108,9 @@ export function PersonalAgentChat({
   posts?: Item[];
   decisions?: Item[];
   rooms?: Item[];
+  matches?: Item[];
+  connections?: Item[];
+  communities?: Item[];
   memories?: Item[];
   navigate?: (path: string) => void;
 }) {
@@ -312,11 +318,22 @@ export function PersonalAgentChat({
         item.task_id === directiveTaskId,
     );
     const room = rooms.find((item) => entityIds.includes(text(item.room_id)));
+    const match = matches.find((item) =>
+      entityIds.includes(text(item.match_id)),
+    );
+    const connection = connections.find(
+      (item) =>
+        entityIds.includes(text(item.relationship_id)) ||
+        entityIds.includes(text(item.connection_id)),
+    );
+    const community = communities.find((item) =>
+      entityIds.includes(text(item.community_id)),
+    );
     const memory = memories.find((item) =>
       entityIds.includes(text(item.memory_id)),
     );
     const key = text(directive.directive_id);
-    if (action === "SHOW_POST") {
+    if (action === "SHOW_POST" || action === "SHOW_POST_DETAIL") {
       const draft = (task?.agent_public_draft || {}) as Item;
       const published = Boolean(post);
       return (
@@ -361,7 +378,7 @@ export function PersonalAgentChat({
         </article>
       );
     }
-    if (action === "SHOW_ROOM" && room)
+    if ((action === "SHOW_ROOM" || action === "OPEN_COORDINATION_ROOM") && room)
       return (
         <button
           className="agent-inline-card clickable"
@@ -381,7 +398,7 @@ export function PersonalAgentChat({
         <button
           className="agent-inline-card clickable"
           key={key}
-          onClick={() => navigate?.("/app/memory")}
+          onClick={() => navigate?.(`/app/memory/${text(memory.memory_id)}`)}
         >
           <MemoryStick size={18} />
           <span>
@@ -396,9 +413,7 @@ export function PersonalAgentChat({
         <button
           className="agent-inline-card clickable"
           key={key}
-          onClick={() =>
-            directiveTaskId && navigate?.(`/app/requests/${directiveTaskId}`)
-          }
+          onClick={() => navigate?.("/app/decisions")}
         >
           <UsersRound size={18} />
           <span>
@@ -421,6 +436,77 @@ export function PersonalAgentChat({
           <span>
             <b>{text(decision.title) || "Decision needed"}</b>
             <small>{text(decision.summary)}</small>
+          </span>
+          <ChevronRight size={16} />
+        </button>
+      );
+    if (action === "SHOW_MATCH" && match)
+      return (
+        <button
+          className="agent-inline-card clickable"
+          key={key}
+          onClick={() => navigate?.(`/app/matches/${text(match.match_id)}`)}
+        >
+          <Check size={18} />
+          <span>
+            <b>Executable Match plan</b>
+            <small>{text(directive.explanation)}</small>
+          </span>
+          <ChevronRight size={16} />
+        </button>
+      );
+    if (
+      ["SHOW_CONNECTION", "SHOW_RELATIONSHIP", "SHOW_NETWORK_PATH"].includes(
+        action,
+      ) &&
+      connection
+    )
+      return (
+        <button
+          className="agent-inline-card clickable"
+          key={key}
+          onClick={() =>
+            navigate?.(
+              `/app/connections/${text(connection.relationship_id) || text(connection.connection_id)}`,
+            )
+          }
+        >
+          <UsersRound size={18} />
+          <span>
+            <b>Connection context</b>
+            <small>{text(directive.explanation)}</small>
+          </span>
+          <ChevronRight size={16} />
+        </button>
+      );
+    if (action === "SHOW_COMMUNITY" && community)
+      return (
+        <button
+          className="agent-inline-card clickable"
+          key={key}
+          onClick={() =>
+            navigate?.(`/app/communities/${text(community.community_id)}`)
+          }
+        >
+          <UsersRound size={18} />
+          <span>
+            <b>{text(community.name) || "Community"}</b>
+            <small>{text(directive.explanation)}</small>
+          </span>
+          <ChevronRight size={16} />
+        </button>
+      );
+    if (action === "FILTER_EXPLORE")
+      return (
+        <button
+          className="agent-inline-card clickable"
+          key={key}
+          onClick={() => navigate?.("/app/explore")}
+        >
+          <UsersRound size={18} />
+          <span>
+            <b>Open filtered Explore</b>
+            <small>{text(directive.explanation)}</small>
           </span>
           <ChevronRight size={16} />
         </button>

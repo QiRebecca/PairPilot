@@ -4,13 +4,14 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 7 — Memory: `PARTIAL`
+Phase 8 — Product glue: `PARTIAL`
 
-Typed owner-scoped Memory read models, ten review groups, direct detail,
-confirmed-only retrieval, task/type/relationship scope enforcement, task
-exceptions, usage provenance, contradiction Decisions, and full lifecycle
-controls now exist locally. Phase 7 remains partial until live semantic and
-candidate multi-user browser acceptance pass.
+An owner-scoped Decision Inbox, actionable/filterable in-app Notifications,
+action-specific global/task Autonomy Center, authority activity, action-specific
+Post publishing enforcement, and server-authorized cross-page Personal Agent
+directives now exist locally. Phase 8 remains partial until all decision types
+resolve inline, all Agent action paths use the common autonomy helper, and
+candidate multi-user browser acceptance passes.
 
 ## Protected baselines
 
@@ -32,7 +33,7 @@ candidate multi-user browser acceptance pass.
 | 5 Matches | PARTIAL | candidate multi-user and failure-injection acceptance |
 | 6 Connections | PARTIAL | candidate relationship-reuse and browser acceptance |
 | 7 Memory | PARTIAL | candidate semantic scope and browser acceptance |
-| 8 Product glue | PARTIAL | Decision Inbox, notification actions, autonomy policies |
+| 8 Product glue | PARTIAL | remaining inline decisions, all-action runtime enforcement, candidate acceptance |
 | 9 Safety and operations | PARTIAL | moderation, DLQ operations, analytics, operational Admin |
 | 10 Unified UI refinement | NOT_IMPLEMENTED | decomposed routes and four-viewport visual QA |
 | 11 Closed-beta acceptance | NOT_IMPLEMENTED | ten controlled users and all ten scenarios |
@@ -40,7 +41,7 @@ candidate multi-user browser acceptance pass.
 
 ## Immediate next work
 
-1. Build Decision Inbox, actionable Notifications, and action-specific Autonomy Center.
+1. Build moderation, operational Admin, failed-job/DLQ actions, and lifecycle analytics.
 2. Connect private Room instructions to live Personal Agent turns and shared drafts.
 3. Implement the remaining lifecycle normalization migrations.
 4. Add candidate-environment feature and namespace configuration.
