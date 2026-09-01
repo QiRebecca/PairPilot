@@ -172,3 +172,11 @@ class SaveSearchInput(BaseModel):
     search: ExploreSearchInput
     monitor_enabled: bool = False
     notification_sensitivity: Literal["HIGH", "MEANINGFUL", "LOW"] = "MEANINGFUL"
+
+
+class CommunityAgentQueryInput(BaseModel):
+    """A privacy-bounded question for a Community's logical Agent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=500)

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { useAuth } from "./auth";
 import { PersonalAgentChat } from "./components/PersonalAgentChat";
 import { MarketplaceExplorePage, PostDetailPage } from "./pages/MarketplacePages";
+import { CommunityDetailPage, CommunityListPage } from "./pages/CommunityPages";
 import { useRouter } from "./router";
 
 type RecordValue = Record<string, unknown>;
@@ -89,13 +90,6 @@ function CandidatePool({ taskId, data, refresh }: { taskId: string; data: BetaBo
   return <section className="candidate-section"><div className="section-heading"><div><span className="eyebrow">DYNAMIC, EVIDENCE-BASED</span><h2>Candidate pool</h2></div><span className="status-pill">{candidates.length} ACTIVE</span></div>{notice ? <div className="form-notice">{notice}</div> : null}{error ? <div className="form-error">{error}</div> : null}<div className="candidate-list">{candidates.map((candidate) => { const candidateId = asString(candidate.candidate_intent_id); const verified = Array.isArray(candidate.verified_support) ? candidate.verified_support as RecordValue[] : []; const uncertainties = Array.isArray(candidate.uncertainties) ? candidate.uncertainties : []; return <article className="candidate-card" key={candidateId}><div className="candidate-rank">#{asNumber(candidate.current_rank)}</div><div className="candidate-body"><div className="candidate-heading"><div><span className="status-pill">{asString(candidate.state)}</span><h3>{asString(candidate.candidate_display_name) || "Community member"}</h3></div><small>{asString(candidate.priority_band)}</small></div><ul>{verified.slice(0, 3).map((item, index) => <li key={`${candidateId}-fact-${index}`}>{asString(item.fact)}</li>)}</ul>{uncertainties.length ? <p>Still uncertain: {uncertainties.join(" ")}</p> : null}<div className="card-actions"><button className="primary-button" disabled={busy === candidateId || Boolean(candidate.proposal_id)} onClick={() => void update(candidate, "proposal")}>{candidate.proposal_id ? "Proposal created" : "Prepare proposal"}</button><button className="secondary-button" onClick={() => navigate(`/app/rooms/${asString(candidate.room_id)}`)}>Open Agent Room</button><button className="secondary-button" disabled={busy === candidateId} onClick={() => void update(candidate, "BACKUP")}>Keep as backup</button><button className="danger-button" disabled={busy === candidateId} onClick={() => void update(candidate, "WITHDRAWN")}>Stop contacting</button></div></div></article>; })}</div></section>;
 }
 
-function Communities({ data, refresh, navigate }: { data: BetaBootstrap; refresh: () => Promise<void>; navigate: (path: string) => void }) {
-  const { request } = useAuth(); const [busy, setBusy] = useState(""); const [notice, setNotice] = useState(""); const [error, setError] = useState("");
-  const activeIds = new Set(data.communityMemberships.filter((item) => item.status === "ACTIVE").map((item) => asString(item.community_id)));
-  async function changeMembership(communityId: string, joined: boolean) { setBusy(communityId); setError(""); try { await request(`/api/app/communities/${communityId}/${joined ? "leave" : "join"}`, { method: "POST", body: joined ? undefined : "{}" }); setNotice(joined ? "You left the community. Existing public work may need to be closed separately." : "Community joined. You can now create and discover posts inside it."); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update membership."); } finally { setBusy(""); } }
-  return <div className="beta-page"><PageTitle eyebrow="DISCOVERY BOUNDARIES" title="Communities" subtitle="Join interest spaces to control where your Agent publishes, searches, and meets other Agents." />{notice ? <div className="form-notice">{notice}</div> : null}{error ? <div className="form-error">{error}</div> : null}<div className="request-grid">{data.communities.map((community) => { const communityId = asString(community.community_id); const joined = activeIds.has(communityId); const postCount = [...data.myPosts, ...data.explorePosts].filter((post) => post.community_id === communityId && post.status === "OPEN").length; return <article className="published-card community-card" key={communityId}><Building2 /><span className="status-pill">{joined ? "JOINED" : "AVAILABLE"}</span><h2>{asString(community.name)}</h2><p>{asString(community.description) || `${asString(community.type).replaceAll("_", " ")} · ${asString(community.location)}`}</p><small>{postCount} open posts visible to you · {asString(community.membership_policy).replaceAll("_", " ")}</small><div className="card-actions">{joined ? <button className="primary-button" onClick={() => navigate("/app/explore")}>Explore posts</button> : null}<button className={joined ? "secondary-button" : "primary-button"} disabled={busy === communityId} onClick={() => void changeMembership(communityId, joined)}>{busy === communityId ? "Updating…" : joined ? "Leave" : "Join community"}</button></div></article>; })}</div></div>;
-}
-
 function MemoryPage({ data, refresh }: { data: BetaBootstrap; refresh: () => Promise<void> }) {
   const { request } = useAuth(); const [busy, setBusy] = useState(""); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
   async function act(memory: RecordValue, action: string) { const memoryId = asString(memory.memory_id); setBusy(memoryId); setError(""); try { await request(`/api/app/memories/${memoryId}/actions`, { method: "POST", body: JSON.stringify({ action }) }); setNotice(action === "CONFIRM" ? "Memory confirmed. Your Agent may now use it within its stated scope." : "Memory preference updated."); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update Memory."); } finally { setBusy(""); } }
@@ -168,7 +162,7 @@ export function BetaApp() {
       navigate("/sign-in", true);
     });
   }, [navigate, signOutUser]);
-  const taskId = path.startsWith("/app/requests/") ? path.split("/")[3] : ""; const roomId = path.startsWith("/app/rooms/") ? path.split("/")[3] : ""; const postId = path.startsWith("/app/posts/") ? path.split("/")[3] : "";
+  const taskId = path.startsWith("/app/requests/") ? path.split("/")[3] : ""; const roomId = path.startsWith("/app/rooms/") ? path.split("/")[3] : ""; const postId = path.startsWith("/app/posts/") ? path.split("/")[3] : ""; const communityId = path.startsWith("/app/communities/") ? path.split("/")[3] : "";
   let page: ReactNode = <Loading />;
   if (data) {
     if (data.profile.onboarding_status !== "COMPLETED") page = <Onboarding onDone={refresh} />;
@@ -177,7 +171,8 @@ export function BetaApp() {
     else if (taskId) page = <RequestDetail taskId={taskId} data={data} refresh={refresh} />;
     else if (path === "/app/explore") page = <MarketplaceExplorePage tasks={data.tasks} myPosts={data.myPosts} communities={data.communities} navigate={navigate} />;
     else if (postId) page = <PostDetailPage intentId={postId} tasks={data.tasks} myPosts={data.myPosts} navigate={navigate} refresh={refresh} />;
-    else if (path === "/app/communities") page = <Communities data={data} refresh={refresh} navigate={navigate} />;
+    else if (path === "/app/communities") page = <CommunityListPage data={data} refresh={refresh} navigate={navigate} />;
+    else if (communityId) page = <CommunityDetailPage communityId={communityId} refresh={refresh} navigate={navigate} />;
     else if (path === "/app/rooms") page = <Rooms data={data} navigate={navigate} />;
     else if (roomId) page = <RoomDetail roomId={roomId} />;
     else if (path === "/app/matches") page = <Matches data={data} refresh={refresh} />;

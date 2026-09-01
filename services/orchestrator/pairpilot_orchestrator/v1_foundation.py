@@ -129,9 +129,7 @@ async def ensure_v1_foundation(store: Any) -> None:
         },
     ]
     for community in communities:
-        await store.create(
-            "communities", str(community["community_id"]), community
-        )
+        await store.create("communities", str(community["community_id"]), community)
 
 
 async def join_community(
@@ -147,8 +145,32 @@ async def join_community(
     community = await store.get("communities", community_id)
     if community is None or community.get("status") != "ACTIVE":
         raise LookupError("community was not found")
-    if community.get("membership_policy") == "INVITE_REQUIRED" and not invite_token:
-        raise PermissionError("COMMUNITY_INVITE_REQUIRED")
+    explicit_type = str(community.get("membership_type") or "").upper()
+    if not explicit_type:
+        explicit_type = (
+            "PUBLIC"
+            if community.get("membership_policy") == "PUBLIC_JOIN"
+            and community.get("visibility") == "PUBLIC"
+            else "INVITE_LINK"
+            if community.get("membership_policy") == "INVITE_REQUIRED"
+            else "PRIVATE"
+        )
+    if explicit_type == "INVITE_LINK":
+        expected_hash = str(community.get("invite_token_hash") or "")
+        actual_hash = sha256(str(invite_token or "").encode()).hexdigest()
+        if not invite_token or (expected_hash and actual_hash != expected_hash):
+            raise PermissionError("COMMUNITY_INVITE_REQUIRED")
+    elif explicit_type == "DOMAIN_VERIFIED":
+        email_domain = str(principal.email or "").rsplit("@", 1)[-1].casefold()
+        allowed_domains = {
+            str(domain).casefold() for domain in community.get("allowed_domains", [])
+        }
+        if not email_domain or email_domain not in allowed_domains:
+            raise PermissionError("COMMUNITY_DOMAIN_REQUIRED")
+    elif explicit_type == "PRIVATE":
+        raise PermissionError("COMMUNITY_PRIVATE")
+    elif explicit_type not in {"PUBLIC", "APPROVAL_REQUIRED"}:
+        raise PermissionError("COMMUNITY_MEMBERSHIP_POLICY_UNSUPPORTED")
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
     membership_id = _stable_id("membership", community_id, principal.uid)
     existing = await store.get("community_memberships", membership_id)
@@ -159,7 +181,7 @@ async def join_community(
         "community_id": community_id,
         "owner_uid": principal.uid,
         "role": str(existing.get("role", "MEMBER")) if existing else "MEMBER",
-        "status": "ACTIVE",
+        "status": "PENDING" if explicit_type == "APPROVAL_REQUIRED" else "ACTIVE",
         "email_verification_evidence": True,
         "joined_at": existing.get("joined_at", timestamp) if existing else timestamp,
         "updated_at": timestamp,

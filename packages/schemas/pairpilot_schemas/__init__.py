@@ -35,6 +35,7 @@ from pairpilot_schemas.intent_draft import (
 from pairpilot_schemas.introduction import IntroductionDecision
 from pairpilot_schemas.multi_user import (
     BlockUserInput,
+    CommunityAgentQueryInput,
     CreateUserTaskInput,
     DeleteAccountInput,
     ExploreSearchInput,
@@ -134,6 +135,7 @@ __all__ = [
     "IntentDraft",
     "IntroductionDecision",
     "BlockUserInput",
+    "CommunityAgentQueryInput",
     "CreateUserTaskInput",
     "DeleteAccountInput",
     "ExploreSearchInput",

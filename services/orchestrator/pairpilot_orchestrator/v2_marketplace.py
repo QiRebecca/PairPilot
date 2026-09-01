@@ -48,7 +48,7 @@ def _normalized_intent_type(value: object) -> str | None:
         return None
 
 
-def _is_explicit_demo_post(post: Mapping[str, Any]) -> bool:
+def is_explicit_demo_post(post: Mapping[str, Any]) -> bool:
     """Recognize only explicit synthetic labels; never guess from user behavior."""
 
     if post.get("demo_data") is True or post.get("test_data") is True:
@@ -64,7 +64,7 @@ def _is_explicit_demo_post(post: Mapping[str, Any]) -> bool:
     )
 
 
-def _public_projection(post: Mapping[str, Any]) -> dict[str, Any]:
+def public_post_projection(post: Mapping[str, Any]) -> dict[str, Any]:
     allowed = {
         "schema_version",
         "intent_id",
@@ -247,7 +247,7 @@ async def search_marketplace(
         is_owner = post.get("owner_uid") == principal.uid
         if post.get("namespace") != PRODUCTION_NAMESPACE:
             continue
-        if not is_owner and _is_explicit_demo_post(post):
+        if not is_owner and is_explicit_demo_post(post):
             continue
         if not is_owner and (
             post.get("status") != DISCOVERABLE_STATUS
@@ -277,7 +277,7 @@ async def search_marketplace(
             continue
         results.append(
             {
-                **_public_projection(post),
+                **public_post_projection(post),
                 "saved": intent_id in saved_ids,
                 "relevance_score": score,
                 "surfaced_reasons": reasons,
@@ -316,7 +316,7 @@ async def get_post_detail(
         raise LookupError("post was not found")
     is_owner = post.get("owner_uid") == principal.uid
     if not is_owner:
-        if _is_explicit_demo_post(post):
+        if is_explicit_demo_post(post):
             raise LookupError("post was not found")
         if post.get("status") != DISCOVERABLE_STATUS:
             raise LookupError("post was not found")
@@ -329,7 +329,7 @@ async def get_post_detail(
     saved_id = stable_id("saved_post", principal.uid, intent_id)
     saved = await store.get("saved_posts", saved_id)
     return {
-        "post": {**_public_projection(post), "owned_by_viewer": is_owner},
+        "post": {**public_post_projection(post), "owned_by_viewer": is_owner},
         "saved": saved is not None,
     }
 

@@ -18,9 +18,9 @@ are valid completion states.
 | Post Detail route | IMPLEMENTED_UNVERIFIED | Authorized `/app/posts/:intentId` and public-only API pass local browser direct-link acceptance; candidate deployment remains |
 | Agent evaluate/contact from Post | IMPLEMENTED_UNVERIFIED | Post Detail selects an owned compatible Request and invokes real candidate processing; candidate multi-user acceptance remains |
 | Community join/leave | LIVE_VERIFIED | Authenticated APIs and production data exist |
-| Community Detail and scoped feed | NOT_IMPLEMENTED | No direct Community route or tabs |
-| Community rules and moderation | PARTIAL | Reports/blocking exist; rule enforcement and moderator actions incomplete |
-| Community Agent | NOT_IMPLEMENTED | No scoped logical Community Agent |
+| Community Detail and scoped feed | IMPLEMENTED_UNVERIFIED | Direct route, five tabs, scoped Posts/members/Rooms pass local tests and browser acceptance |
+| Community rules and moderation | PARTIAL | Rules are visible and Agent-scoped; moderator mutation actions and cross-path enforcement remain |
+| Community Agent | IMPLEMENTED_UNVERIFIED | Logical safe-scope Agent answers rules and surfaces only public Posts |
 | Candidate Pool and dynamic ranking | LIVE_VERIFIED | Multiple candidates, rank events, real A2A acceptance |
 | Continuous offline monitoring | IMPLEMENTED_UNVERIFIED | Pub/Sub/reconciliation exists; required browser-closed scenario not accepted |
 | Room lifecycle and summary | PARTIAL | Real Rooms/messages exist; V2 state machine and summary panel missing |

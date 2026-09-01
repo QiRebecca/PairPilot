@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
     BlockUserInput,
+    CommunityAgentQueryInput,
     ContactCardInput,
     ConversationRole,
     CreateUserTaskInput,
@@ -139,6 +140,10 @@ from pairpilot_orchestrator.v1_relationships import (
     offer_contact_card,
     revoke_contact_card,
     submit_outcome_check_in,
+)
+from pairpilot_orchestrator.v2_communities import (
+    get_community_detail,
+    query_community_agent,
 )
 from pairpilot_orchestrator.v2_marketplace import (
     create_saved_search,
@@ -1106,6 +1111,31 @@ async def app_list_communities(
     principal: AuthenticatedUser,
 ) -> dict[str, Any]:
     return await list_communities_for_user(_store(), principal)
+
+
+@app.get("/api/app/communities/{community_id}")
+async def app_get_community_detail(
+    community_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await get_community_detail(_store(), principal, community_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Community was not found.") from exc
+
+
+@app.post("/api/app/communities/{community_id}/agent/query")
+async def app_query_community_agent(
+    community_id: str,
+    body: CommunityAgentQueryInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await query_community_agent(
+            _store(), principal, community_id, body.question
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Community was not found.") from exc
 
 
 @app.post("/api/app/explore/search")

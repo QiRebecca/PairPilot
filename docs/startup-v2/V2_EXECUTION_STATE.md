@@ -4,13 +4,15 @@ Updated: 2026-09-01
 
 ## Current phase
 
-Phase 2 — Explore and Post Detail: `PARTIAL`
+Phase 3 — Communities: `PARTIAL`
 
-Server-authorized Explore search, six marketplace views, structured filters,
-Saved Posts, Saved Searches, a direct Post route, and Agent-contact actions exist.
-Local browser acceptance exposed and fixed legacy Request and controlled-demo
-leakage issues. Phase 2 remains partial until vector retrieval, saved-search
-workers, candidate deployment, and multi-user acceptance pass.
+Operational Community Detail, five scoped tabs, membership-policy enforcement,
+public member/Agent projections, Community-visible Room filtering, and a
+privacy-bounded logical Community Agent exist. Local authenticated browser
+acceptance exposed and fixed slow member reads, blank empty states, and
+controlled-test directory leakage. Phase 3 remains partial until moderation
+actions, rule enforcement at every publish/contact path, candidate deployment,
+and multi-user acceptance pass.
 
 ## Protected baselines
 
@@ -27,7 +29,7 @@ workers, candidate deployment, and multi-user acceptance pass.
 | 0 Audit and protection | IMPLEMENTED_UNVERIFIED | Candidate environment gate required for LIVE_VERIFIED |
 | 1 Unified domain model | PARTIAL | Remaining lifecycle migrations and candidate apply |
 | 2 Explore and Post Detail | PARTIAL | Vector index/backfill, monitoring worker, candidate acceptance |
-| 3 Communities | PARTIAL | Community Detail/rules/roles/Community Agent |
+| 3 Communities | PARTIAL | moderation actions, cross-path rule enforcement, candidate acceptance |
 | 4 Rooms | PARTIAL | V2 lifecycle, summary, three-channel acceptance |
 | 5 Matches | PARTIAL | plan detail/change/cancel/calendar/backup |
 | 6 Connections | PARTIAL | list/detail/provenance/reuse acceptance |
@@ -40,7 +42,7 @@ workers, candidate deployment, and multi-user acceptance pass.
 
 ## Immediate next work
 
-1. Build Community Detail, rules, roles, scoped feed, and Community Agent boundary.
+1. Build V2 Room state, summary, and three strictly separated channels.
 2. Implement the remaining lifecycle normalization migrations.
 3. Add candidate-environment feature and namespace configuration.
 4. Create candidate vector index and public-Post embedding backfill.
@@ -56,5 +58,5 @@ workers, candidate deployment, and multi-user acceptance pass.
 - Firestore has no composite indexes for the planned search filters.
 - Firestore has no candidate vector index or public-Post embedding backfill.
 - Saved-search events are durable but no V2 monitoring worker consumes them yet.
-- The frontend is concentrated in `BetaApp.tsx`.
+- Core authenticated pages still remaining in `BetaApp.tsx` need decomposition.
 - Offline monitoring and browser-level acceptance are not yet V2-verified.
