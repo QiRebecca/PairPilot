@@ -193,3 +193,30 @@ class RoomChannelMessageInput(BaseModel):
     )
     idempotency_key: str = Field(min_length=8, max_length=100)
     reply_to: str | None = Field(default=None, max_length=200)
+
+
+class MatchChangeProposalInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1, max_length=500)
+    terms: dict[str, str | int | bool] = Field(min_length=1, max_length=30)
+
+
+class MatchChangeDecisionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=2)
+    confirmation: str = Field(min_length=1, max_length=80)
+
+
+class CancelMatchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=500)
+    reopen_candidate_pool: bool = True
+
+
+class CompleteMatchInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation: Literal["MARK PLAN COMPLETED"]

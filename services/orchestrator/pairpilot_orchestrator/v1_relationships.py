@@ -152,6 +152,8 @@ async def submit_outcome_check_in(
         "did_plan_happen": body.did_plan_happen,
         "would_coordinate_again": body.would_coordinate_again,
         "agreed_term_inaccurate": body.agreed_term_inaccurate,
+        "either_person_cancelled": body.either_person_cancelled,
+        "safety_concern": body.safety_concern,
         "optional_feedback_private": body.optional_feedback,
         "relationship_event_id": event_id,
         "created_at": timestamp,
@@ -167,6 +169,8 @@ async def submit_outcome_check_in(
         "did_plan_happen": body.did_plan_happen,
         "would_coordinate_again": body.would_coordinate_again,
         "agreed_term_inaccurate": body.agreed_term_inaccurate,
+        "either_person_cancelled": body.either_person_cancelled,
+        "safety_concern": body.safety_concern,
         "source": "MATCH_PARTICIPANT_CHECK_IN",
         "created_at": timestamp,
     }
@@ -218,8 +222,13 @@ async def submit_outcome_check_in(
             "created_at": timestamp,
         },
     )
-    if body.agreed_term_inaccurate:
-        signal_id = stable_id("moderation_signal", outcome_id, "inaccurate-term")
+    if body.agreed_term_inaccurate or body.safety_concern:
+        signal_type = (
+            "SAFETY_CONCERN_REPORTED"
+            if body.safety_concern
+            else "AGREED_TERM_REPORTED_INACCURATE"
+        )
+        signal_id = stable_id("moderation_signal", outcome_id, signal_type)
         await store.create(
             "moderation_signals",
             signal_id,
@@ -229,7 +238,7 @@ async def submit_outcome_check_in(
                 "signal_id": signal_id,
                 "owner_uid": principal.uid,
                 "match_id": match_id,
-                "type": "AGREED_TERM_REPORTED_INACCURATE",
+                "type": signal_type,
                 "status": "UNREVIEWED",
                 "created_at": timestamp,
             },

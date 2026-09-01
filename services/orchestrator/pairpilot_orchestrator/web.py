@@ -16,7 +16,7 @@ from time import monotonic
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -27,7 +27,9 @@ from fastapi.staticfiles import StaticFiles
 from pairpilot_schemas import (
     AutonomyMode,
     BlockUserInput,
+    CancelMatchInput,
     CommunityAgentQueryInput,
+    CompleteMatchInput,
     ContactCardInput,
     ConversationRole,
     CreateUserTaskInput,
@@ -39,6 +41,8 @@ from pairpilot_schemas import (
     IntentPublicConstraints,
     IntentStatus,
     JoinCommunityInput,
+    MatchChangeDecisionInput,
+    MatchChangeProposalInput,
     MemoryActionInput,
     MessageAuthorship,
     MessageVisibility,
@@ -151,6 +155,17 @@ from pairpilot_orchestrator.v2_marketplace import (
     save_post,
     search_marketplace,
     unsave_post,
+)
+from pairpilot_orchestrator.v2_matches import (
+    accept_contact_card,
+    activate_backup,
+    approve_match_change,
+    build_match_calendar,
+    cancel_match,
+    get_match_detail,
+    list_matches_for_user,
+    mark_match_completed,
+    propose_match_change,
 )
 from pairpilot_orchestrator.v2_rooms import (
     get_room_workspace,
@@ -1045,6 +1060,156 @@ async def personal_agent_conversation_audit(
     else:
         result["a2aTurns"] = []
     return result
+
+
+@app.get("/api/app/matches")
+async def app_list_matches(
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    return await list_matches_for_user(_store(), principal)
+
+
+@app.get("/api/app/matches/{match_id}")
+async def app_get_match_detail(
+    match_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await get_match_detail(_store(), principal, match_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+
+
+@app.get("/api/app/matches/{match_id}/calendar.ics")
+async def app_download_match_calendar(
+    match_id: str,
+    principal: AuthenticatedUser,
+) -> Response:
+    try:
+        calendar = await build_match_calendar(_store(), principal, match_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return Response(
+        content=calendar,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f'attachment; filename="pairpilot-{match_id}.ics"'
+        },
+    )
+
+
+@app.post("/api/app/matches/{match_id}/changes")
+async def app_propose_match_change(
+    match_id: str,
+    body: MatchChangeProposalInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        change = await propose_match_change(
+            _store(),
+            principal,
+            match_id=match_id,
+            summary=body.summary,
+            terms=body.terms,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"changeProposal": change}
+
+
+@app.post("/api/app/matches/{match_id}/changes/{change_id}/approve")
+async def app_approve_match_change(
+    match_id: str,
+    change_id: str,
+    body: MatchChangeDecisionInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await approve_match_change(
+            _store(),
+            principal,
+            match_id=match_id,
+            change_id=change_id,
+            version=body.version,
+            confirmation=body.confirmation,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Match change was not found.") from exc
+    except PermissionError as exc:
+        raise HTTPException(403, "This change is not assigned to you.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/app/matches/{match_id}/cancel")
+async def app_cancel_match(
+    match_id: str,
+    body: CancelMatchInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        match = await cancel_match(
+            _store(),
+            principal,
+            match_id=match_id,
+            reason=body.reason,
+            reopen_candidate_pool=body.reopen_candidate_pool,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"match": match}
+
+
+@app.post("/api/app/matches/{match_id}/backup/activate")
+async def app_activate_match_backup(
+    match_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        return await activate_backup(_store(), principal, match_id=match_id)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/app/matches/{match_id}/complete")
+async def app_complete_match(
+    match_id: str,
+    _body: CompleteMatchInput,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        match = await mark_match_completed(_store(), principal, match_id=match_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Match was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"match": match}
+
+
+@app.post("/api/app/matches/{match_id}/contacts/{contact_card_id}/accept")
+async def app_accept_match_contact(
+    match_id: str,
+    contact_card_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        acceptance = await accept_contact_card(
+            _store(),
+            principal,
+            match_id=match_id,
+            contact_card_id=contact_card_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(404, "Contact card was not found.") from exc
+    return {"acceptance": acceptance}
 
 
 @app.get("/api/app/matches/{match_id}/contacts")

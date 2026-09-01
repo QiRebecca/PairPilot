@@ -26,9 +26,9 @@ are valid completion states.
 | Room lifecycle and summary | IMPLEMENTED_UNVERIFIED | Participant-scoped list/detail, V2 mapping, header facts and summary panel pass local tests/build |
 | Three-channel isolation | IMPLEMENTED_UNVERIFIED | Server-isolated private, redacted read-only Agents-only, and consent-gated Shared channels exist |
 | Dual-human approval | LIVE_VERIFIED | Version-bound atomic commit tests and live two-user acceptance |
-| Match Detail and executable plan | PARTIAL | Match list/shared Room/contact/outcome exist; detail route and plan operations missing |
-| Calendar `.ics` export | NOT_IMPLEMENTED | No route or artifact generation |
-| Match change/cancel/backup | NOT_IMPLEMENTED | No complete versioned lifecycle |
+| Match Detail and executable plan | IMPLEMENTED_UNVERIFIED | Participant-scoped direct list/detail routes and plan actions pass local tests/build; candidate acceptance remains |
+| Calendar `.ics` export | IMPLEMENTED_UNVERIFIED | Authenticated participant-only escaped UTC calendar route and download UI pass local tests |
+| Match change/cancel/backup | IMPLEMENTED_UNVERIFIED | Exact-version dual approval, audited cancellation, notifications, durable reopen event, and ranked backup activation pass local tests |
 | Opt-in Contact Cards | LIVE_VERIFIED | Match-scoped offer/revoke and authorization implemented |
 | Connections list/detail | PARTIAL | Relationships and graph/list content exist under Network; no V2 routes or actions |
 | Connection reuse | IMPLEMENTED_UNVERIFIED | Warm-introduction tool exists; future-task behavioral acceptance missing |

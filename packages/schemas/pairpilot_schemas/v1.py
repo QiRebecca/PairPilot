@@ -93,6 +93,7 @@ class ContactCardInput(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     whatsapp: str | None = Field(default=None, max_length=80)
     telegram: str | None = Field(default=None, max_length=80)
+    signal: str | None = Field(default=None, max_length=80)
     wechat: str | None = Field(default=None, max_length=80)
     linkedin: str | None = Field(default=None, max_length=240)
     other_handle: str | None = Field(default=None, max_length=160)
@@ -104,4 +105,6 @@ class OutcomeCheckInInput(BaseModel):
     did_plan_happen: bool
     would_coordinate_again: bool
     agreed_term_inaccurate: bool
+    either_person_cancelled: bool = False
+    safety_concern: bool = False
     optional_feedback: str | None = Field(default=None, max_length=1_000)
