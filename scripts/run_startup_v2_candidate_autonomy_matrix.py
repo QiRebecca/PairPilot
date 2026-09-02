@@ -29,6 +29,7 @@ from seed_startup_v2_candidate_cohort import (  # noqa: E402
 )
 
 COMMUNITY_ID = "community_v2_local_weekends"
+TASK_PREFIX = "Autonomy matrix v2 "
 
 
 def _active_count(state: dict[str, Any]) -> int:
@@ -43,7 +44,7 @@ def _select_user(users: list[ControlledUser]) -> ControlledUser:
         matrix_tasks = [
             item
             for item in state["tasks"]
-            if str(item.get("title") or "").startswith("Autonomy matrix ")
+            if str(item.get("title") or "").startswith(TASK_PREFIX)
         ]
         if len(matrix_tasks) == 3 or _active_count(state) == 0:
             return user
@@ -51,7 +52,7 @@ def _select_user(users: list[ControlledUser]) -> ControlledUser:
 
 
 def _ensure_task(user: ControlledUser, level: str) -> dict[str, Any]:
-    title = f"Autonomy matrix {level}"
+    title = f"{TASK_PREFIX}{level}"
     state = _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
     task = next((item for item in state["tasks"] if item.get("title") == title), None)
     if task is None:
@@ -89,12 +90,12 @@ def _ensure_task(user: ControlledUser, level: str) -> dict[str, Any]:
         (item for item in state["myPosts"] if item.get("task_id") == task["task_id"]),
         None,
     )
-    if post is not None and post.get("status") != "CLOSED":
+    if post is not None and post.get("status") != "PAUSED":
         _api(
             user,
             "PATCH",
             f"/api/app/posts/{task['intent_id']}/status",
-            {"status": "CLOSED"},
+            {"status": "PAUSED"},
         )
     return task
 
