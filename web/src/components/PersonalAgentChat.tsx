@@ -21,6 +21,7 @@ type Item = Record<string, unknown>;
 
 interface StreamEvent {
   type: string;
+  sequence?: number;
   invocation_id?: string;
   delta?: string;
   tool_call_id?: string;
@@ -48,11 +49,13 @@ function timestamp(value: unknown): string {
 async function readEventStream(
   response: Response,
   onEvent: (event: StreamEvent) => void,
-): Promise<void> {
+): Promise<{ terminal: boolean; lastSequence: number }> {
   if (!response.body) throw new Error("The Agent stream did not open.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let terminal = false;
+  let lastSequence = 0;
   while (true) {
     const { done, value } = await reader.read();
     buffer += decoder.decode(value, { stream: !done });
@@ -75,10 +78,26 @@ async function readEventStream(
         .map((line) => line.slice(5).trim())
         .join("\n");
       if (!eventName || !data) continue;
-      onEvent({ ...(JSON.parse(data) as StreamEvent), type: eventName });
+      const rawSequence = frame
+        .split("\n")
+        .find((line) => line.startsWith("id:"))
+        ?.slice(3)
+        .trim();
+      const sequence = Number(rawSequence || 0);
+      if (Number.isFinite(sequence))
+        lastSequence = Math.max(lastSequence, sequence);
+      const event = {
+        ...(JSON.parse(data) as StreamEvent),
+        type: eventName,
+        sequence: Number.isFinite(sequence) ? sequence : undefined,
+      };
+      if (event.type === "agent.completed" || event.type === "agent.error")
+        terminal = true;
+      onEvent(event);
     }
     if (done) break;
   }
+  return { terminal, lastSequence };
 }
 
 export function PersonalAgentChat({
@@ -206,7 +225,7 @@ export function PersonalAgentChat({
     setLastTurn({ content: clean, clientId });
     setDraft("");
     try {
-      const response = await streamRequest(
+      let response = await streamRequest(
         `/api/v1/conversations/${encodeURIComponent(conversationId)}/messages`,
         {
           method: "POST",
@@ -218,9 +237,18 @@ export function PersonalAgentChat({
           }),
         },
       );
-      setInvocationId(response.headers.get("X-PairPilot-Invocation-Id") || "");
-      await readEventStream(response, (event) => {
-        if (event.invocation_id) setInvocationId(event.invocation_id);
+      let activeInvocation =
+        response.headers.get("X-PairPilot-Invocation-Id") || "";
+      let lastSequence = 0;
+      let terminal = false;
+      if (activeInvocation) setInvocationId(activeInvocation);
+      const handleEvent = (event: StreamEvent) => {
+        if (event.invocation_id) {
+          activeInvocation = event.invocation_id;
+          setInvocationId(event.invocation_id);
+        }
+        if (event.sequence)
+          lastSequence = Math.max(lastSequence, event.sequence);
         if (event.type === "agent.text.delta")
           setPartial((current) => current + text(event.delta));
         if (event.type === "tool.started")
@@ -240,7 +268,25 @@ export function PersonalAgentChat({
           );
         if (event.type === "agent.error")
           setFailure(text(event.error) || "The live Agent turn failed.");
-      });
+      };
+      for (let attempt = 0; attempt < 3 && !terminal; attempt += 1) {
+        try {
+          const result = await readEventStream(response, handleEvent);
+          terminal = result.terminal;
+          lastSequence = Math.max(lastSequence, result.lastSequence);
+        } catch (reason) {
+          if (!activeInvocation || attempt === 2) throw reason;
+        }
+        if (terminal) break;
+        if (!activeInvocation || attempt === 2)
+          throw new Error("The Agent stream disconnected before completion.");
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        response = await streamRequest(
+          `/api/v1/conversations/${encodeURIComponent(conversationId)}/events?` +
+            `invocation_id=${encodeURIComponent(activeInvocation)}&after=${lastSequence}`,
+          { method: "GET" },
+        );
+      }
       await refresh();
     } catch (reason) {
       setFailure(

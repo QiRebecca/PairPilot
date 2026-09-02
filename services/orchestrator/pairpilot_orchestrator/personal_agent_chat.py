@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -49,6 +50,7 @@ from pairpilot_orchestrator.v2_product_glue import autonomy_level_for
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
+PERSONAL_AGENT_TURN_TIMEOUT_SECONDS = 90
 logger = logging.getLogger(__name__)
 
 
@@ -67,6 +69,18 @@ def authoritative_tool_recovery_message(
         for item in completed_tools
         if isinstance(item.get("result"), dict)
     }
+    if "publish_intent_post" in names and "BLOCKED_BY_AUTONOMY_POLICY" in statuses:
+        return (
+            "I did not publish the Post because your PUBLISH_POST autonomy policy "
+            "is set to Never. The policy decision is saved and you can change it "
+            "before trying again."
+        )
+    if "publish_intent_post" in names and "REQUIRES_HUMAN_CONFIRMATION" in statuses:
+        return (
+            "I did not publish the Post because this action still needs your "
+            "explicit confirmation. The review card is saved and no publication "
+            "was fabricated."
+        )
     if "publish_intent_post" in names and "PUBLISHED" in statuses:
         return (
             "Your approved Post is published and open for matching. The model "
@@ -1351,7 +1365,7 @@ async def stream_personal_agent_turn(
             ),
             session_service=session_service,
         )
-        async for event in runner.run_async(
+        adk_events = runner.run_async(
             user_id=principal.uid,
             session_id=session_id,
             invocation_id=invocation_id,
@@ -1362,7 +1376,32 @@ async def stream_personal_agent_turn(
                 streaming_mode=StreamingMode.SSE,
                 max_llm_calls=8,
             ),
-        ):
+        )
+        turn_deadline = (
+            time.monotonic() + PERSONAL_AGENT_TURN_TIMEOUT_SECONDS
+        )
+        while True:
+            try:
+                remaining = turn_deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError
+                event = await asyncio.wait_for(anext(adk_events), timeout=remaining)
+            except StopAsyncIteration:
+                break
+            except TimeoutError as exc:
+                if completed_tools:
+                    recovered_model_error = "PERSONAL_AGENT_TURN_TIMEOUT"
+                    completion_mode = "AUTHORITATIVE_TOOL_RECOVERY"
+                    final_text = authoritative_tool_recovery_message(completed_tools)
+                    yield {
+                        "type": "agent.text.delta",
+                        "invocation_id": invocation_id,
+                        "delta": "\n\n" + final_text,
+                    }
+                    break
+                raise PersonalAgentChatError(
+                    "the live model turn exceeded its bounded execution time"
+                ) from exc
             prompt_count, output_count = _usage(event)
             if prompt_count is not None:
                 input_tokens = max(input_tokens or 0, prompt_count)

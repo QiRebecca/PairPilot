@@ -100,6 +100,47 @@ describe("PersonalAgentChat", () => {
     expect(secondBody.client_message_id).not.toBe(firstBody.client_message_id);
   });
 
+  it("replays durable events after a stream disconnects", async () => {
+    const interrupted = [
+      "id: 1",
+      "event: message.accepted",
+      'data: {"type":"message.accepted","invocation_id":"invocation-replay"}',
+      "",
+    ].join("\n");
+    const replayed = [
+      "id: 2",
+      "event: agent.completed",
+      'data: {"type":"agent.completed","invocation_id":"invocation-replay","message":{"content":"Recovered."}}',
+      "",
+    ].join("\n");
+    authMocks.streamRequest
+      .mockResolvedValueOnce(
+        new Response(interrupted, {
+          status: 200,
+          headers: { "X-PairPilot-Invocation-Id": "invocation-replay" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(replayed, { status: 200 }));
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PersonalAgentChat
+        conversation={{ conversation_id: "user:uid-a:global" }}
+        messages={[]}
+        refresh={refresh}
+      />,
+    );
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Message My Personal Agent" }),
+      { target: { value: "Resume this turn safely." } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(authMocks.streamRequest).toHaveBeenCalledTimes(2));
+    expect(String(authMocks.streamRequest.mock.calls[1][0])).toContain(
+      "/events?invocation_id=invocation-replay&after=1",
+    );
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
   it("renders an Agent directive as a real clickable task card", () => {
     const navigate = vi.fn();
     render(
