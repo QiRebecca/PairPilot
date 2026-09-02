@@ -1,4 +1,7 @@
-from pairpilot_orchestrator.personal_agent_chat import _publish_policy_decision
+from pairpilot_orchestrator.personal_agent_chat import (
+    _effective_autonomy_actions,
+    _publish_policy_decision,
+)
 
 
 def test_publish_policy_never_blocks_even_explicit_confirmation() -> None:
@@ -40,3 +43,25 @@ def test_publish_policy_automatic_does_not_require_confirmation() -> None:
         )
         == "AUTHORIZED"
     )
+
+
+def test_task_override_is_visible_to_agent_but_final_commitment_stays_locked() -> (
+    None
+):
+    actions = _effective_autonomy_actions(
+        {
+            "action_levels": {
+                "PUBLISH_POST": "ASK_FIRST",
+                "APPROVE_FINAL_COMMITMENT": "NEVER",
+            }
+        },
+        {
+            "action_levels": {
+                "PUBLISH_POST": "AUTOMATIC",
+                "APPROVE_FINAL_COMMITMENT": "AUTOMATIC",
+            }
+        },
+    )
+
+    assert actions["PUBLISH_POST"] == "AUTOMATIC"
+    assert actions["APPROVE_FINAL_COMMITMENT"] == "ASK_FIRST"

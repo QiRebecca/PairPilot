@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
@@ -46,7 +46,7 @@ from pairpilot_orchestrator.v1_foundation import (
 )
 from pairpilot_orchestrator.v2_connections import record_connection_usage
 from pairpilot_orchestrator.v2_memory import retrieve_memory_context
-from pairpilot_orchestrator.v2_product_glue import autonomy_level_for
+from pairpilot_orchestrator.v2_product_glue import ACTION_DEFAULTS, autonomy_level_for
 
 APP_NAME = "pairpilot_real_personal_agent"
 MAX_CONTEXT_ITEMS = 20
@@ -131,6 +131,24 @@ def _publish_policy_decision(
     if confirmation == "PUBLISH THIS POST" and user_authorized:
         return "AUTHORIZED"
     return "REQUIRES_HUMAN_CONFIRMATION"
+
+
+def _effective_autonomy_actions(
+    global_config: Mapping[str, Any], task_override: Mapping[str, Any]
+) -> dict[str, str]:
+    """Merge the same action policy layers used by authoritative tools."""
+
+    effective = dict(ACTION_DEFAULTS)
+    for source in (global_config, task_override):
+        for action, level in dict(source.get("action_levels") or {}).items():
+            if action in ACTION_DEFAULTS and level in {
+                "AUTOMATIC",
+                "ASK_FIRST",
+                "NEVER",
+            }:
+                effective[action] = str(level)
+    effective["APPROVE_FINAL_COMMITMENT"] = "ASK_FIRST"
+    return effective
 
 
 def resolve_task_intent_type(requested_type: str, *, event: str, goal: str) -> str:
@@ -332,6 +350,12 @@ async def _scoped_context(
         "relationships", filters=[("owner_uid", "EQUAL", principal.uid)]
     )
     autonomy = await store.get("user_autonomy_configs", principal.uid) or {}
+    autonomy_override: dict[str, Any] = {}
+    if task_id is not None:
+        override_id = stable_id("autonomy_override", principal.uid, task_id)
+        autonomy_override = (
+            await store.get("autonomy_task_overrides", override_id) or {}
+        )
     memberships = await active_community_ids(store, principal.uid)
     task_index = [
         {
@@ -367,7 +391,9 @@ async def _scoped_context(
             for item in relationships[:MAX_CONTEXT_ITEMS]
         ],
         "autonomyMode": autonomy.get("default_mode", "COPILOT"),
-        "autonomyActions": dict(autonomy.get("action_levels") or {}),
+        "autonomyActions": _effective_autonomy_actions(
+            autonomy, autonomy_override
+        ),
         "activeCommunityIds": sorted(memberships),
     }
     if task_id is None:
