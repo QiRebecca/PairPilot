@@ -72,6 +72,24 @@ describe("Startup V2 integrated workspaces", () => {
     expect(screen.getByText("Authoritative object history")).toBeInTheDocument();
   });
 
+  it("opens the Post approval surface from an authoritative decision deep link", () => {
+    render(
+      <RequestWorkspaceV2Page
+        taskId="task_one"
+        data={workspaceData}
+        refresh={vi.fn().mockResolvedValue(undefined)}
+        navigate={vi.fn()}
+        initialTab="post"
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Approve & publish" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Persistent Personal Agent · scoped task task_one"),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses the same live Personal Agent inside the private Room channel", async () => {
     authMocks.request.mockResolvedValue({
       room: {

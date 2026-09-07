@@ -86,6 +86,29 @@ async def test_decision_inbox_is_owner_scoped_routed_and_rejects_change() -> Non
 
 
 @pytest.mark.asyncio
+async def test_post_review_decision_routes_directly_to_post_tab() -> None:
+    store = MemoryMultiUserStore()
+    await store.create(
+        "decisions",
+        "decision_post",
+        {
+            "namespace": "production",
+            "decision_id": "decision_post",
+            "owner_uid": "owner",
+            "task_id": "task_post",
+            "type": "REVIEW_POST_DRAFT",
+            "status": "OPEN",
+        },
+    )
+
+    inbox = await list_decision_inbox(store, principal())
+
+    assert inbox["open"][0]["entity_route"] == (
+        "/app/requests/task_post?tab=post"
+    )
+
+
+@pytest.mark.asyncio
 async def test_notifications_are_actionable_and_owner_state_isolated() -> None:
     store = MemoryMultiUserStore()
     for notification_id, owner_uid in (

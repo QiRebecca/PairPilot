@@ -65,14 +65,16 @@ export function RequestWorkspaceV2Page({
   data,
   refresh,
   navigate,
+  initialTab = "conversation",
 }: {
   taskId: string;
   data: WorkspaceData;
   refresh: () => Promise<void>;
   navigate: (path: string) => void;
+  initialTab?: WorkspaceTab;
 }) {
   const { request } = useAuth();
-  const [tab, setTab] = useState<WorkspaceTab>("conversation");
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -107,6 +109,8 @@ export function RequestWorkspaceV2Page({
   const rankEvents = data.candidateRankEvents.filter(
     (item) => item.task_id === taskId,
   );
+
+  useEffect(() => setTab(initialTab), [initialTab]);
 
   useEffect(() => {
     setTitle(asString(draft.public_title) || asString(task?.title));

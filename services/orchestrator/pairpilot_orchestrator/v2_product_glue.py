@@ -78,7 +78,13 @@ def _entity_route(decision: Mapping[str, Any]) -> str:
     if memory_id:
         return f"/app/memory/{memory_id}"
     if decision.get("task_id"):
-        return f"/app/requests/{decision['task_id']}"
+        tab_by_type = {
+            "REVIEW_POST_DRAFT": "post",
+            "APPROVE_PROPOSAL": "candidates",
+            "ACTIVATE_BACKUP": "candidates",
+        }
+        tab = tab_by_type.get(_decision_type(decision), "overview")
+        return f"/app/requests/{decision['task_id']}?tab={tab}"
     return "/app/agent"
 
 

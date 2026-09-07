@@ -1230,7 +1230,7 @@ function PageTitle({
 
 export function BetaApp() {
   const { request, user, loading, signOutUser } = useAuth();
-  const { path, navigate } = useRouter();
+  const { path, search, navigate } = useRouter();
   const [data, setData] = useState<BetaBootstrap | null>(null);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
@@ -1256,6 +1256,25 @@ export function BetaApp() {
     });
   }, [navigate, signOutUser]);
   const taskId = path.startsWith("/app/requests/") ? path.split("/")[3] : "";
+  const requestedWorkspaceTab = new URLSearchParams(search).get("tab");
+  const workspaceTab = [
+    "conversation",
+    "overview",
+    "post",
+    "candidates",
+    "rooms",
+    "activity",
+    "audit",
+  ].includes(requestedWorkspaceTab || "")
+    ? (requestedWorkspaceTab as
+        | "conversation"
+        | "overview"
+        | "post"
+        | "candidates"
+        | "rooms"
+        | "activity"
+        | "audit")
+    : "conversation";
   const roomId = path.startsWith("/app/rooms/") ? path.split("/")[3] : "";
   const postId = path.startsWith("/app/posts/") ? path.split("/")[3] : "";
   const communityId = path.startsWith("/app/communities/")
@@ -1281,6 +1300,7 @@ export function BetaApp() {
           data={data}
           refresh={refresh}
           navigate={navigate}
+          initialTab={workspaceTab}
         />
       );
     else if (path === "/app/explore")
