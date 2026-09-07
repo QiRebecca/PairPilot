@@ -118,6 +118,32 @@ async def test_notifications_are_actionable_and_owner_state_isolated() -> None:
         state="READ",
     )
     assert (await mark_all_notifications_read(store, principal()))["updated"] == 0
+
+
+@pytest.mark.asyncio
+async def test_saved_search_notification_routes_to_public_post_detail() -> None:
+    store = MemoryMultiUserStore()
+    await store.create(
+        "notifications",
+        "notification_search_match",
+        {
+            "namespace": "production",
+            "notification_id": "notification_search_match",
+            "owner_uid": "owner",
+            "type": "SAVED_SEARCH_MATCH",
+            "title": "A monitored Post is available",
+            "body": "Public Post title",
+            "entity_ids": ["intent_public_match"],
+            "status": "UNREAD",
+            "created_at": datetime.now(UTC),
+        },
+    )
+
+    payload = await list_notifications(store, principal())
+
+    notification = payload["notifications"][0]
+    assert notification["category"] == "CANDIDATE_CHANGE"
+    assert notification["entity_route"] == "/app/posts/intent_public_match"
     with pytest.raises(LookupError):
         await set_notification_state(
             store,

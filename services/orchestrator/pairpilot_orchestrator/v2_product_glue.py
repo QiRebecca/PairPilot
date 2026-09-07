@@ -219,7 +219,7 @@ def _notification_category(notification: Mapping[str, Any]) -> str:
     value = str(notification.get("type") or "").upper()
     if "DECISION" in value or "CLARIF" in value or "MEMORY" in value:
         return "DECISION_REQUIRED"
-    if "CANDIDATE" in value or "RANK" in value:
+    if "CANDIDATE" in value or "RANK" in value or "SAVED_SEARCH" in value:
         return "CANDIDATE_CHANGE"
     if "MESSAGE" in value or "REPLIED" in value or "CONTACT_CARD" in value:
         return "AGENT_MESSAGE"
@@ -235,6 +235,7 @@ def _notification_category(notification: Mapping[str, Any]) -> str:
 def _notification_route(notification: Mapping[str, Any]) -> str:
     entity_ids = [str(item) for item in notification.get("entity_ids", []) if item]
     for prefix, route in (
+        ("intent_", "/app/posts/"),
         ("match_", "/app/matches/"),
         ("room_", "/app/rooms/"),
         ("task_", "/app/requests/"),
