@@ -29,6 +29,7 @@ async def run(*, source_intent_id: str, run_id: UUID | None = None) -> dict[str,
         project_id=settings.project_id,
         topic_id=settings.event_topic_id,
         collection_prefix=settings.collection_prefix,
+        environment=settings.environment,
     )
     runtime = GoldenPathRuntime(
         store=store,

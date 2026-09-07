@@ -28,6 +28,7 @@ from pairpilot_orchestrator.auth.authorization import (
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
 from pairpilot_orchestrator.infrastructure.google_cloud import encode_fields
 from pairpilot_orchestrator.policies.privacy import OutboundPrivacyGuard
+from pairpilot_orchestrator.schema_registry import V2_SCHEMA_VERSION
 from pairpilot_orchestrator.v1_foundation import (
     DEFAULT_COMMUNITY_ID,
     active_community_ids,
@@ -38,7 +39,7 @@ from pairpilot_orchestrator.v1_foundation import (
     require_active_membership,
 )
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = V2_SCHEMA_VERSION
 PRODUCTION_NAMESPACE = os.getenv("PAIRPILOT_ENVIRONMENT", "production").strip()
 MAX_ACTIVE_TASKS_PER_USER = 3
 MAX_NEW_CONTACTS_PER_TASK = 5

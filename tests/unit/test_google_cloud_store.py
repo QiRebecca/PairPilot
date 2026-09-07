@@ -43,6 +43,25 @@ def test_candidate_collection_prefix_changes_physical_authority_boundary() -> No
     )
 
 
+def test_product_entity_writes_receive_canonical_runtime_metadata() -> None:
+    store = GoogleCloudStore.__new__(GoogleCloudStore)
+    store.environment = "candidate"
+    normalized = store._with_v2_metadata(
+        "intent_posts",
+        {"schema_version": 3, "namespace": "candidate", "status": "OPEN"},
+    )
+    assert normalized["schema_version"] == 4
+    assert normalized["environment"] == "candidate"
+    assert normalized["status"] == "OPEN"
+
+
+def test_non_entity_writes_keep_their_own_event_schema() -> None:
+    store = GoogleCloudStore.__new__(GoogleCloudStore)
+    store.environment = "candidate"
+    source = {"schemaVersion": 1, "eventType": "test.event"}
+    assert store._with_v2_metadata("events", source) == source
+
+
 def test_nonproduction_environment_fails_closed_without_prefix(monkeypatch) -> None:
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("PAIRPILOT_ENVIRONMENT", "candidate")

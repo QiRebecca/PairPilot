@@ -279,6 +279,7 @@ async def _ensure_communities() -> None:
         project_id=PROJECT,
         topic_id=EVENT_TOPIC,
         collection_prefix=COLLECTION_PREFIX,
+        environment="candidate",
     )
     timestamp = datetime.now(UTC)
     for definition in COMMUNITIES:

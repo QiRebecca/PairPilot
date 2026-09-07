@@ -289,6 +289,7 @@ async def _seed_memory_volume(users: list[ControlledUser]) -> list[str]:
         project_id=PROJECT,
         topic_id=EVENT_TOPIC,
         collection_prefix=COLLECTION_PREFIX,
+        environment="candidate",
     )
     statuses = ("PROPOSED", "CONFIRMED", "REJECTED", "ARCHIVED")
     memory_types = (

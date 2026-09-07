@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import re
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
@@ -15,6 +16,11 @@ from uuid import uuid4
 
 import google.auth
 from google.auth.transport.requests import AuthorizedSession
+
+from pairpilot_orchestrator.schema_registry import (
+    V2_ENTITY_COLLECTION_SET,
+    V2_SCHEMA_VERSION,
+)
 
 
 def encode_value(value: Any) -> dict[str, Any]:
@@ -90,6 +96,7 @@ class GoogleCloudStore:
         topic_id: str = "pairpilot-events",
         database_id: str = "(default)",
         collection_prefix: str = "",
+        environment: str | None = None,
     ) -> None:
         if collection_prefix and not re.fullmatch(
             r"[a-z][a-z0-9_]{0,39}_", collection_prefix
@@ -104,6 +111,17 @@ class GoogleCloudStore:
         self.project_id = project_id
         self.topic_id = topic_id
         self.collection_prefix = collection_prefix
+        self.environment = (
+            environment or os.getenv("PAIRPILOT_ENVIRONMENT", "production")
+        ).strip().lower()
+        if self.environment not in {
+            "local",
+            "test",
+            "candidate",
+            "demo",
+            "production",
+        }:
+            raise ValueError("environment is not a supported deployment class")
         self._documents = (
             "https://firestore.googleapis.com/v1/projects/"
             f"{project_id}/databases/{database_id}/documents"
@@ -131,6 +149,15 @@ class GoogleCloudStore:
             f"projects/{self.project_id}/databases/(default)/documents/"
             f"{self._physical_collection(collection)}/{document_id}"
         )
+
+    def _with_v2_metadata(
+        self, collection: str, data: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        clean = dict(data)
+        if collection in V2_ENTITY_COLLECTION_SET:
+            clean["schema_version"] = V2_SCHEMA_VERSION
+            clean["environment"] = self.environment
+        return clean
 
     async def get(self, collection: str, document_id: str) -> dict[str, Any] | None:
         """Read one authoritative document, returning None for a miss."""
@@ -252,10 +279,12 @@ class GoogleCloudStore:
     ) -> dict[str, Any]:
         """Write an application document at a deterministic ID."""
 
+        normalized = self._with_v2_metadata(collection, data)
+
         def write() -> dict[str, Any]:
             response = self._session.patch(
                 self._document_url(collection, document_id),
-                json={"fields": encode_fields(data)},
+                json={"fields": encode_fields(normalized)},
                 timeout=15,
             )
             response.raise_for_status()
@@ -268,11 +297,13 @@ class GoogleCloudStore:
     ) -> bool:
         """Create exactly once and return False on an existing document."""
 
+        normalized = self._with_v2_metadata(collection, data)
+
         def write() -> bool:
             response = self._session.post(
                 f"{self._documents}/{quote(self._physical_collection(collection))}",
                 params={"documentId": document_id},
-                json={"fields": encode_fields(data)},
+                json={"fields": encode_fields(normalized)},
                 timeout=15,
             )
             if response.status_code == 409:
@@ -285,10 +316,43 @@ class GoogleCloudStore:
     async def commit_writes(self, writes: list[dict[str, Any]]) -> dict[str, Any]:
         """Atomically commit preconditioned Firestore writes."""
 
+        normalized_writes: list[dict[str, Any]] = []
+        physical_prefix = self.collection_prefix
+        for source in writes:
+            write = dict(source)
+            update = source.get("update")
+            if isinstance(update, Mapping):
+                normalized_update = dict(update)
+                physical_collection = str(update.get("name", "")).split(
+                    "/documents/", 1
+                )[-1].split("/", 1)[0]
+                logical_collection = (
+                    physical_collection[len(physical_prefix) :]
+                    if physical_prefix
+                    and physical_collection.startswith(physical_prefix)
+                    else physical_collection
+                )
+                if logical_collection in V2_ENTITY_COLLECTION_SET:
+                    fields = dict(update.get("fields", {}))
+                    fields["schema_version"] = encode_value(V2_SCHEMA_VERSION)
+                    fields["environment"] = encode_value(self.environment)
+                    normalized_update["fields"] = fields
+                    update_mask = normalized_update.get("updateMask")
+                    if isinstance(update_mask, Mapping):
+                        normalized_mask = dict(update_mask)
+                        field_paths = list(normalized_mask.get("fieldPaths", []))
+                        for field in ("schema_version", "environment"):
+                            if field not in field_paths:
+                                field_paths.append(field)
+                        normalized_mask["fieldPaths"] = field_paths
+                        normalized_update["updateMask"] = normalized_mask
+                    write["update"] = normalized_update
+            normalized_writes.append(write)
+
         def commit() -> dict[str, Any]:
             response = self._session.post(
                 f"{self._documents}:commit",
-                json={"writes": writes},
+                json={"writes": normalized_writes},
                 timeout=20,
             )
             response.raise_for_status()

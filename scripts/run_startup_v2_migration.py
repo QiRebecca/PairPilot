@@ -11,7 +11,10 @@ import sys
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-MIGRATION_IDS = ("V2_001_schema_registry_and_environment",)
+MIGRATION_IDS = (
+    "V2_001_schema_registry_and_environment",
+    "V2_002_runtime_metadata_convergence",
+)
 PRODUCTION_CONFIRMATION = "APPLY_V2_TO_PRODUCTION"
 
 
@@ -67,6 +70,7 @@ async def main() -> None:
     store = GoogleCloudStore(
         project_id=args.project,
         collection_prefix=args.collection_prefix,
+        environment=args.environment,
     )
     result = await run_migration(
         store,

@@ -15,6 +15,7 @@ from pairpilot_orchestrator.startup_v2_migrations import (
 )
 
 MIGRATION_ID = "V2_001_schema_registry_and_environment"
+CONVERGENCE_MIGRATION_ID = "V2_002_runtime_metadata_convergence"
 
 
 class MigrationMemoryStore:
@@ -103,7 +104,69 @@ async def test_candidate_apply_is_idempotent() -> None:
     assert first["applied"] is True
     assert store.collections["matches"]["match-a"]["schema_version"] == 4
 
-    second = await apply_migration(store, plan, allow_writes=True)
+    converged_plan = await plan_migration(
+        store, migration_id=MIGRATION_ID, environment="candidate"
+    )
+    assert converged_plan.mutations == ()
+    second = await apply_migration(store, converged_plan, allow_writes=True)
+    assert second["already_applied"] is True
+
+
+@pytest.mark.asyncio
+async def test_applied_migration_fails_loudly_when_new_drift_appears() -> None:
+    store = MigrationMemoryStore()
+    await store.create(
+        "matches", "match-a", {"schema_version": 3, "namespace": "candidate"}
+    )
+    first_plan = await plan_migration(
+        store, migration_id=MIGRATION_ID, environment="candidate"
+    )
+    await apply_migration(store, first_plan, allow_writes=True)
+    await store.create(
+        "matches", "match-b", {"schema_version": 3, "namespace": "candidate"}
+    )
+    drifted_plan = await plan_migration(
+        store, migration_id=MIGRATION_ID, environment="candidate"
+    )
+    with pytest.raises(RuntimeError, match="new drift"):
+        await apply_migration(store, drifted_plan, allow_writes=True)
+
+
+@pytest.mark.asyncio
+async def test_v2_002_converges_records_created_after_v2_001() -> None:
+    store = MigrationMemoryStore()
+    await store.create(
+        "matches", "match-a", {"schema_version": 3, "namespace": "candidate"}
+    )
+    first_plan = await plan_migration(
+        store, migration_id=MIGRATION_ID, environment="candidate"
+    )
+    await apply_migration(store, first_plan, allow_writes=True)
+    await store.create(
+        "intent_posts",
+        "post-after-v2-001",
+        {"schema_version": 3, "namespace": "candidate"},
+    )
+
+    convergence_plan = await plan_migration(
+        store,
+        migration_id=CONVERGENCE_MIGRATION_ID,
+        environment="candidate",
+    )
+    assert len(convergence_plan.mutations) == 1
+    result = await apply_migration(store, convergence_plan, allow_writes=True)
+    assert result["applied"] is True
+    converged = store.collections["intent_posts"]["post-after-v2-001"]
+    assert converged["schema_version"] == 4
+    assert converged["environment"] == "candidate"
+
+    final_plan = await plan_migration(
+        store,
+        migration_id=CONVERGENCE_MIGRATION_ID,
+        environment="candidate",
+    )
+    assert final_plan.mutations == ()
+    second = await apply_migration(store, final_plan, allow_writes=True)
     assert second["already_applied"] is True
 
 

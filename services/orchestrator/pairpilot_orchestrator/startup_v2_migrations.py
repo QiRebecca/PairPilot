@@ -14,55 +14,12 @@ from hashlib import sha256
 from typing import Any, Protocol
 
 from pairpilot_orchestrator.infrastructure.google_cloud import encode_fields
-
-V2_SCHEMA_VERSION = 4
-PRODUCTION_CONFIRMATION = "APPLY_V2_TO_PRODUCTION"
-
-V2_ENTITY_COLLECTIONS = (
-    "users",
-    "personal_agents",
-    "communities",
-    "community_memberships",
-    "task_workspaces",
-    "conversations",
-    "conversation_messages",
-    "intent_posts",
-    "intent_private_data",
-    "saved_posts",
-    "saved_searches",
-    "candidate_assessments",
-    "candidate_rank_events",
-    "coordination_rooms",
-    "room_participants",
-    "room_messages",
-    "proposals",
-    "proposal_versions",
-    "holds",
-    "human_approvals",
-    "matches",
-    "match_participants",
-    "contact_cards",
-    "relationships",
-    "relationship_events",
-    "memories",
-    "memory_usage_events",
-    "decisions",
-    "notifications",
-    "notification_settings",
-    "user_autonomy_configs",
-    "blocks",
-    "reports",
-    "outcomes",
-    "agent_invocations",
-    "job_failures",
-    "usage_quotas",
-    "moderation_actions",
-    "operator_job_actions",
-    "dead_letter_messages",
-    "relationship_usage_events",
-    "memory_usage_events",
-    "audit_events",
+from pairpilot_orchestrator.schema_registry import (
+    V2_ENTITY_COLLECTIONS,
+    V2_SCHEMA_VERSION,
 )
+
+PRODUCTION_CONFIRMATION = "APPLY_V2_TO_PRODUCTION"
 
 
 class MigrationStore(Protocol):
@@ -194,7 +151,15 @@ MIGRATIONS: dict[str, MigrationDefinition] = {
         description="Add V2 schema version and classify record environments",
         collections=V2_ENTITY_COLLECTIONS,
         transform=_v2_001_transform,
-    )
+    ),
+    "V2_002_runtime_metadata_convergence": MigrationDefinition(
+        migration_id="V2_002_runtime_metadata_convergence",
+        description=(
+            "Converge records created after V2_001 on the canonical V2 envelope"
+        ),
+        collections=V2_ENTITY_COLLECTIONS,
+        transform=_v2_001_transform,
+    ),
 }
 
 
@@ -303,6 +268,10 @@ async def apply_migration(
     if existing is not None:
         if existing.get("checksum") != plan.checksum:
             raise RuntimeError("applied migration checksum does not match source")
+        if plan.mutations:
+            raise RuntimeError(
+                "applied migration has new drift; add a new versioned migration"
+            )
         return {**plan.public_summary(), "applied": False, "already_applied": True}
 
     for offset in range(0, len(plan.mutations), 400):

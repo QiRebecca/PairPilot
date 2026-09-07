@@ -378,6 +378,7 @@ def _store() -> GoogleCloudStore:
         project_id=settings.project_id,
         topic_id=settings.event_topic_id,
         collection_prefix=settings.collection_prefix,
+        environment=settings.environment,
     )
 
 

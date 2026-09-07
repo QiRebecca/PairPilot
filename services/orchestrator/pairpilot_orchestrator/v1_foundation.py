@@ -10,8 +10,9 @@ from typing import Any
 from pairpilot_orchestrator.auth.authorization import require_verified_email
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
 from pairpilot_orchestrator.config import runtime_environment
+from pairpilot_orchestrator.schema_registry import V2_SCHEMA_VERSION
 
-V1_SCHEMA_VERSION = 3
+V1_SCHEMA_VERSION = V2_SCHEMA_VERSION
 DEFAULT_COMMUNITY_ID = "community_icml_seoul_2026"
 SUPPORTED_INTENT_TYPES = {
     "ROOM_SHARE",
