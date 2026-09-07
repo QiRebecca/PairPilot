@@ -19,7 +19,8 @@ const post = {
   status: "OPEN",
   public_display_name: "Nora Chen",
   public_title: "Coffee chat about multi-agent systems",
-  public_summary: "Looking for a practical exchange about agent interoperability.",
+  public_summary:
+    "Looking for a practical exchange about agent interoperability.",
   public_constraints: {
     location: "London",
     date_start: "2026-09-12",
@@ -50,6 +51,12 @@ describe("Explore social intent feed", () => {
           },
         });
       }
+      if (path.includes("/candidates/") && path.endsWith("/contact")) {
+        return Promise.resolve({
+          status: "CONTACTED",
+          result: { contacted: 1, failures: [] },
+        });
+      }
       return Promise.resolve({});
     });
   });
@@ -71,7 +78,9 @@ describe("Explore social intent feed", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Nora Chen")).toBeInTheDocument();
     expect(screen.getByText("London")).toBeInTheDocument();
-    expect(screen.getByText("Why your Agent surfaced this")).toBeInTheDocument();
+    expect(
+      screen.getByText("Why your Agent surfaced this"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Ask my Agent" }));
     await waitFor(() =>
@@ -80,6 +89,11 @@ describe("Explore social intent feed", () => {
         { method: "POST", body: "{}" },
       ),
     );
+    expect(
+      await screen.findByText(
+        /opened a conversation with the other Personal Agent/i,
+      ),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -91,5 +105,46 @@ describe("Explore social intent feed", () => {
     await waitFor(() =>
       expect(screen.getAllByRole("button", { name: "Saved" })).toHaveLength(2),
     );
+  });
+
+  it("does not claim Agent contact when the server found no compatible Post", async () => {
+    authMocks.request.mockImplementation((path: string) => {
+      if (path === "/api/app/explore/search") {
+        return Promise.resolve({
+          items: [post],
+          count: 1,
+          view: "FOR_YOUR_REQUESTS",
+          retrieval: {},
+        });
+      }
+      if (path.includes("/candidates/") && path.endsWith("/contact")) {
+        return Promise.resolve({
+          status: "NO_COMPATIBLE_POST_YET",
+          result: { contacted: 0, failures: [] },
+        });
+      }
+      return Promise.resolve({});
+    });
+    render(
+      <MarketplaceExplorePage
+        tasks={[task]}
+        myPosts={[{ task_id: "task_one", status: "OPEN" }]}
+        communities={[]}
+        navigate={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ask my Agent" }),
+    );
+
+    expect(
+      await screen.findByText(/not compatible with this Request yet/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /opened a conversation with the other Personal Agent/i,
+      ),
+    ).not.toBeInTheDocument();
   });
 });

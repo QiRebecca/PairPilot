@@ -13,6 +13,7 @@ from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
 from pairpilot_orchestrator.firestore_session_service import FirestoreSessionService
 from pairpilot_orchestrator.generic_agent_runtime import (
     AgentRuntimeError,
+    compatible_posts,
     consume_daily_agent_turns,
     load_personal_agent,
     process_published_intent,
@@ -237,6 +238,32 @@ def test_personal_agent_resolves_all_v1_intent_types(
     requested: str, event: str, goal: str, expected: str
 ) -> None:
     assert resolve_task_intent_type(requested, event=event, goal=goal) == expected
+
+
+def test_candidate_compatibility_accepts_equivalent_public_place_labels() -> None:
+    source = {
+        "task_type": "HACKATHON_TEAMMATE",
+        "community_id": "community-ai",
+        "public_constraints": {
+            "event": "AI Conference Hackathon",
+            "location": "London",
+            "date_start": "2026-10-15",
+            "date_end": "2026-10-17",
+        },
+    }
+    target = {
+        "task_type": "HACKATHON_TEAMMATE",
+        "community_id": "community-ai",
+        "public_constraints": {
+            "event": "AI Conference",
+            "location": "London, United Kingdom",
+            "date_start": "2026-10-15",
+            "date_end": "2026-10-17",
+        },
+    }
+    assert compatible_posts(source, target) is True
+    target["public_constraints"]["location"] = "San Francisco, United States"
+    assert compatible_posts(source, target) is False
 
 
 @pytest.mark.asyncio

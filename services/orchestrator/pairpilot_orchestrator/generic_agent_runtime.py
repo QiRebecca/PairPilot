@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Any
@@ -155,6 +156,21 @@ def _date_range(post: dict[str, Any]) -> tuple[date, date]:
     )
 
 
+def _compatible_public_label(source: object, target: object) -> bool:
+    """Match equivalent public labels without treating a shared word as enough."""
+
+    source_text = " ".join(re.findall(r"\w+", str(source).casefold()))
+    target_text = " ".join(re.findall(r"\w+", str(target).casefold()))
+    if not source_text or not target_text:
+        return True
+    if source_text in target_text or target_text in source_text:
+        return True
+    source_words = set(source_text.split())
+    target_words = set(target_text.split())
+    smaller = min(len(source_words), len(target_words))
+    return bool(smaller) and len(source_words & target_words) / smaller >= 0.67
+
+
 def compatible_posts(source: dict[str, Any], target: dict[str, Any]) -> bool:
     try:
         source_type = normalize_intent_type(str(source.get("task_type", "")))
@@ -169,14 +185,13 @@ def compatible_posts(source: dict[str, Any], target: dict[str, Any]) -> bool:
         return False
     source_constraints = dict(source.get("public_constraints", {}))
     target_constraints = dict(target.get("public_constraints", {}))
-    if (
-        str(source_constraints.get("event", "")).casefold()
-        != str(target_constraints.get("event", "")).casefold()
+    if not _compatible_public_label(
+        source_constraints.get("event", ""), target_constraints.get("event", "")
     ):
         return False
-    if (
-        str(source_constraints.get("location", "")).casefold()
-        != str(target_constraints.get("location", "")).casefold()
+    if not _compatible_public_label(
+        source_constraints.get("location", ""),
+        target_constraints.get("location", ""),
     ):
         return False
     source_start, source_end = _date_range(source)

@@ -1933,7 +1933,11 @@ async def app_contact_explore_candidate(
         )
     except AgentRuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return {"status": "CONTACTED", "result": result}
+    contacted = int(result.get("contacted", 0))
+    return {
+        "status": "CONTACTED" if contacted else str(result.get("status")),
+        "result": result,
+    }
 
 
 @app.patch("/api/app/posts/{intent_id}/status")
