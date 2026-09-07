@@ -95,55 +95,64 @@ export function MatchesPage({
       {error ? <div className="form-error">{error}</div> : null}
       {!payload ? (
         <div className="community-loading">Loading Matches…</div>
-      ) : payload.count === 0 ? (
-        <div className="empty-state">
-          <CheckCircle2 />
-          <h3>No confirmed Match yet</h3>
-          <p>
-            Your Agent will bring a negotiated proposal here only after both
-            people approve the same version.
-          </p>
-        </div>
       ) : (
-        <div className="match-section-list">
-          {Object.entries(sectionLabels).map(([section, label]) => {
-            const matches = payload.sections[section] || [];
-            return matches.length ? (
-              <section key={section}>
-                <div className="section-heading">
-                  <h2>{label}</h2>
-                  <span className="status-pill">{matches.length}</span>
-                </div>
-                <div className="request-grid">
-                  {matches.map((match) => (
-                    <button
-                      className="request-card match-list-card"
-                      key={asString(match.match_id)}
-                      onClick={() =>
-                        navigate(`/app/matches/${asString(match.match_id)}`)
-                      }
-                    >
-                      <span className="status-pill">
-                        {asString(match.state).replaceAll("_", " ")}
-                      </span>
-                      <h3>{titleFor(match)}</h3>
-                      <p>
-                        <Clock3 size={12} /> {displayTime(match.start_at)}
-                      </p>
-                      <p>
-                        <MapPin size={12} />{" "}
-                        {asString(
-                          ((match.terms || {}) as RecordValue).location,
-                        ) || "Location to be confirmed"}
-                      </p>
-                      <span>Open Match Detail →</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null;
-          })}
-        </div>
+        <>
+          <section className="match-overview-strip" aria-label="Match summary">
+            {Object.entries(sectionLabels).map(([section, label]) => (
+              <article key={section}>
+                <strong>{(payload.sections[section] || []).length}</strong>
+                <span>{label}</span>
+              </article>
+            ))}
+          </section>
+          {payload.count === 0 ? (
+            <div className="empty-state actionable-empty">
+              <CheckCircle2 />
+              <h3>No confirmed Match yet</h3>
+              <p>
+                Start with a Request. Your Agent will search, negotiate and
+                bring the final proposal to both people for approval.
+              </p>
+              <div className="card-actions">
+                <button className="primary-button" onClick={() => navigate("/app/agent")}>Tell my Agent what I need</button>
+                <button className="secondary-button" onClick={() => navigate("/app/explore")}>Explore active Posts</button>
+              </div>
+            </div>
+          ) : (
+            <div className="match-section-list">
+              {Object.entries(sectionLabels).map(([section, label]) => {
+                const matches = payload.sections[section] || [];
+                return matches.length ? (
+                  <section key={section}>
+                    <div className="section-heading">
+                      <h2>{label}</h2>
+                      <span className="status-pill">{matches.length}</span>
+                    </div>
+                    <div className="request-grid">
+                      {matches.map((match) => (
+                        <button
+                          className="request-card match-list-card"
+                          key={asString(match.match_id)}
+                          onClick={() =>
+                            navigate(`/app/matches/${asString(match.match_id)}`)
+                          }
+                        >
+                          <span className="status-pill">
+                            {asString(match.state).replaceAll("_", " ")}
+                          </span>
+                          <h3>{titleFor(match)}</h3>
+                          <p><Clock3 size={12} /> {displayTime(match.start_at)}</p>
+                          <p><MapPin size={12} /> {asString(((match.terms || {}) as RecordValue).location) || "Location to be confirmed"}</p>
+                          <span>Open plan and actions →</span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null;
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

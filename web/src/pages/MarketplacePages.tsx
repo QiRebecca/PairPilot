@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ArrowRight,
   Bot,
   Bookmark,
   BookmarkCheck,
@@ -7,9 +8,12 @@ import {
   BellRing,
   Flag,
   MapPin,
+  MessageCircle,
   Search,
   ShieldAlert,
+  Sparkles,
   Tags,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth";
@@ -17,6 +21,30 @@ import { useAuth } from "../auth";
 type RecordValue = Record<string, unknown>;
 
 const asString = (value: unknown) => (typeof value === "string" ? value : "");
+
+function initials(value: unknown): string {
+  const words = asString(value).trim().split(/\s+/).filter(Boolean);
+  return (words.slice(0, 2).map((word) => word[0]).join("") || "PP").toUpperCase();
+}
+
+function relativeTime(value: unknown): string {
+  const date = new Date(asString(value));
+  if (Number.isNaN(date.getTime())) return "Recently updated";
+  const minutes = Math.max(1, Math.round((Date.now() - date.getTime()) / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return days < 30 ? `${days}d` : date.toLocaleDateString();
+}
+
+function dateRange(constraints: RecordValue): string {
+  const start = asString(constraints.date_start);
+  const end = asString(constraints.date_end);
+  if (!start && !end) return "Flexible timing";
+  if (!end || start === end) return start;
+  return `${start} – ${end}`;
+}
 
 interface PostDetailResponse {
   post: RecordValue;
@@ -73,6 +101,7 @@ export function MarketplaceExplorePage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [busyPost, setBusyPost] = useState("");
 
   const activeTasks = useMemo(
     () =>
@@ -150,30 +179,263 @@ export function MarketplaceExplorePage({
     }
   }
 
+  function updatePost(intentId: string, update: Partial<RecordValue>) {
+    setResult((current) =>
+      current
+        ? {
+            ...current,
+            items:
+              view === "SAVED" && update.saved === false
+                ? current.items.filter((item) => item.intent_id !== intentId)
+                : current.items.map((item) =>
+                    item.intent_id === intentId ? { ...item, ...update } : item,
+                  ),
+            count:
+              view === "SAVED" && update.saved === false
+                ? Math.max(0, current.count - 1)
+                : current.count,
+          }
+        : current,
+    );
+  }
+
+  async function toggleSaved(post: RecordValue) {
+    const intentId = asString(post.intent_id);
+    const saved = post.saved === true;
+    setBusyPost(`${intentId}:save`);
+    setError("");
+    try {
+      await request(`/api/app/posts/${intentId}/saved`, {
+        method: saved ? "DELETE" : "PUT",
+        body: saved ? undefined : JSON.stringify({ task_id: taskId || null }),
+      });
+      updatePost(intentId, { saved: !saved });
+      setNotice(saved ? "Removed from Saved." : "Saved. Your Agent can revisit this Post.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update Saved.");
+    } finally {
+      setBusyPost("");
+    }
+  }
+
+  async function askAgent(post: RecordValue) {
+    const intentId = asString(post.intent_id);
+    const postType = asString(post.task_type).toUpperCase();
+    const relatedTaskId =
+      asString(post.related_task_id) ||
+      taskId ||
+      asString(activeTasks.find((task) => asString(task.task_type).toUpperCase() === postType)?.task_id);
+    if (!relatedTaskId) {
+      setError("Create or publish a compatible Request first, then your Agent can evaluate this Post.");
+      return;
+    }
+    setBusyPost(`${intentId}:contact`);
+    setError("");
+    try {
+      await request(`/api/app/tasks/${relatedTaskId}/candidates/${intentId}/contact`, {
+        method: "POST",
+        body: "{}",
+      });
+      setNotice("Your Agent is evaluating this Post and talking with the other Personal Agent.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Your Agent could not contact this Post.");
+    } finally {
+      setBusyPost("");
+    }
+  }
+
   return (
     <div className="beta-page marketplace-page">
-      <header className="page-title">
-        <span className="eyebrow">ACTIVE INTENT MARKETPLACE</span>
-        <h1>Explore Posts, not profiles.</h1>
-        <p>Search current needs inside trusted Communities. Your Personal Agent evaluates evidence and contacts the other Agent before people exchange details.</p>
+      <header className="marketplace-hero">
+        <div>
+          <span className="eyebrow">YOUR TRUSTED INTENT FEED</span>
+          <h1>Explore</h1>
+          <p>
+            See what people in your Communities want to do now. Your Agent can
+            evaluate fit and start a private Agent-to-Agent conversation.
+          </p>
+        </div>
+        <button className="primary-button" onClick={() => navigate("/app/agent")}>
+          <Sparkles size={16} /> Tell my Agent what I need
+        </button>
       </header>
       <nav className="marketplace-tabs" aria-label="Marketplace views">
-        {MARKETPLACE_VIEWS.map(([id, label]) => <button key={id} className={view === id ? "active" : ""} onClick={() => setView(id)}>{label}</button>)}
+        {MARKETPLACE_VIEWS.map(([id, label]) => (
+          <button
+            key={id}
+            className={view === id ? "active" : ""}
+            onClick={() => setView(id)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
       <section className="marketplace-search-panel">
-        <label className="explore-search"><Search size={17} /><input aria-label="Natural-language Post search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try: dinner after the AI keynote with someone interested in agents" /></label>
+        <label className="explore-search">
+          <Search size={18} />
+          <input
+            aria-label="Natural-language Post search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search needs, interests, places, dates…"
+          />
+        </label>
         <div className="marketplace-filters">
-          {view === "FOR_YOUR_REQUESTS" ? <label>Request<select value={taskId} onChange={(event) => setTaskId(event.target.value)}><option value="">All active Requests</option>{activeTasks.map((task) => <option key={asString(task.task_id)} value={asString(task.task_id)}>{asString(task.title)}</option>)}</select></label> : null}
-          <label>Community<select value={communityId} onChange={(event) => setCommunityId(event.target.value)}><option value="">All joined</option>{communities.map((community) => <option key={asString(community.community_id)} value={asString(community.community_id)}>{asString(community.name)}</option>)}</select></label>
-          <label>Type<select value={intentType} onChange={(event) => setIntentType(event.target.value)}><option value="">All types</option><option value="ROOM_SHARE">Room share</option><option value="MEAL_COMPANION">Meal companion</option><option value="COFFEE_CHAT">Coffee chat</option><option value="EVENT_BUDDY">Event buddy</option><option value="HACKATHON_TEAMMATE">Hackathon teammate</option></select></label>
-          <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or venue" /></label>
-          <button className="secondary-button monitor-search" disabled={saving} onClick={() => void saveAndMonitor()}><BellRing size={15} />{saving ? "Saving…" : "Save & monitor"}</button>
+          {view === "FOR_YOUR_REQUESTS" ? (
+            <label>
+              For Request
+              <select value={taskId} onChange={(event) => setTaskId(event.target.value)}>
+                <option value="">All active Requests</option>
+                {activeTasks.map((task) => (
+                  <option key={asString(task.task_id)} value={asString(task.task_id)}>
+                    {asString(task.title)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label>
+            Community
+            <select value={communityId} onChange={(event) => setCommunityId(event.target.value)}>
+              <option value="">All joined</option>
+              {communities.map((community) => (
+                <option key={asString(community.community_id)} value={asString(community.community_id)}>
+                  {asString(community.name)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Type
+            <select value={intentType} onChange={(event) => setIntentType(event.target.value)}>
+              <option value="">All types</option>
+              <option value="ROOM_SHARE">Room share</option>
+              <option value="MEAL_COMPANION">Meal companion</option>
+              <option value="COFFEE_CHAT">Coffee chat</option>
+              <option value="EVENT_BUDDY">Event buddy</option>
+              <option value="HACKATHON_TEAMMATE">Hackathon teammate</option>
+            </select>
+          </label>
+          <label>
+            Location
+            <input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or venue" />
+          </label>
+          <button className="secondary-button monitor-search" disabled={saving} onClick={() => void saveAndMonitor()}>
+            <BellRing size={15} /> {saving ? "Saving…" : "Monitor this feed"}
+          </button>
         </div>
       </section>
-      {notice ? <div className="form-notice">{notice}</div> : null}
-      {error ? <div className="form-error">{error}</div> : null}
-      <div className="marketplace-result-heading"><strong>{result ? `${result.count} Posts` : "Searching…"}</strong><small>{result?.retrieval.semantic_vector ? "Structured + semantic retrieval" : "Structured + text relevance; vector index pending candidate backfill"}</small></div>
-      {result?.items.length ? <div className="explore-grid">{result.items.map((post) => { const requirements = Array.isArray(post.public_requirements) ? post.public_requirements.map(String) : []; const reasons = Array.isArray(post.surfaced_reasons) ? post.surfaced_reasons.map(String) : []; return <button className="explore-card explore-card-button" key={asString(post.intent_id)} onClick={() => navigate(`/app/posts/${asString(post.intent_id)}`)}><span className={`status-pill status-${asString(post.status).toLowerCase()}`}>{post.saved ? "SAVED" : asString(post.status)}</span><h2>{asString(post.public_title)}</h2><p>{asString(post.public_summary)}</p>{requirements.length ? <div className="tag-row">{requirements.slice(0, 4).map((item) => <span key={item}><Tags size={11} />{item}</span>)}</div> : null}<div className="surfaced-reason"><Search size={14} /><small>{reasons.join(" · ")}</small></div><footer><span>Open direct Post Detail →</span></footer></button>; })}</div> : result ? <div className="empty-state"><Search /><h3>No Posts in this view</h3><p>Try removing a filter, changing Request context, or joining another Community.</p></div> : null}
+      <div className="marketplace-layout">
+        <main className="intent-stream" aria-live="polite">
+          {notice ? <div className="form-notice">{notice}</div> : null}
+          {error ? <div className="form-error" role="alert">{error}</div> : null}
+          <div className="marketplace-result-heading">
+            <strong>{result ? `${result.count} active Posts` : "Refreshing your feed…"}</strong>
+            <small>Only public, active Posts from your trusted scope</small>
+          </div>
+          {result?.items.length ? (
+            result.items.map((post) => {
+              const intentId = asString(post.intent_id);
+              const constraints = (post.public_constraints || {}) as RecordValue;
+              const requirements = Array.isArray(post.public_requirements)
+                ? post.public_requirements.map(String)
+                : [];
+              const reasons = Array.isArray(post.surfaced_reasons)
+                ? post.surfaced_reasons.map(String)
+                : [];
+              const owned = view === "MY_POSTS";
+              return (
+                <article className="intent-feed-card" key={intentId}>
+                  <header className="intent-author-row">
+                    <div className="intent-avatar">{initials(post.public_display_name)}</div>
+                    <div>
+                      <strong>{asString(post.public_display_name) || "Community member"}</strong>
+                      <span>
+                        <Bot size={12} /> represented by a Personal Agent · {relativeTime(post.updated_at || post.published_at)}
+                      </span>
+                    </div>
+                    <span className={`status-pill status-${asString(post.status).toLowerCase()}`}>
+                      {asString(post.status)}
+                    </span>
+                  </header>
+                  <button className="intent-post-body" onClick={() => navigate(`/app/posts/${intentId}`)}>
+                    <span className="intent-type-label">{asString(post.task_type).replaceAll("_", " ")}</span>
+                    <h2>{asString(post.public_title)}</h2>
+                    <p>{asString(post.public_summary)}</p>
+                    <div className="intent-facts">
+                      <span><CalendarDays size={14} /> {dateRange(constraints)}</span>
+                      <span><MapPin size={14} /> {asString(constraints.location) || "Flexible location"}</span>
+                      <span><UsersRound size={14} /> {String(post.capacity_remaining ?? 1)} place available</span>
+                    </div>
+                    {requirements.length ? (
+                      <div className="tag-row">
+                        {requirements.slice(0, 5).map((item) => (
+                          <span key={item}><Tags size={11} /> {item}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="agent-fit-note">
+                      <Sparkles size={15} />
+                      <span><strong>Why your Agent surfaced this</strong>{reasons.join(" · ") || "Relevant to your current discovery scope"}</span>
+                    </div>
+                  </button>
+                  <footer className="intent-actions">
+                    {owned ? (
+                      <button onClick={() => navigate(`/app/posts/${intentId}`)}><ArrowRight size={15} /> Manage Post</button>
+                    ) : (
+                      <button
+                        className="agent-action"
+                        disabled={Boolean(busyPost)}
+                        onClick={() => void askAgent(post)}
+                      >
+                        <MessageCircle size={15} />
+                        {busyPost === `${intentId}:contact` ? "Agents are talking…" : "Ask my Agent"}
+                      </button>
+                    )}
+                    {!owned ? (
+                      <button disabled={Boolean(busyPost)} onClick={() => void toggleSaved(post)}>
+                        {post.saved ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
+                        {busyPost === `${intentId}:save` ? "Saving…" : post.saved ? "Saved" : "Save"}
+                      </button>
+                    ) : null}
+                    <button onClick={() => navigate(`/app/posts/${intentId}`)}>View details <ArrowRight size={14} /></button>
+                  </footer>
+                </article>
+              );
+            })
+          ) : result ? (
+            <div className="empty-state"><Search /><h3>No Posts in this view</h3><p>Try removing a filter, changing Request context, or joining another Community.</p></div>
+          ) : (
+            <div className="feed-skeleton" aria-label="Loading Posts"><span /><span /><span /></div>
+          )}
+        </main>
+        <aside className="marketplace-context-rail">
+          <section>
+            <span className="eyebrow">YOUR ACTIVE REQUESTS</span>
+            <strong>{activeTasks.length}</strong>
+            <p>Your Agent uses one of these as context before contacting another Agent.</p>
+            {activeTasks.slice(0, 3).map((task) => (
+              <button key={asString(task.task_id)} onClick={() => navigate(`/app/requests/${asString(task.task_id)}`)}>
+                <span>{asString(task.title)}</span><ArrowRight size={13} />
+              </button>
+            ))}
+          </section>
+          <section>
+            <span className="eyebrow">TRUSTED COMMUNITIES</span>
+            <strong>{communities.length}</strong>
+            <p>Feed visibility follows your real memberships and block settings.</p>
+            {communities.slice(0, 4).map((community) => (
+              <button key={asString(community.community_id)} onClick={() => navigate(`/app/communities/${asString(community.community_id)}`)}>
+                <span>{asString(community.name)}</span><ArrowRight size={13} />
+              </button>
+            ))}
+          </section>
+          <section className="feed-safety-note">
+            <ShieldAlert size={17} />
+            <div><strong>Privacy by design</strong><p>Login email, private chat, protected Memory and hidden constraints never appear in this feed.</p></div>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -198,6 +198,25 @@ async def test_saved_post_lifecycle_is_idempotent_and_owner_scoped() -> None:
     )
     assert after["items"] == []
 
+    detail_after_remove = await get_post_detail(
+        store, principal("viewer"), "intent_saved"
+    )
+    assert detail_after_remove["saved"] is False
+
+    await save_post(
+        store, principal("viewer"), intent_id="intent_saved", task_id=None
+    )
+    latest = await search_marketplace(
+        store, principal("viewer"), ExploreSearchInput(view="LATEST")
+    )
+    assert latest["items"][0]["saved"] is True
+    saved_again = await search_marketplace(
+        store, principal("viewer"), ExploreSearchInput(view="SAVED")
+    )
+    assert [item["intent_id"] for item in saved_again["items"]] == [
+        "intent_saved"
+    ]
+
 
 @pytest.mark.asyncio
 async def test_monitored_saved_search_is_persisted_and_emits_event() -> None:

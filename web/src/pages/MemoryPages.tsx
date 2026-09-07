@@ -79,16 +79,26 @@ export function MemoryPage({ navigate }: { navigate: (path: string) => void }) {
       {!payload ? (
         <div className="community-loading">Loading Memory…</div>
       ) : payload.count === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state actionable-empty">
           <MemoryStick />
           <h3>No retained Memory</h3>
           <p>
-            Your Agent may propose scoped Memory after real work. You decide
-            whether it becomes usable.
+            Keep talking to your Personal Agent and complete real plans. It can
+            propose useful preferences with a source and scope; nothing becomes
+            reusable until you confirm it.
           </p>
+          <button className="primary-button" onClick={() => navigate("/app/agent")}>
+            Talk to my Agent
+          </button>
         </div>
       ) : (
         <>
+          <section className="memory-overview-strip" aria-label="Memory summary">
+            <article><strong>{payload.count}</strong><span>Total retained</span></article>
+            <article><strong>{(payload.groups.WAITING_FOR_CONFIRMATION || []).length}</strong><span>Waiting for you</span></article>
+            <article><strong>{(payload.groups.RECENTLY_USED || []).length}</strong><span>Recently used</span></article>
+            <article><strong>{(payload.groups.ARCHIVED || []).length}</strong><span>Archived</span></article>
+          </section>
           <nav className="memory-tabs" aria-label="Memory categories">
             {groups.map((item) => (
               <button

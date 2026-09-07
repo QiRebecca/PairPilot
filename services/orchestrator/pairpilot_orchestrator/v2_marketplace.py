@@ -224,16 +224,17 @@ async def search_marketplace(
             "intent_posts", filters=[("status", "EQUAL", DISCOVERABLE_STATUS)]
         )
 
-    saved_ids: set[str] = set()
-    if body.view == "SAVED":
-        saved = await store.query_documents(
-            "saved_posts", filters=[("owner_uid", "EQUAL", principal.uid)]
-        )
-        saved_ids = {
-            str(item.get("intent_id"))
-            for item in saved
-            if item.get("status", "ACTIVE") == "ACTIVE"
-        }
+    # Load the viewer's active saves for every view so feed cards can render an
+    # authoritative saved state. Previously this happened only on the Saved
+    # tab, which made the same Post look unsaved everywhere else.
+    saved = await store.query_documents(
+        "saved_posts", filters=[("owner_uid", "EQUAL", principal.uid)]
+    )
+    saved_ids = {
+        str(item.get("intent_id"))
+        for item in saved
+        if item.get("status", "ACTIVE") == "ACTIVE"
+    }
 
     connected_agents: set[str] = set()
     if body.view == "FROM_CONNECTIONS":
@@ -334,7 +335,7 @@ async def get_post_detail(
     saved = await store.get("saved_posts", saved_id)
     return {
         "post": {**public_post_projection(post), "owned_by_viewer": is_owner},
-        "saved": saved is not None,
+        "saved": saved is not None and saved.get("status", "ACTIVE") == "ACTIVE",
     }
 
 
@@ -362,7 +363,13 @@ async def save_post(
         "status": "ACTIVE",
         "created_at": datetime.now(UTC),
     }
-    await store.create("saved_posts", saved_id, saved)
+    # Re-saving after removal must reactivate the deterministic record instead
+    # of silently returning its previous REMOVED state.
+    existing = await store.get("saved_posts", saved_id)
+    if existing is None:
+        await store.create("saved_posts", saved_id, saved)
+    else:
+        await store.upsert("saved_posts", saved_id, saved)
     return _clean((await store.get("saved_posts", saved_id)) or saved)
 
 

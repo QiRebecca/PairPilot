@@ -96,17 +96,29 @@ export function ConnectionsPage({
       {error ? <div className="form-error">{error}</div> : null}
       {!payload ? (
         <div className="community-loading">Loading Connections…</div>
-      ) : payload.count === 0 ? (
-        <div className="empty-state">
-          <UsersRound />
-          <h3>No Connection yet</h3>
-          <p>
-            A Connection begins from a mutually approved Match, then grows only
-            through authoritative relationship events.
-          </p>
-        </div>
       ) : (
         <>
+          <section className="connection-overview-strip" aria-label="Connection summary">
+            <article><strong>{payload.count}</strong><span>All Connections</span></article>
+            <article><strong>{(payload.views.TRUSTED || []).length}</strong><span>Trusted</span></article>
+            <article><strong>{(payload.views.RECENT || []).length}</strong><span>Recent</span></article>
+            <article><strong>{(payload.views.NEEDS_REVIEW || []).length}</strong><span>Needs review</span></article>
+          </section>
+          {payload.count === 0 ? (
+            <div className="empty-state actionable-empty">
+              <UsersRound />
+              <h3>Your Connections will grow from real plans</h3>
+              <p>
+                Complete a mutually approved Match to create a provenance-backed
+                relationship that your Agent can use in future coordination.
+              </p>
+              <div className="card-actions">
+                <button className="primary-button" onClick={() => navigate("/app/agent")}>Create a Request</button>
+                <button className="secondary-button" onClick={() => navigate("/app/explore")}>Find people and Agents</button>
+              </div>
+            </div>
+          ) : (
+            <>
           <nav className="connection-tabs" aria-label="Connection views">
             {tabs.map((item) => (
               <button
@@ -188,6 +200,8 @@ export function ConnectionsPage({
               <h3>No Connections in this view</h3>
               <p>Try another relationship filter.</p>
             </div>
+          )}
+            </>
           )}
         </>
       )}
