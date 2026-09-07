@@ -68,9 +68,9 @@ def _users(api_key: str) -> list[ControlledUser]:
                 api_key,
             ),
         )
-        profile = _api(
-            user, "GET", "/api/app/bootstrap", retry_transport=True
-        )["profile"]
+        profile = _api(user, "GET", "/api/app/bootstrap", retry_transport=True)[
+            "profile"
+        ]
         user.uid = str(profile["uid"])
         users.append(user)
     return users
@@ -78,9 +78,7 @@ def _users(api_key: str) -> list[ControlledUser]:
 
 def _states(users: list[ControlledUser]) -> dict[int, dict[str, Any]]:
     return {
-        user.index: _api(
-            user, "GET", "/api/app/bootstrap", retry_transport=True
-        )
+        user.index: _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
         for user in users
     }
 
@@ -151,9 +149,7 @@ def _wait_for_assessment(
 ) -> dict[str, Any]:
     deadline = time.monotonic() + 180
     while time.monotonic() < deadline:
-        state = _api(
-            owner, "GET", "/api/app/bootstrap", retry_transport=True
-        )
+        state = _api(owner, "GET", "/api/app/bootstrap", retry_transport=True)
         assessment = next(
             (
                 item
@@ -182,9 +178,7 @@ def _contact_pairs(
             f"contacting candidate pair {len(assessments) + 1:02d}/{len(pairs):02d}",
             file=sys.stderr,
         )
-        state = _api(
-            owner, "GET", "/api/app/bootstrap", retry_transport=True
-        )
+        state = _api(owner, "GET", "/api/app/bootstrap", retry_transport=True)
         existing = next(
             (
                 item
@@ -467,7 +461,23 @@ def _personal_agent_two_turn_gate(
     users: list[ControlledUser], states: dict[int, dict[str, Any]]
 ) -> dict[str, Any]:
     user = users[-1]
-    task = states[user.index]["tasks"][0]
+    open_task_ids = {
+        str(post["task_id"])
+        for post in states[user.index]["myPosts"]
+        if post.get("status") == "OPEN" and post.get("task_id")
+    }
+    task = next(
+        (
+            item
+            for item in states[user.index]["tasks"]
+            if str(item.get("task_id")) in open_task_ids
+            and str(item.get("status") or "").upper()
+            not in {"CANCELLED", "CLOSED", "COMPLETED"}
+        ),
+        None,
+    )
+    if task is None:
+        raise RuntimeError("no active Request with an OPEN Post is available")
     task_id = str(task["task_id"])
     global_conversation = next(
         item
@@ -500,9 +510,7 @@ def _personal_agent_two_turn_gate(
     )
     if "draft_intent_post" not in first["tool_names"]:
         raise RuntimeError("first Personal Agent turn did not persist a Post draft")
-    if not {"revise_intent_post", "draft_intent_post"} & set(
-        second["tool_names"]
-    ):
+    if not {"revise_intent_post", "draft_intent_post"} & set(second["tool_names"]):
         raise RuntimeError("second Personal Agent turn did not revise the Post draft")
     third = _stream_chat_turn(
         user,
@@ -518,9 +526,7 @@ def _personal_agent_two_turn_gate(
         raise RuntimeError(
             "third Personal Agent turn did not publish the approved Post"
         )
-    task_detail = _api(
-        user, "GET", f"/api/app/tasks/{task_id}", retry_transport=True
-    )
+    task_detail = _api(user, "GET", f"/api/app/tasks/{task_id}", retry_transport=True)
     private_intent = task_detail.get("privateIntent") or {}
     draft = private_intent.get("public_draft") or {}
     serialized_draft = json.dumps(draft).casefold()
@@ -531,14 +537,15 @@ def _personal_agent_two_turn_gate(
         raise RuntimeError("the authoritative Post draft did not retain the revision")
     post = next(
         item
-        for item in _api(
-            user, "GET", "/api/app/bootstrap", retry_transport=True
-        )["myPosts"]
+        for item in _api(user, "GET", "/api/app/bootstrap", retry_transport=True)[
+            "myPosts"
+        ]
         if item.get("task_id") == task_id
     )
-    if post.get("status") != "OPEN" or "professional ai" not in str(
-        post.get("public_title") or ""
-    ).casefold():
+    if (
+        post.get("status") != "OPEN"
+        or "professional ai" not in str(post.get("public_title") or "").casefold()
+    ):
         raise RuntimeError("the approved Post was not authoritatively published")
     return {
         "same_conversation_id": conversation_id,
@@ -593,9 +600,7 @@ def main() -> None:
         plans = []
         for index, (owner, own, peer, _peer_post) in enumerate(pairs[:7]):
             plans.append(
-                _approve_plan(
-                    owner, peer, str(own["task_id"]), assessments[index]
-                )
+                _approve_plan(owner, peer, str(own["task_id"]), assessments[index])
             )
             print(f"Match committed {index + 1:02d}/07", file=sys.stderr)
         outcomes = _complete_or_cancel(plans, pairs)

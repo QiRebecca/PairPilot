@@ -391,9 +391,7 @@ async def _scoped_context(
             for item in relationships[:MAX_CONTEXT_ITEMS]
         ],
         "autonomyMode": autonomy.get("default_mode", "COPILOT"),
-        "autonomyActions": _effective_autonomy_actions(
-            autonomy, autonomy_override
-        ),
+        "autonomyActions": _effective_autonomy_actions(autonomy, autonomy_override),
         "activeCommunityIds": sorted(memberships),
     }
     if task_id is None:
@@ -837,6 +835,21 @@ def _build_tools(
         confirmation: str,
     ) -> dict[str, Any]:
         """Publish only with the owner's exact explicit confirmation phrase."""
+
+        task = await _task(store, principal, scoped_task_id)
+        if str(task.get("status") or "").upper() in {
+            "CANCELLED",
+            "CLOSED",
+            "COMPLETED",
+        }:
+            return {
+                "status": "TASK_NOT_ACTIVE",
+                "task_id": scoped_task_id,
+                "message": (
+                    "This Request is closed. Create or select an active Request "
+                    "before publishing a Post."
+                ),
+            }
 
         publish_level = await autonomy_level_for(
             store,
@@ -1403,9 +1416,7 @@ async def stream_personal_agent_turn(
                 max_llm_calls=8,
             ),
         )
-        turn_deadline = (
-            time.monotonic() + PERSONAL_AGENT_TURN_TIMEOUT_SECONDS
-        )
+        turn_deadline = time.monotonic() + PERSONAL_AGENT_TURN_TIMEOUT_SECONDS
         while True:
             try:
                 remaining = turn_deadline - time.monotonic()

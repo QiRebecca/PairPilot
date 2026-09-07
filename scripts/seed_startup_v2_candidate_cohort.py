@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import sys
 import time
@@ -155,9 +156,7 @@ def _secret_password(session: AuthorizedSession, secret_id: str) -> str:
         f"https://secretmanager.googleapis.com/v1/projects/{PROJECT}/secrets/"
         f"{secret_id}"
     )
-    latest = _admin_request(
-        session, "GET", f"{secret_url}/versions/latest:access"
-    )
+    latest = _admin_request(session, "GET", f"{secret_url}/versions/latest:access")
     if latest.ok:
         return base64.b64decode(latest.json()["payload"]["data"]).decode()
     if latest.status_code not in {400, 404}:
@@ -372,7 +371,7 @@ def _provision(user: ControlledUser, api_key: str) -> None:
         )
 
 
-def _task_spec(index: int) -> dict[str, Any]:
+def _task_spec(index: int, *, generation: str = "base") -> dict[str, Any]:
     task_type = TASK_TYPES[index % len(TASK_TYPES)]
     community = COMMUNITIES[(index // 5) % len(COMMUNITIES)]
     type_label = task_type.replace("_", " ").title()
@@ -384,8 +383,9 @@ def _task_spec(index: int) -> dict[str, Any]:
         "HACKATHON_TEAMMATE": ["available both days", "collaborative", "ships a demo"],
     }[task_type]
     location = str(community["location"])
+    title_prefix = "" if generation == "base" else f"Acceptance {generation} · "
     return {
-        "title": f"{type_label} option {index + 1:02d}",
+        "title": f"{title_prefix}{type_label} option {index + 1:02d}",
         "task_type": task_type,
         "goal": (
             f"Find a reliable adult participant for {type_label.lower()} in "
@@ -403,17 +403,38 @@ def _task_spec(index: int) -> dict[str, Any]:
     }
 
 
-def _seed_posts(users: list[ControlledUser]) -> list[dict[str, Any]]:
+def _close_active_controlled_tasks(users: list[ControlledUser]) -> int:
+    """Release quota through the product API before a repeat acceptance run."""
+
+    closed = 0
+    terminal_statuses = {"COMPLETED", "CANCELLED", "CLOSED"}
+    for user in users:
+        state = _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
+        for task in state["tasks"]:
+            if str(task.get("status") or "").upper() in terminal_statuses:
+                continue
+            _api(
+                user,
+                "POST",
+                f"/api/app/tasks/{task['task_id']}/close",
+                {},
+                retry_transport=True,
+            )
+            closed += 1
+    return closed
+
+
+def _seed_posts(
+    users: list[ControlledUser], *, generation: str = "base"
+) -> list[dict[str, Any]]:
     posts: list[dict[str, Any]] = []
     state_by_user = {
-        user.index: _api(
-            user, "GET", "/api/app/bootstrap", retry_transport=True
-        )
+        user.index: _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
         for user in users
     }
     for index in range(25):
         user = users[index % len(users)]
-        spec = _task_spec(index)
+        spec = _task_spec(index, generation=generation)
         state = state_by_user[user.index]
         task = next(
             (item for item in state["tasks"] if item.get("title") == spec["title"]),
@@ -460,7 +481,21 @@ def _seed_posts(users: list[ControlledUser]) -> list[dict[str, Any]]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--plan", action="store_true")
+    parser.add_argument(
+        "--generation",
+        default="base",
+        help="bounded cohort generation label used to create fresh deterministic tasks",
+    )
+    parser.add_argument(
+        "--replenish",
+        action="store_true",
+        help="close active controlled-user tasks through the product API first",
+    )
     args = parser.parse_args()
+    if not re.fullmatch(r"[a-z0-9-]{1,24}", args.generation):
+        parser.error("--generation must match [a-z0-9-]{1,24}")
+    if args.replenish and args.generation == "base":
+        parser.error("--replenish requires a non-base --generation")
     plan = {
         "users": 10,
         "communities": [item["name"] for item in COMMUNITIES],
@@ -468,6 +503,7 @@ def main() -> None:
         "task_types": list(TASK_TYPES),
         "credentials": "Secret Manager only",
         "outcomes_hardcoded": False,
+        "generation": args.generation,
     }
     if args.plan:
         print(json.dumps(plan, indent=2))
@@ -482,7 +518,8 @@ def main() -> None:
     for user in users:
         _provision(user, api_key)
         print(f"provisioned controlled user {user.index:02d}/10", file=sys.stderr)
-    posts = _seed_posts(users)
+    closed_tasks = _close_active_controlled_tasks(users) if args.replenish else 0
+    posts = _seed_posts(users, generation=args.generation)
     print(
         json.dumps(
             {
@@ -492,6 +529,7 @@ def main() -> None:
                 "user_uids": [user.uid for user in users],
                 "secret_ids": [user.secret_id for user in users],
                 "posts": posts,
+                "closed_tasks": closed_tasks,
                 "passwords_printed": False,
                 "tokens_printed": False,
             },

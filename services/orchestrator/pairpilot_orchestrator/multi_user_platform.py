@@ -847,6 +847,12 @@ async def publish_user_post(
     if task is None:
         raise LookupError("task was not found")
     require_task_owner(principal, task)
+    if str(task.get("status") or "").upper() in {
+        "CANCELLED",
+        "CLOSED",
+        "COMPLETED",
+    }:
+        raise ValueError("TASK_NOT_ACTIVE")
     community_id = str(task.get("community_id", DEFAULT_COMMUNITY_ID))
     await require_active_membership(store, principal, community_id)
     profile = await store.get("users", principal.uid)

@@ -322,6 +322,38 @@ async def test_personal_agent_task_tool_uses_users_active_community() -> None:
 
 
 @pytest.mark.asyncio
+async def test_personal_agent_publish_returns_safe_status_for_closed_request() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-closed-agent-task")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Closed Request User"))
+    task = await create_user_task(store, user, task_input("Closed agent request"))
+    await close_user_task(store, user, task_id=str(task["task_id"]))
+    conversation = await store.get("conversations", "user:uid-closed-agent-task:global")
+    assert conversation is not None
+    scoped_conversation = {**conversation, "task_id": task["task_id"]}
+    tools = _build_tools(
+        store,
+        user,
+        scoped_conversation,
+        authorizing_user_content="PUBLISH THIS POST",
+    )
+    publish_tool = next(
+        item for item in tools if item.__name__ == "publish_intent_post"
+    )
+
+    result = await publish_tool(
+        public_title="Cannot reopen a closed Request",
+        public_summary="The Agent should explain this safely.",
+        public_requirements=[],
+        confirmation="PUBLISH THIS POST",
+    )
+
+    assert result["status"] == "TASK_NOT_ACTIVE"
+    assert "closed" in result["message"].lower()
+
+
+@pytest.mark.asyncio
 async def test_reconciliation_rotates_fairly_across_open_posts(monkeypatch) -> None:
     class StrictLimitStore(MemoryMultiUserStore):
         async def query_documents(self, collection, *, filters, limit=100):
@@ -532,9 +564,7 @@ async def test_closing_draft_request_without_post_releases_quota() -> None:
         for index in range(3)
     ]
 
-    closed = await close_user_task(
-        store, user, task_id=str(tasks[0]["task_id"])
-    )
+    closed = await close_user_task(store, user, task_id=str(tasks[0]["task_id"]))
 
     assert closed["status"] == "CANCELLED"
     decision_id = str(tasks[0]["decision_ids"][0])
