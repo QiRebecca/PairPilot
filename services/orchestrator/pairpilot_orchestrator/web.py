@@ -985,12 +985,19 @@ async def send_personal_agent_message(
     """Accept one user turn and stream its durable Personal Agent execution."""
 
     conversation = await _owned_conversation(conversation_id, principal)
+    store = _store()
+    is_global_conversation = conversation.get("kind") == "GLOBAL_PERSONAL_AGENT"
     raw_conversation_task_id = conversation.get("task_id")
     conversation_task_id = (
         str(raw_conversation_task_id)
-        if raw_conversation_task_id not in (None, "")
+        if not is_global_conversation and raw_conversation_task_id not in (None, "")
         else None
     )
+    if is_global_conversation and raw_conversation_task_id not in (None, ""):
+        clean_conversation = _clean(conversation)
+        clean_conversation.pop("task_id", None)
+        clean_conversation["updated_at"] = datetime.now(UTC)
+        await store.upsert("conversations", conversation_id, clean_conversation)
     if (
         body.task_id is not None
         and conversation_task_id is not None
@@ -999,7 +1006,7 @@ async def send_personal_agent_message(
         raise HTTPException(409, "The message task does not match this conversation.")
     effective_task_id = body.task_id or conversation_task_id
     if effective_task_id is not None:
-        task_workspace = await _store().get("task_workspaces", effective_task_id)
+        task_workspace = await store.get("task_workspaces", effective_task_id)
         if task_workspace is None:
             raise HTTPException(404, "Task was not found.")
         require_task_owner(principal, task_workspace)
@@ -1011,7 +1018,6 @@ async def send_personal_agent_message(
         "chat_request", principal.uid, conversation_id, body.client_message_id
     )
     invocation_id = stable_id("invocation", request_id)
-    store = _store()
     now = datetime.now(UTC)
     created = await store.create(
         "chat_message_requests",

@@ -1384,6 +1384,8 @@ async def stream_personal_agent_turn(
                 },
             )
             conversation_clean = _clean(conversation)
+            if conversation_clean.get("kind") == "GLOBAL_PERSONAL_AGENT":
+                conversation_clean.pop("task_id", None)
             conversation_clean.update(
                 adk_session_id=session_id,
                 updated_at=datetime.now(UTC),

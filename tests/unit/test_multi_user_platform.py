@@ -1279,6 +1279,12 @@ def test_global_conversation_can_focus_an_owned_task_without_switching_threads(
         json=task_input("Disney buddy").model_dump(mode="json"),
     )
     task_id = task_response.json()["task"]["task_id"]
+    second_task_response = client.post(
+        "/api/app/tasks",
+        headers=headers,
+        json=task_input("Conference coffee chat").model_dump(mode="json"),
+    )
+    second_task_id = second_task_response.json()["task"]["task_id"]
     response = client.post(
         "/api/v1/conversations/user:uid-a:global/messages",
         headers=headers,
@@ -1290,6 +1296,23 @@ def test_global_conversation_can_focus_an_owned_task_without_switching_threads(
     )
     assert response.status_code == 200
     assert observed_task_ids == [task_id]
+    assert (
+        store.collections["conversations"]["user:uid-a:global"].get("task_id") is None
+    )
+    # Simulate a record written by an older revision that incorrectly bound the
+    # global chat to its first focused Request.
+    store.collections["conversations"]["user:uid-a:global"]["task_id"] = task_id
+    second_response = client.post(
+        "/api/v1/conversations/user:uid-a:global/messages",
+        headers=headers,
+        json={
+            "content": "Now work on my conference coffee request.",
+            "client_message_id": "focused-message-0002",
+            "task_id": second_task_id,
+        },
+    )
+    assert second_response.status_code == 200
+    assert observed_task_ids == [task_id, second_task_id]
     assert (
         store.collections["conversations"]["user:uid-a:global"].get("task_id") is None
     )
