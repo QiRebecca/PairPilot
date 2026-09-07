@@ -1022,11 +1022,90 @@ async def set_user_post_status(
     require_resource_owner(principal, post)
     current_state = IntentPostState(str(post.get("status", "")))
     validate_intent_post_transition(current_state, target_state)
+    timestamp = datetime.now(UTC)
     clean = _clean(post)
-    clean.update(status=target_state.value, updated_at=datetime.now(UTC))
+    clean.update(status=target_state.value, updated_at=timestamp)
     if target_state == IntentPostState.CLOSED:
         clean["closed_to_new_contacts"] = True
-    await store.upsert("intent_posts", intent_id, clean)
+        task_id = str(clean["task_id"])
+        task, decisions, candidates = await asyncio.gather(
+            store.get("task_workspaces", task_id),
+            store.query_documents(
+                "decisions", filters=[("owner_uid", "EQUAL", principal.uid)]
+            ),
+            store.query_documents(
+                "candidate_assessments",
+                filters=[("owner_uid", "EQUAL", principal.uid)],
+            ),
+        )
+        if task is None:
+            raise RuntimeError("post task was not found")
+        require_task_owner(principal, task)
+        task_clean = _clean(task)
+        task_clean.update(
+            status="CANCELLED",
+            closed_at=timestamp,
+            close_reason="USER_CLOSED_POST",
+            updated_at=timestamp,
+        )
+        writes = [
+            _update_write(
+                store,
+                "intent_posts",
+                intent_id,
+                clean,
+                update_time=str(post["_updateTime"]),
+            ),
+            _update_write(
+                store,
+                "task_workspaces",
+                task_id,
+                task_clean,
+                update_time=str(task["_updateTime"]),
+            ),
+        ]
+        for decision in decisions:
+            if decision.get("task_id") != task_id or decision.get("status") != "OPEN":
+                continue
+            decision_clean = _clean(decision)
+            decision_clean.update(
+                status="CANCELLED",
+                resolved_at=timestamp,
+                resolution_reason="REQUEST_CLOSED",
+            )
+            writes.append(
+                _update_write(
+                    store,
+                    "decisions",
+                    str(decision["decision_id"]),
+                    decision_clean,
+                    update_time=str(decision["_updateTime"]),
+                )
+            )
+        for candidate in candidates:
+            if candidate.get("task_id") != task_id or candidate.get("state") in {
+                "COMMITTED",
+                "WITHDRAWN",
+            }:
+                continue
+            candidate_clean = _clean(candidate)
+            candidate_clean.update(
+                state="WITHDRAWN",
+                withdrawal_reason="REQUEST_CLOSED",
+                updated_at=timestamp,
+            )
+            writes.append(
+                _update_write(
+                    store,
+                    "candidate_assessments",
+                    str(candidate["assessment_id"]),
+                    candidate_clean,
+                    update_time=str(candidate["_updateTime"]),
+                )
+            )
+        await store.commit_writes(writes)
+    else:
+        await store.upsert("intent_posts", intent_id, clean)
     await store.write_event(
         event_type=f"intent.{status.lower()}.v1",
         run_id=str(clean["task_id"]),

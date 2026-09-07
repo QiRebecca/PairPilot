@@ -31,6 +31,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     create_user_task,
     provision_user,
     publish_user_post,
+    set_user_post_status,
 )
 from pairpilot_orchestrator.personal_agent_chat import (
     _build_tools,
@@ -455,6 +456,68 @@ async def test_public_post_description_is_optional_and_falls_back_to_title() -> 
         public_requirements=[],
     )
     assert post["public_summary"] == "Simple public title"
+
+
+@pytest.mark.asyncio
+async def test_closing_post_closes_request_and_releases_active_task_quota() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-close-request")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Request Owner"))
+    tasks = [
+        await create_user_task(store, user, task_input(f"Active task {index}"))
+        for index in range(3)
+    ]
+    post = await publish_user_post(
+        store,
+        user,
+        task_id=str(tasks[0]["task_id"]),
+        public_title="Request that can be closed",
+        public_summary="Verify closing releases the user's active request slot.",
+        public_requirements=[],
+    )
+    pending_decision_id = "decision-close-pending"
+    await store.create(
+        "decisions",
+        pending_decision_id,
+        {
+            "decision_id": pending_decision_id,
+            "owner_uid": user.uid,
+            "task_id": tasks[0]["task_id"],
+            "status": "OPEN",
+        },
+    )
+    assessment_id = "assessment-close-pending"
+    await store.create(
+        "candidate_assessments",
+        assessment_id,
+        {
+            "assessment_id": assessment_id,
+            "owner_uid": user.uid,
+            "task_id": tasks[0]["task_id"],
+            "state": "CONTACTING",
+        },
+    )
+
+    closed = await set_user_post_status(
+        store,
+        user,
+        intent_id=str(post["intent_id"]),
+        status="CLOSED",
+    )
+
+    assert closed["status"] == "CLOSED"
+    stored_task = store.collections["task_workspaces"][str(tasks[0]["task_id"])]
+    assert stored_task["status"] == "CANCELLED"
+    assert store.collections["decisions"][pending_decision_id]["status"] == "CANCELLED"
+    assert (
+        store.collections["candidate_assessments"][assessment_id]["state"]
+        == "WITHDRAWN"
+    )
+    replacement = await create_user_task(
+        store, user, task_input("Replacement active task")
+    )
+    assert replacement["status"] == "DRAFT"
 
 
 @pytest.mark.asyncio

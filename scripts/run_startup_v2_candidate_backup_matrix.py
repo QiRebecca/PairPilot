@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -143,13 +144,44 @@ def _unrelated_backup(owner: ControlledUser, owned_task_id: str) -> dict[str, An
     )
 
 
+def _close_prior_matrix_requests(user: ControlledUser) -> None:
+    """Close prior matrix Posts through the product API to release task quota."""
+
+    state = _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
+    posts_by_task = {str(item.get("task_id")): item for item in state["myPosts"]}
+    for task in state["tasks"]:
+        if not str(task.get("title", "")).startswith("Backup matrix "):
+            continue
+        if task.get("status") in {"COMPLETED", "CANCELLED"}:
+            continue
+        post = posts_by_task.get(str(task["task_id"]))
+        if post is None or post.get("status") not in {"OPEN", "PAUSED", "CLOSED"}:
+            continue
+        _api(
+            user,
+            "PATCH",
+            f"/api/app/posts/{post['intent_id']}/status",
+            {"status": "CLOSED"},
+        )
+
+
 def main() -> None:
     _assert_candidate_target()
     users = _users(_firebase_api_key(_admin_session()))
     owner, primary_peer, backup_peer = users[4], users[5], users[6]
-    owner_post = _ensure_open_post(owner, "Backup matrix owner request")
-    primary_post = _ensure_open_post(primary_peer, "Backup matrix primary peer")
-    backup_post = _ensure_open_post(backup_peer, "Backup matrix reserve peer")
+    for user in (owner, primary_peer, backup_peer):
+        _close_prior_matrix_requests(user)
+    # Every acceptance execution uses fresh public intents. Reopening a prior
+    # terminal pair would correctly reuse its immutable proposal, which is not
+    # the lifecycle this matrix is intended to exercise.
+    run_label = str(int(time.time()))
+    owner_post = _ensure_open_post(owner, f"Backup matrix owner {run_label}")
+    primary_post = _ensure_open_post(
+        primary_peer, f"Backup matrix primary {run_label}"
+    )
+    backup_post = _ensure_open_post(
+        backup_peer, f"Backup matrix reserve {run_label}"
+    )
     task_id = str(owner_post["task_id"])
 
     primary = _assessment(owner, task_id, str(primary_post["intent_id"]))

@@ -36,6 +36,7 @@ import firebase_admin  # noqa: E402
 import google.auth  # noqa: E402
 import requests  # noqa: E402
 from firebase_admin import auth  # noqa: E402
+from google.auth.exceptions import TransportError  # noqa: E402
 from google.auth.transport.requests import AuthorizedSession  # noqa: E402
 from pairpilot_orchestrator.infrastructure.google_cloud import (  # noqa: E402
     GoogleCloudStore,
@@ -106,11 +107,31 @@ def _admin_session() -> AuthorizedSession:
     return AuthorizedSession(credentials)
 
 
+def _admin_request(
+    session: AuthorizedSession,
+    method: str,
+    url: str,
+    **kwargs: Any,
+) -> requests.Response:
+    """Retry bounded control-plane failures, including OAuth refresh timeouts."""
+
+    kwargs.setdefault("timeout", 45)
+    for attempt in range(4):
+        try:
+            return session.request(method, url, **kwargs)
+        except (TransportError, requests.RequestException):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    raise RuntimeError("unreachable Google control-plane retry state")
+
+
 def _firebase_api_key(session: AuthorizedSession) -> str:
-    apps_response = session.get(
+    apps_response = _admin_request(
+        session,
+        "GET",
         f"https://firebase.googleapis.com/v1beta1/projects/{PROJECT}/webApps",
         params={"pageSize": 100},
-        timeout=30,
     )
     apps_response.raise_for_status()
     apps = apps_response.json()["apps"]
@@ -119,10 +140,11 @@ def _firebase_api_key(session: AuthorizedSession) -> str:
         for item in apps
         if item["displayName"] == "PairPilot Public Beta Web"
     )
-    config = session.get(
+    config = _admin_request(
+        session,
+        "GET",
         f"https://firebase.googleapis.com/v1beta1/projects/{PROJECT}/webApps/"
         f"{app_id}/config",
-        timeout=30,
     )
     config.raise_for_status()
     return str(config.json()["apiKey"])
@@ -133,39 +155,57 @@ def _secret_password(session: AuthorizedSession, secret_id: str) -> str:
         f"https://secretmanager.googleapis.com/v1/projects/{PROJECT}/secrets/"
         f"{secret_id}"
     )
-    latest = session.get(f"{secret_url}/versions/latest:access", timeout=30)
+    latest = _admin_request(
+        session, "GET", f"{secret_url}/versions/latest:access"
+    )
     if latest.ok:
         return base64.b64decode(latest.json()["payload"]["data"]).decode()
     if latest.status_code not in {400, 404}:
         latest.raise_for_status()
-    existing = session.get(secret_url, timeout=30)
+    existing = _admin_request(session, "GET", secret_url)
     if existing.status_code == 404:
-        created = session.post(
+        created = _admin_request(
+            session,
+            "POST",
             f"https://secretmanager.googleapis.com/v1/projects/{PROJECT}/secrets",
             params={"secretId": secret_id},
             json={"replication": {"automatic": {}}},
-            timeout=30,
         )
         created.raise_for_status()
     elif not existing.ok:
         existing.raise_for_status()
     password = "Pp!" + secrets.token_urlsafe(28)
-    version = session.post(
+    version = _admin_request(
+        session,
+        "POST",
         f"{secret_url}:addVersion",
         json={"payload": {"data": base64.b64encode(password.encode()).decode()}},
-        timeout=30,
     )
     version.raise_for_status()
     return password
 
 
 def _sign_in(email: str, password: str, api_key: str) -> str:
-    response = requests.post(
-        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword",
-        params={"key": api_key},
-        json={"email": email, "password": password, "returnSecureToken": True},
-        timeout=30,
-    )
+    response: requests.Response | None = None
+    for attempt in range(4):
+        try:
+            response = requests.post(
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword",
+                params={"key": api_key},
+                json={
+                    "email": email,
+                    "password": password,
+                    "returnSecureToken": True,
+                },
+                timeout=45,
+            )
+            break
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    if response is None:  # pragma: no cover - defensive assertion
+        raise RuntimeError("Firebase sign-in did not produce a response")
     response.raise_for_status()
     return str(response.json()["idToken"])
 
@@ -217,7 +257,17 @@ def _assert_candidate_target() -> None:
         raise RuntimeError("exact PAIRPILOT_COHORT_CONFIRM is required")
     if "candidate" not in BASE_URL:
         raise RuntimeError("candidate URL must contain the candidate tag")
-    response = requests.get(BASE_URL + "/api/health", timeout=30)
+    response: requests.Response | None = None
+    for attempt in range(4):
+        try:
+            response = requests.get(BASE_URL + "/api/health", timeout=45)
+            break
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == 3:
+                raise
+            time.sleep(2**attempt)
+    if response is None:  # pragma: no cover - defensive assertion
+        raise RuntimeError("candidate health check did not produce a response")
     response.raise_for_status()
     health = response.json()
     if health.get("environment") != "candidate":
