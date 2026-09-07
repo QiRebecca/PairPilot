@@ -23,6 +23,7 @@ from pairpilot_orchestrator.multi_user_platform import (
 from pairpilot_orchestrator.v1_foundation import (
     DEFAULT_COMMUNITY_ID,
     active_community_ids,
+    create_notification,
     normalize_intent_type,
 )
 
@@ -434,3 +435,138 @@ async def create_saved_search(
         idempotency_key=f"v2:saved-search:{saved_search_id}:created",
     )
     return _clean((await store.get("saved_searches", saved_search_id)) or document)
+
+
+async def _record_saved_search_hit(
+    store: MultiUserStore,
+    *,
+    saved_search: Mapping[str, Any],
+    post: Mapping[str, Any],
+    now: datetime,
+) -> bool:
+    owner_uid = str(saved_search.get("owner_uid") or "")
+    intent_id = str(post.get("intent_id") or "")
+    saved_search_id = str(saved_search.get("saved_search_id") or "")
+    if not owner_uid or not intent_id or not saved_search_id:
+        return False
+    if post.get("owner_uid") == owner_uid or post.get("status") != "OPEN":
+        return False
+    if post.get("namespace") != PRODUCTION_NAMESPACE:
+        return False
+    if PRODUCTION_NAMESPACE == "production" and is_explicit_demo_post(post):
+        return False
+    search = ExploreSearchInput.model_validate(saved_search.get("search") or {})
+    communities = set(await active_community_ids(store, owner_uid))
+    if str(post.get("community_id", DEFAULT_COMMUNITY_ID)) not in communities:
+        return False
+    viewer = AuthenticatedPrincipal(
+        uid=owner_uid,
+        email=None,
+        email_verified=True,
+    )
+    if post.get("owner_uid") in await _blocked_uids(store, viewer):
+        return False
+    if search.task_id:
+        task = await store.get("task_workspaces", search.task_id)
+        if (
+            task is None
+            or task.get("owner_uid") != owner_uid
+            or task.get("status") in {"COMPLETED", "CANCELLED"}
+            or _normalized_intent_type(task.get("task_type"))
+            != _normalized_intent_type(post.get("task_type"))
+        ):
+            return False
+    if not _structured_match(post, search):
+        return False
+    score, reasons = _relevance(post, search)
+    minimum_score = {
+        "HIGH": 0.2,
+        "MEANINGFUL": 0.35,
+        "LOW": 0.55,
+    }.get(str(saved_search.get("notification_sensitivity")), 0.35)
+    if search.query and score <= minimum_score:
+        return False
+    hit_id = stable_id("saved_search_hit", saved_search_id, intent_id)
+    hit = {
+        "schema_version": SCHEMA_VERSION,
+        "namespace": PRODUCTION_NAMESPACE,
+        "saved_search_hit_id": hit_id,
+        "saved_search_id": saved_search_id,
+        "owner_uid": owner_uid,
+        "intent_id": intent_id,
+        "task_id": saved_search.get("task_id"),
+        "relevance_score": score,
+        "surfaced_reasons": reasons,
+        "status": "NOTIFIED",
+        "created_at": now,
+    }
+    if not await store.create("saved_search_hits", hit_id, hit):
+        return False
+    entity_ids = [intent_id]
+    if saved_search.get("task_id"):
+        entity_ids.append(str(saved_search["task_id"]))
+    await create_notification(
+        store,
+        owner_uid=owner_uid,
+        notification_type="SAVED_SEARCH_MATCH",
+        title=f"New Post matches {str(saved_search.get('name') or 'your monitor')}",
+        body=str(post.get("public_title") or "A new public Post is available."),
+        entity_ids=entity_ids,
+        idempotency_key=f"saved-search:{saved_search_id}:{intent_id}",
+        now=now,
+    )
+    return True
+
+
+async def evaluate_saved_searches_for_post(
+    store: MultiUserStore,
+    intent_id: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Evaluate one newly published public Post against active monitors."""
+
+    post = await store.get("intent_posts", intent_id)
+    if post is None:
+        return {"searches_evaluated": 0, "new_matches": 0}
+    searches = await store.query_documents(
+        "saved_searches", filters=[("monitor_status", "EQUAL", "ACTIVE")], limit=100
+    )
+    timestamp = (now or datetime.now(UTC)).astimezone(UTC)
+    matched = 0
+    for saved_search in searches:
+        if await _record_saved_search_hit(
+            store,
+            saved_search=saved_search,
+            post=post,
+            now=timestamp,
+        ):
+            matched += 1
+    return {"searches_evaluated": len(searches), "new_matches": matched}
+
+
+async def evaluate_saved_search(
+    store: MultiUserStore,
+    saved_search_id: str,
+    *,
+    now: datetime | None = None,
+) -> dict[str, int]:
+    """Evaluate a newly enabled monitor against currently open Posts."""
+
+    saved_search = await store.get("saved_searches", saved_search_id)
+    if saved_search is None or saved_search.get("monitor_status") != "ACTIVE":
+        return {"posts_evaluated": 0, "new_matches": 0}
+    posts = await store.query_documents(
+        "intent_posts", filters=[("status", "EQUAL", "OPEN")], limit=100
+    )
+    timestamp = (now or datetime.now(UTC)).astimezone(UTC)
+    matched = 0
+    for post in posts:
+        if await _record_saved_search_hit(
+            store,
+            saved_search=saved_search,
+            post=post,
+            now=timestamp,
+        ):
+            matched += 1
+    return {"posts_evaluated": len(posts), "new_matches": matched}

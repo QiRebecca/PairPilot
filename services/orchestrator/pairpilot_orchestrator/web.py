@@ -164,6 +164,8 @@ from pairpilot_orchestrator.v2_connections import (
 )
 from pairpilot_orchestrator.v2_marketplace import (
     create_saved_search,
+    evaluate_saved_search,
+    evaluate_saved_searches_for_post,
     get_post_detail,
     save_post,
     search_marketplace,
@@ -2245,10 +2247,12 @@ async def internal_event_worker(
         "intent.expired.v1",
         "intent.matched.v1",
     }
+    saved_search_event = "marketplace.saved_search.created.v2"
     if event_type not in {
         "intent.published.v2",
         "agent.contact.requested.v3",
         "proposal.evaluation.requested.v3",
+        saved_search_event,
         *availability_events,
     }:
         return {"status": "IGNORED"}
@@ -2258,6 +2262,12 @@ async def internal_event_worker(
         )
         return {"status": "AVAILABILITY_RECONCILED", "changed": changed}
     event_payload = dict(event.get("payload", {}))
+    if event_type == saved_search_event:
+        saved_search_id = str(event_payload.get("savedSearchId") or "")
+        if not saved_search_id:
+            raise HTTPException(400, "Saved-search event is missing savedSearchId.")
+        result = await evaluate_saved_search(_store(), saved_search_id)
+        return {"status": "SAVED_SEARCH_EVALUATED", "result": result}
     intent_id = str(
         event_payload.get("intentId") or event_payload.get("sourceIntentId") or ""
     )
@@ -2266,6 +2276,11 @@ async def internal_event_worker(
         raise HTTPException(400, "Published intent event is missing intentId.")
     try:
         store = _store()
+        monitored = (
+            await evaluate_saved_searches_for_post(store, intent_id)
+            if event_type == "intent.published.v2"
+            else {"searches_evaluated": 0, "new_matches": 0}
+        )
         result = await process_candidate_pool_event(
             store,
             intent_id,
@@ -2273,7 +2288,7 @@ async def internal_event_worker(
         )
     except AgentRuntimeError as exc:
         return {"status": "NO_ACTION", "reason": str(exc)}
-    return {"status": "PROCESSED", "result": result}
+    return {"status": "PROCESSED", "result": result, "monitored": monitored}
 
 
 @app.post("/api/internal/reconcile")

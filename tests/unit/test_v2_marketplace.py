@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import base64
+import json
 from datetime import UTC, datetime
 
 import pytest
+from pairpilot_orchestrator import web
 from pairpilot_orchestrator.auth.principal import AuthenticatedPrincipal
 from pairpilot_orchestrator.v2_marketplace import (
     create_saved_search,
+    evaluate_saved_search,
+    evaluate_saved_searches_for_post,
     get_post_detail,
     save_post,
     search_marketplace,
@@ -241,6 +246,123 @@ async def test_monitored_saved_search_is_persisted_and_emits_event() -> None:
     assert len(events) == 1
     assert events[0]["eventType"] == "marketplace.saved_search.created.v2"
     assert "agent systems dinner" not in str(events[0]["payload"]).casefold()
+
+
+@pytest.mark.asyncio
+async def test_saved_search_monitor_notifies_once_with_public_scoped_data() -> None:
+    store = MemoryMultiUserStore()
+    await seed_membership(store, "viewer")
+    saved = await create_saved_search(
+        store,
+        principal("viewer"),
+        SaveSearchInput(
+            name="Agent systems dinner",
+            search=ExploreSearchInput(
+                query="agent systems dinner",
+                view="FROM_COMMUNITIES",
+                community_id="community_ai",
+            ),
+            monitor_enabled=True,
+            notification_sensitivity="MEANINGFUL",
+        ),
+    )
+    await seed_post(
+        store,
+        intent_id="intent_monitor_match",
+        owner_uid="peer-monitor",
+        owner_agent_id="agent_peer_monitor",
+        private_marker="private-budget-must-not-leak",
+    )
+
+    first = await evaluate_saved_searches_for_post(store, "intent_monitor_match")
+    duplicate = await evaluate_saved_searches_for_post(
+        store, "intent_monitor_match"
+    )
+    current = await evaluate_saved_search(store, str(saved["saved_search_id"]))
+
+    assert first == {"searches_evaluated": 1, "new_matches": 1}
+    assert duplicate == {"searches_evaluated": 1, "new_matches": 0}
+    assert current == {"posts_evaluated": 1, "new_matches": 0}
+    assert len(store.collections["saved_search_hits"]) == 1
+    notifications = list(store.collections["notifications"].values())
+    assert len(notifications) == 1
+    assert notifications[0]["type"] == "SAVED_SEARCH_MATCH"
+    assert notifications[0]["entity_ids"] == ["intent_monitor_match"]
+    assert "private-budget-must-not-leak" not in str(notifications)
+
+
+@pytest.mark.asyncio
+async def test_saved_search_monitor_respects_community_scope() -> None:
+    store = MemoryMultiUserStore()
+    await seed_membership(store, "viewer", "community_ai")
+    await create_saved_search(
+        store,
+        principal("viewer"),
+        SaveSearchInput(
+            name="Agent dinner anywhere joined",
+            search=ExploreSearchInput(
+                query="agent dinner",
+                view="FROM_COMMUNITIES",
+            ),
+            monitor_enabled=True,
+            notification_sensitivity="HIGH",
+        ),
+    )
+    await seed_post(
+        store,
+        intent_id="intent_outside_scope",
+        owner_uid="outside-peer",
+        owner_agent_id="agent_outside_peer",
+        community_id="community_private_other",
+    )
+
+    result = await evaluate_saved_searches_for_post(
+        store, "intent_outside_scope"
+    )
+
+    assert result == {"searches_evaluated": 1, "new_matches": 0}
+    assert store.collections["saved_search_hits"] == {}
+    assert store.collections["notifications"] == {}
+
+
+@pytest.mark.asyncio
+async def test_saved_search_pubsub_event_runs_the_monitor(monkeypatch) -> None:
+    store = MemoryMultiUserStore()
+    await seed_membership(store, "viewer")
+    saved = await create_saved_search(
+        store,
+        principal("viewer"),
+        SaveSearchInput(
+            name="Agent systems dinner",
+            search=ExploreSearchInput(
+                query="agent systems dinner",
+                view="FROM_COMMUNITIES",
+                community_id="community_ai",
+            ),
+            monitor_enabled=True,
+        ),
+    )
+    await seed_post(
+        store,
+        intent_id="intent_existing_monitor_match",
+        owner_uid="peer-existing",
+        owner_agent_id="agent_peer_existing",
+    )
+    monkeypatch.setattr(web, "_store", lambda: store)
+    event = {
+        "eventType": "marketplace.saved_search.created.v2",
+        "payload": {"savedSearchId": saved["saved_search_id"]},
+    }
+    body = web.PubSubPushBody(
+        message=web.PubSubPushMessage(
+            data=base64.b64encode(json.dumps(event).encode()).decode()
+        )
+    )
+
+    result = await web.internal_event_worker(body, "authenticated-worker")
+
+    assert result["status"] == "SAVED_SEARCH_EVALUATED"
+    assert result["result"]["new_matches"] == 1
 
 
 @pytest.mark.asyncio
