@@ -145,23 +145,20 @@ def _unrelated_backup(owner: ControlledUser, owned_task_id: str) -> dict[str, An
 
 
 def _close_prior_matrix_requests(user: ControlledUser) -> None:
-    """Close prior matrix Posts through the product API to release task quota."""
+    """Close prior acceptance Requests through the product API."""
 
     state = _api(user, "GET", "/api/app/bootstrap", retry_transport=True)
-    posts_by_task = {str(item.get("task_id")): item for item in state["myPosts"]}
     for task in state["tasks"]:
-        if not str(task.get("title", "")).startswith("Backup matrix "):
+        title = str(task.get("title", ""))
+        if not title.startswith(("Backup matrix ", "Autonomy matrix ")):
             continue
         if task.get("status") in {"COMPLETED", "CANCELLED"}:
             continue
-        post = posts_by_task.get(str(task["task_id"]))
-        if post is None or post.get("status") not in {"OPEN", "PAUSED", "CLOSED"}:
-            continue
         _api(
             user,
-            "PATCH",
-            f"/api/app/posts/{post['intent_id']}/status",
-            {"status": "CLOSED"},
+            "POST",
+            f"/api/app/tasks/{task['task_id']}/close",
+            {},
         )
 
 

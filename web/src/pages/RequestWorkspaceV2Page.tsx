@@ -118,7 +118,7 @@ export function RequestWorkspaceV2Page({
     key: string,
     action: () => Promise<unknown>,
     success: string,
-  ) {
+  ): Promise<boolean> {
     setBusy(key);
     setError("");
     setNotice("");
@@ -126,11 +126,32 @@ export function RequestWorkspaceV2Page({
       await action();
       setNotice(success);
       await refresh();
+      return true;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The action failed.");
+      return false;
     } finally {
       setBusy("");
     }
+  }
+
+  async function closeRequest() {
+    if (
+      !window.confirm(
+        "Close this Request? Its public Post will stop appearing, active candidate conversations will be withdrawn, and open decisions will be cancelled.",
+      )
+    )
+      return;
+    const closed = await run(
+      "close-request",
+      () =>
+        request(`/api/app/tasks/${taskId}/close`, {
+          method: "POST",
+          body: "{}",
+        }),
+      "Request closed. It no longer counts toward your active Request limit.",
+    );
+    if (closed) navigate("/app/agent");
   }
 
   async function saveOrPublish(event: FormEvent, publish: boolean) {
@@ -217,9 +238,21 @@ export function RequestWorkspaceV2Page({
             the active task context; it never starts a disconnected assistant.
           </p>
         </div>
-        <span className={`status-pill status-${asString(task.status).toLowerCase()}`}>
-          {asString(task.status)}
-        </span>
+        <div className="request-workspace-heading-actions">
+          <span className={`status-pill status-${asString(task.status).toLowerCase()}`}>
+            {asString(task.status)}
+          </span>
+          {!["COMPLETED", "CANCELLED"].includes(asString(task.status)) ? (
+            <button
+              className="danger-button"
+              disabled={Boolean(busy)}
+              onClick={() => void closeRequest()}
+            >
+              <StopCircle size={14} />
+              {busy === "close-request" ? "Closing…" : "Close Request"}
+            </button>
+          ) : null}
+        </div>
       </header>
       {error ? (
         <div className="form-error" role="alert">

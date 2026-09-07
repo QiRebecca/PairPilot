@@ -1000,6 +1000,129 @@ async def save_user_post_draft(
     return draft
 
 
+async def close_user_task(
+    store: MultiUserStore,
+    principal: AuthenticatedPrincipal,
+    *,
+    task_id: str,
+) -> dict[str, Any]:
+    """Cancel an owned Request, including a draft that has no public Post."""
+
+    task = await store.get("task_workspaces", task_id)
+    if task is None:
+        raise LookupError("task was not found")
+    require_task_owner(principal, task)
+    if task.get("status") == "CANCELLED":
+        return _clean(task)
+    if task.get("status") == "COMPLETED":
+        raise ValueError("a completed request cannot be closed")
+    timestamp = datetime.now(UTC)
+    intent_id = str(task.get("intent_id") or "")
+    post, decisions, candidates = await asyncio.gather(
+        store.get("intent_posts", intent_id) if intent_id else asyncio.sleep(0),
+        store.query_documents(
+            "decisions", filters=[("owner_uid", "EQUAL", principal.uid)]
+        ),
+        store.query_documents(
+            "candidate_assessments",
+            filters=[("owner_uid", "EQUAL", principal.uid)],
+        ),
+    )
+    task_clean = _clean(task)
+    task_clean.update(
+        status="CANCELLED",
+        closed_at=timestamp,
+        close_reason="USER_CLOSED_REQUEST",
+        updated_at=timestamp,
+    )
+    writes = [
+        _update_write(
+            store,
+            "task_workspaces",
+            task_id,
+            task_clean,
+            update_time=str(task["_updateTime"]),
+        )
+    ]
+    if isinstance(post, dict):
+        current = IntentPostState(str(post.get("status", "")))
+        if current not in {
+            IntentPostState.CLOSED,
+            IntentPostState.EXPIRED,
+            IntentPostState.CANCELLED,
+        }:
+            validate_intent_post_transition(current, IntentPostState.CANCELLED)
+            post_clean = _clean(post)
+            post_clean.update(
+                status=IntentPostState.CANCELLED.value,
+                closed_to_new_contacts=True,
+                closed_reason="USER_CLOSED_REQUEST",
+                updated_at=timestamp,
+            )
+            writes.append(
+                _update_write(
+                    store,
+                    "intent_posts",
+                    intent_id,
+                    post_clean,
+                    update_time=str(post["_updateTime"]),
+                )
+            )
+    for decision in decisions:
+        if decision.get("task_id") != task_id or decision.get("status") != "OPEN":
+            continue
+        decision_clean = _clean(decision)
+        decision_clean.update(
+            status="CANCELLED",
+            resolved_at=timestamp,
+            resolution_reason="REQUEST_CLOSED",
+        )
+        writes.append(
+            _update_write(
+                store,
+                "decisions",
+                str(decision["decision_id"]),
+                decision_clean,
+                update_time=str(decision["_updateTime"]),
+            )
+        )
+    for candidate in candidates:
+        if candidate.get("task_id") != task_id or candidate.get("state") in {
+            "COMMITTED",
+            "WITHDRAWN",
+        }:
+            continue
+        candidate_clean = _clean(candidate)
+        candidate_clean.update(
+            state="WITHDRAWN",
+            withdrawal_reason="REQUEST_CLOSED",
+            updated_at=timestamp,
+        )
+        writes.append(
+            _update_write(
+                store,
+                "candidate_assessments",
+                str(candidate["assessment_id"]),
+                candidate_clean,
+                update_time=str(candidate["_updateTime"]),
+            )
+        )
+    await store.commit_writes(writes)
+    await store.write_event(
+        event_type="product.task_closed.v2",
+        run_id=task_id,
+        producer=str(task["principal_agent_id"]),
+        payload={
+            "schemaVersion": SCHEMA_VERSION,
+            "namespace": PRODUCTION_NAMESPACE,
+            "taskId": task_id,
+            "intentId": intent_id,
+        },
+        idempotency_key=f"v2:{task_id}:closed",
+    )
+    return task_clean
+
+
 async def set_user_post_status(
     store: MultiUserStore,
     principal: AuthenticatedPrincipal,

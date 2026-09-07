@@ -103,6 +103,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     PRODUCTION_NAMESPACE,
     block_agent_owner,
     build_user_bootstrap,
+    close_user_task,
     complete_onboarding,
     create_user_report,
     create_user_task,
@@ -1827,6 +1828,20 @@ async def app_get_task(
             else None
         ),
     }
+
+
+@app.post("/api/app/tasks/{task_id}/close")
+async def app_close_task(
+    task_id: str,
+    principal: AuthenticatedUser,
+) -> dict[str, Any]:
+    try:
+        task = await close_user_task(_store(), principal, task_id=task_id)
+    except LookupError as exc:
+        raise HTTPException(404, "Task was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"task": task, "status": "CANCELLED"}
 
 
 @app.post("/api/app/tasks/{task_id}/publish")

@@ -27,6 +27,7 @@ from pairpilot_orchestrator.multi_user_commit import (
 from pairpilot_orchestrator.multi_user_platform import (
     agent_id_for_uid,
     build_user_bootstrap,
+    close_user_task,
     complete_onboarding,
     create_user_task,
     provision_user,
@@ -517,6 +518,28 @@ async def test_closing_post_closes_request_and_releases_active_task_quota() -> N
     replacement = await create_user_task(
         store, user, task_input("Replacement active task")
     )
+    assert replacement["status"] == "DRAFT"
+
+
+@pytest.mark.asyncio
+async def test_closing_draft_request_without_post_releases_quota() -> None:
+    store = MemoryMultiUserStore()
+    user = principal("uid-close-draft")
+    await provision_user(store, user)
+    await complete_onboarding(store, user, onboarding("Draft Owner"))
+    tasks = [
+        await create_user_task(store, user, task_input(f"Draft task {index}"))
+        for index in range(3)
+    ]
+
+    closed = await close_user_task(
+        store, user, task_id=str(tasks[0]["task_id"])
+    )
+
+    assert closed["status"] == "CANCELLED"
+    decision_id = str(tasks[0]["decision_ids"][0])
+    assert store.collections["decisions"][decision_id]["status"] == "CANCELLED"
+    replacement = await create_user_task(store, user, task_input("New draft task"))
     assert replacement["status"] == "DRAFT"
 
 

@@ -384,6 +384,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .match-overview-strip strong, .connection-overview-strip strong, .memory-overview-strip strong { display: block; color: var(--green); font-size: 25px; line-height: 1; }
 .match-overview-strip span, .connection-overview-strip span, .memory-overview-strip span { display: block; margin-top: 6px; color: var(--muted); font-size: 8px; }
 .actionable-empty .card-actions { justify-content: center; }
+.request-workspace-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
 .match-section-list { display: grid; gap: 34px; }
 .match-section-list section > .section-heading { margin-bottom: 12px; }
 .match-list-card { cursor: pointer; }
@@ -423,7 +424,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .safety-panel { background: #f4f9f5; }
 .danger-panel { border-color: #e2c5c1; background: #fffafa; }
 @media (max-width: 860px) { .match-detail-hero { display: grid; }.match-detail-actions { justify-content: flex-start; }.match-detail-grid { grid-template-columns: 1fr; }.match-plan-facts { grid-template-columns: 1fr 1fr; }.match-overview-strip { grid-template-columns: repeat(3, 1fr); }.connection-overview-strip, .memory-overview-strip { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .match-plan-facts, .match-terms, .contact-form, .outcome-form { grid-template-columns: 1fr; }.match-overview-strip { grid-template-columns: repeat(2, 1fr); }.actionable-empty .card-actions { align-items: stretch; flex-direction: column; }.actionable-empty .card-actions button { width: 100%; } }
+@media (max-width: 560px) { .match-plan-facts, .match-terms, .contact-form, .outcome-form { grid-template-columns: 1fr; }.match-overview-strip { grid-template-columns: repeat(2, 1fr); }.actionable-empty .card-actions { align-items: stretch; flex-direction: column; }.actionable-empty .card-actions button { width: 100%; }.request-workspace-heading-actions { align-items: flex-end; flex-direction: column; } }
 
 /* Startup V2 owner-scoped Connections */
 .connection-tabs { display: flex; gap: 5px; margin-bottom: 18px; padding: 5px; overflow-x: auto; border: 1px solid var(--line); border-radius: 11px; background: white; }

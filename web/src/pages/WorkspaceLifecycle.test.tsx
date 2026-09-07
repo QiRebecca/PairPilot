@@ -120,4 +120,29 @@ describe("Startup V2 integrated workspaces", () => {
       screen.getByText(/same persistent Personal Agent conversation/i),
     ).toBeInTheDocument();
   });
+
+  it("closes a Request from its workspace and returns to the Agent", async () => {
+    authMocks.request.mockResolvedValue({ status: "CANCELLED" });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const navigate = vi.fn();
+    render(
+      <RequestWorkspaceV2Page
+        taskId="task_one"
+        data={workspaceData}
+        refresh={refresh}
+        navigate={navigate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Request" }));
+
+    await waitFor(() =>
+      expect(authMocks.request).toHaveBeenCalledWith(
+        "/api/app/tasks/task_one/close",
+        { method: "POST", body: "{}" },
+      ),
+    );
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/app/agent"));
+  });
 });
