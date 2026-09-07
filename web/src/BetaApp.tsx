@@ -18,6 +18,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useState,
@@ -26,26 +28,93 @@ import {
 } from "react";
 import { useAuth } from "./auth";
 import { PersonalAgentChat } from "./components/PersonalAgentChat";
-import {
-  MarketplaceExplorePage,
-  PostDetailPage,
-} from "./pages/MarketplacePages";
-import { CommunityDetailPage, CommunityListPage } from "./pages/CommunityPages";
-import { ConnectionDetailPage, ConnectionsPage } from "./pages/ConnectionPages";
-import { MatchDetailPage, MatchesPage } from "./pages/MatchPages";
-import {
-  MemoryDetailPage,
-  MemoryPage as V2MemoryPage,
-} from "./pages/MemoryPages";
-import {
-  AutonomyCenterPage,
-  DecisionInboxPage,
-  NotificationsPage as V2NotificationsPage,
-} from "./pages/ProductGluePages";
-import { OperationsPage } from "./pages/OperationsPage";
-import { RequestWorkspaceV2Page } from "./pages/RequestWorkspaceV2Page";
-import { RoomDetailPage, RoomsPage } from "./pages/RoomPages";
 import { useRouter } from "./router";
+
+const MarketplaceExplorePage = lazy(() =>
+  import("./pages/MarketplacePages").then((module) => ({
+    default: module.MarketplaceExplorePage,
+  })),
+);
+const PostDetailPage = lazy(() =>
+  import("./pages/MarketplacePages").then((module) => ({
+    default: module.PostDetailPage,
+  })),
+);
+const CommunityListPage = lazy(() =>
+  import("./pages/CommunityPages").then((module) => ({
+    default: module.CommunityListPage,
+  })),
+);
+const CommunityDetailPage = lazy(() =>
+  import("./pages/CommunityPages").then((module) => ({
+    default: module.CommunityDetailPage,
+  })),
+);
+const ConnectionsPage = lazy(() =>
+  import("./pages/ConnectionPages").then((module) => ({
+    default: module.ConnectionsPage,
+  })),
+);
+const ConnectionDetailPage = lazy(() =>
+  import("./pages/ConnectionPages").then((module) => ({
+    default: module.ConnectionDetailPage,
+  })),
+);
+const MatchesPage = lazy(() =>
+  import("./pages/MatchPages").then((module) => ({
+    default: module.MatchesPage,
+  })),
+);
+const MatchDetailPage = lazy(() =>
+  import("./pages/MatchPages").then((module) => ({
+    default: module.MatchDetailPage,
+  })),
+);
+const V2MemoryPage = lazy(() =>
+  import("./pages/MemoryPages").then((module) => ({
+    default: module.MemoryPage,
+  })),
+);
+const MemoryDetailPage = lazy(() =>
+  import("./pages/MemoryPages").then((module) => ({
+    default: module.MemoryDetailPage,
+  })),
+);
+const AutonomyCenterPage = lazy(() =>
+  import("./pages/ProductGluePages").then((module) => ({
+    default: module.AutonomyCenterPage,
+  })),
+);
+const DecisionInboxPage = lazy(() =>
+  import("./pages/ProductGluePages").then((module) => ({
+    default: module.DecisionInboxPage,
+  })),
+);
+const V2NotificationsPage = lazy(() =>
+  import("./pages/ProductGluePages").then((module) => ({
+    default: module.NotificationsPage,
+  })),
+);
+const OperationsPage = lazy(() =>
+  import("./pages/OperationsPage").then((module) => ({
+    default: module.OperationsPage,
+  })),
+);
+const RequestWorkspaceV2Page = lazy(() =>
+  import("./pages/RequestWorkspaceV2Page").then((module) => ({
+    default: module.RequestWorkspaceV2Page,
+  })),
+);
+const RoomsPage = lazy(() =>
+  import("./pages/RoomPages").then((module) => ({
+    default: module.RoomsPage,
+  })),
+);
+const RoomDetailPage = lazy(() =>
+  import("./pages/RoomPages").then((module) => ({
+    default: module.RoomDetailPage,
+  })),
+);
 
 type RecordValue = Record<string, unknown>;
 interface BetaBootstrap {
@@ -1301,7 +1370,7 @@ export function BetaApp() {
       onSignOut={signOutNow}
     >
       {error ? <div className="form-error">{error}</div> : null}
-      {page}
+      <Suspense fallback={<Loading />}>{page}</Suspense>
     </BetaShell>
   );
 }

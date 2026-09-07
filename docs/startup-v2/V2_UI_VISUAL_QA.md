@@ -90,21 +90,22 @@ horizontal, scrollable control on narrower screens.
 
 - ESLint: passed.
 - TypeScript: passed.
-- Frontend component tests: 9 passed, zero failed.
+- Frontend component tests: 15 passed, zero failed.
 - Production frontend build: passed.
 - Request test verifies Conversation is the default and all seven tabs exist.
 - Room test verifies Private with My Agent receives the same global conversation
   and the associated Request's task scope.
-- Build warning: the main JavaScript chunk is approximately 504 kB before gzip
-  and should be route-split before broad beta traffic.
+- Authenticated feature pages are route-split. The main JavaScript chunk is
+  approximately 282 kB before gzip; Explore, Rooms, Matches, Connections,
+  Memory, Communities, Decisions/Notifications and Admin load on demand.
 
 ## Remaining visual acceptance gate
 
-No V2 candidate is deployed and no independently authenticated candidate session
-was available for the required screenshot matrix during this phase. Therefore
-responsive and accessibility status remains `PARTIAL`, not `LIVE_VERIFIED`.
+The V2 candidate is deployed at revision `pairpilot-orchestrator-00062-zor`, but
+the required independently authenticated four-viewport screenshot matrix has not
+yet been completed. Therefore responsive and accessibility status remains
+`PARTIAL`, not `LIVE_VERIFIED`.
 
 Candidate acceptance must capture and inspect every listed surface at all four
 target widths, run keyboard-only navigation, verify screen-reader naming and
 error announcements, check zoom/reflow, and test slow/offline/reconnect behavior.
-

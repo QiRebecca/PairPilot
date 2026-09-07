@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-01T23:39:00+08:00",
+  "updated_at": "2026-09-08T06:23:00+08:00",
   "current_phase": 11,
   "current_phase_name": "Closed-beta acceptance",
   "current_phase_status": "PARTIAL",
@@ -21,8 +21,8 @@
   },
   "candidate": {
     "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
-    "orchestrator_revision": "pairpilot-orchestrator-00053-suw",
-    "image_digest": "sha256:04500d3320139300b2e07200643fdca952dfd67bb58c77f3b27937c313cae6a3",
+    "orchestrator_revision": "pairpilot-orchestrator-00062-zor",
+    "image_digest": "sha256:23a80abd82adfb3806effa40d162523b87fedb6d1295568b75ee1ca347eff5bf",
     "traffic_percent": 0,
     "environment": "candidate",
     "collection_prefix": "candidate_v2_",
@@ -43,8 +43,8 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 163,
-    "frontend_tests": 9
+    "python_tests": 178,
+    "frontend_tests": 15
   },
   "phases": {
     "0": "IMPLEMENTED_UNVERIFIED",
@@ -62,13 +62,13 @@
     "12": "PARTIAL"
   },
   "candidate_acceptance": {
-    "security_load_run_id": "v2-acceptance-1788273643",
+    "security_load_run_id": "v2-acceptance-1788816767",
     "agent_lifecycle_run_id": "v2-acceptance-1788273819",
-    "personal_agent_chat_run_id": "v2-acceptance-1788276697",
+    "personal_agent_chat_run_id": "v2-acceptance-1788816767",
     "authenticated_users": 10,
     "communities": 3,
-    "tasks": 25,
-    "posts": 25,
+    "tasks": 36,
+    "posts": 31,
     "task_types": 5,
     "agent_rooms": 8,
     "matches": 7,
@@ -80,13 +80,20 @@
     "concurrent_requests": 80,
     "request_concurrency": 20,
     "request_failures": 0,
-    "load_elapsed_seconds": 20.55,
+    "load_elapsed_seconds": 18.411,
     "global_personal_agent_turns": 3,
     "global_personal_agent_tools": [
       "draft_intent_post",
       "revise_intent_post",
       "publish_intent_post"
-    ]
+    ],
+    "request_closure_quota_release": true,
+    "same_request_backup_activation": true,
+    "action_autonomy_matrix": true,
+    "connection_context_matrix": true,
+    "memory_scope_matrix": true,
+    "saved_search_pubsub_monitor": true,
+    "saved_search_notification_route": "/app/posts/intent_c8cea097082e414ab3616e2cf068ff8e"
   },
   "migration_dry_run": {
     "migration_id": "V2_001_schema_registry_and_environment",
@@ -99,8 +106,7 @@
     "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
   },
   "next_actions": [
-    "Run remaining named lifecycle acceptance scenarios",
-    "Run offline monitoring and failure-injection acceptance",
+    "Run failure-injection acceptance",
     "Run the candidate migration dry-run and apply gate",
     "Capture authenticated visual and accessibility evidence"
   ],
@@ -110,9 +116,8 @@
     "Non-empty DLQ inspection backlog",
     "No Firestore composite indexes for planned search",
     "No candidate vector index or public-Post embedding backfill",
-    "Saved-search monitoring worker not implemented",
-    "Core authenticated pages still remaining in BetaApp need decomposition",
-    "Full V2 offline monitoring and failure-injection acceptance not run",
-    "Authenticated multi-viewport visual and accessibility acceptance not run"
+    "Full V2 failure-injection acceptance not run",
+    "Authenticated multi-viewport visual and accessibility acceptance not run",
+    "Transient Vertex AI 429s recovered during live Agent context acceptance; provider-capacity alerting and a longer soak window remain required"
   ]
 }

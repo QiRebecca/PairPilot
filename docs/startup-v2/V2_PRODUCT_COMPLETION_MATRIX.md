@@ -1,6 +1,6 @@
 # Startup V2 product completion matrix
 
-Updated: 2026-09-01
+Updated: 2026-09-08
 
 Only `NOT_IMPLEMENTED`, `PARTIAL`, `IMPLEMENTED_UNVERIFIED`, and `LIVE_VERIFIED`
 are valid completion states.
@@ -12,29 +12,29 @@ are valid completion states.
 | Authenticated multi-user isolation | LIVE_VERIFIED | Firebase principals, owner checks, deny-all Firestore browser rules, tests |
 | Unified V2 schema and state machines | PARTIAL | Canonical Post, Room, Match, Connection, Memory, Decision, Notification, and action-autonomy vocabularies plus validators exist; legacy Room/Match/Connection runtime writes still need migration |
 | Versioned migration framework | IMPLEMENTED_UNVERIFIED | Registry, checksums, pagination, dry-run, optimistic concurrency, environment/backup guards, migration report, and real 3,093-record dry-run pass; candidate apply is still gated |
-| Request workspace tabs and activity | IMPLEMENTED_UNVERIFIED | Conversation-default seven-tab route, Overview, Post, Candidates, Agent Rooms, material Activity and object Audit pass component/build checks; material-change invalidation and candidate acceptance remain |
+| Request workspace tabs and activity | IMPLEMENTED_UNVERIFIED | Conversation-default seven-tab route, Overview, Post, Candidates, Agent Rooms, Activity, Audit and explicit Request closure pass component/build checks; live closure released quota and withdrew stale state, but authenticated browser acceptance remains |
 | Explore natural-language and structured search | PARTIAL | Authenticated server filters, six views, bounded text relevance, result explanations, and local browser acceptance pass; Firestore vector index and embedding backfill remain gated |
-| Saved Posts and saved searches | PARTIAL | Owner-scoped entities, save/remove APIs, monitored-search event, and UI exist; event worker monitoring and candidate acceptance remain |
-| Post Detail route | IMPLEMENTED_UNVERIFIED | Authorized `/app/posts/:intentId` and public-only API pass local browser direct-link acceptance; candidate deployment remains |
+| Saved Posts and saved searches | LIVE_VERIFIED | Save/remove/reactivate semantics, active monitor creation, existing/new Post Pub/Sub evaluation, scope/block checks, idempotent hits and clickable in-app notification passed live candidate acceptance |
+| Post Detail route | LIVE_VERIFIED | Authorized `/app/posts/:intentId` public-only API and saved-search notification direct link passed candidate acceptance without private-field leakage |
 | Agent evaluate/contact from Post | LIVE_VERIFIED | Eight candidate contacts produced real Gemini/ADK/A2A turns, evidence-backed assessments and Rooms across independent users |
 | Community join/leave | LIVE_VERIFIED | Authenticated APIs and production data exist |
 | Community Detail and scoped feed | IMPLEMENTED_UNVERIFIED | Direct route, five tabs, scoped Posts/members/Rooms pass local tests and browser acceptance |
 | Community rules and moderation | PARTIAL | Scoped moderator queue/actions, removal/suspension authority, untrusted-content warning, and audit exist locally; cross-path and candidate acceptance remain |
 | Community Agent | IMPLEMENTED_UNVERIFIED | Logical safe-scope Agent answers rules and surfaces only public Posts |
 | Candidate Pool and dynamic ranking | LIVE_VERIFIED | Multiple candidates, rank events, real A2A acceptance |
-| Continuous offline monitoring | IMPLEMENTED_UNVERIFIED | Pub/Sub/reconciliation exists; required browser-closed scenario not accepted |
+| Continuous offline monitoring | LIVE_VERIFIED | OIDC Pub/Sub push evaluated saved searches and created authorized notifications without browser participation; reconciliation and candidate availability also run through the isolated worker |
 | Room lifecycle and summary | IMPLEMENTED_UNVERIFIED | Participant-scoped list/detail, V2 mapping, header facts and summary panel pass local tests/build |
 | Three-channel isolation | IMPLEMENTED_UNVERIFIED | Private Room view now uses the same live task-scoped Personal Agent; redacted read-only Agents-only and consent-gated Shared channels remain server-isolated; shared Agent draft approval remains |
 | Dual-human approval | LIVE_VERIFIED | Version-bound atomic commit tests and live two-user acceptance |
-| Match Detail and executable plan | IMPLEMENTED_UNVERIFIED | Participant-scoped direct list/detail routes and plan actions pass local tests/build; candidate acceptance remains |
-| Calendar `.ics` export | IMPLEMENTED_UNVERIFIED | Authenticated participant-only escaped UTC calendar route and download UI pass local tests |
-| Match change/cancel/backup | IMPLEMENTED_UNVERIFIED | Exact-version dual approval, audited cancellation, notifications, durable reopen event, and ranked backup activation pass local tests |
+| Match Detail and executable plan | LIVE_VERIFIED | Participant-scoped list/detail, outsider denial, Room link and plan actions passed the live lifecycle matrix |
+| Calendar `.ics` export | LIVE_VERIFIED | Authenticated participant-only calendar output passed live validation |
+| Match change/cancel/backup | LIVE_VERIFIED | Exact-version dual approval, cancellation and same-Request-only ranked backup activation passed live candidate matrices |
 | Opt-in Contact Cards | LIVE_VERIFIED | Match-scoped offer/revoke and authorization implemented |
 | Connections list/detail | IMPLEMENTED_UNVERIFIED | Owner-scoped list, eight views, direct detail, dimensions, plan/Room links, provenance, controls, and secondary Graph pass local tests/build |
-| Connection reuse | IMPLEMENTED_UNVERIFIED | Personal Agent inspection/warm-introduction is task-context checked and usage-audited; candidate future-task acceptance remains |
-| Memory lifecycle | IMPLEMENTED_UNVERIFIED | Typed grouped list/detail, confirmed-only scoped retrieval, usage events, Why-used provenance, task exceptions, contradiction review, and full controls pass local tests/build |
+| Connection reuse | LIVE_VERIFIED | Nine-turn candidate context matrix proved applicable reuse, mismatched-context refusal and usage audit |
+| Memory lifecycle | LIVE_VERIFIED | Candidate context matrix proved proposed Memory inert, confirmed in-scope use, out-of-scope exclusion, why-used evidence, task override and rejection stop |
 | Decision Inbox | PARTIAL | Owner-scoped unified route, badges, exact entity routing, reject, and safe inline approval for supported types pass locally; remaining types need inline handlers |
-| In-app notifications | IMPLEMENTED_UNVERIFIED | Read/unread, categories, entity routing, archive, mark-all-read, quiet hours, and preferences pass local tests/build |
+| In-app notifications | LIVE_VERIFIED | Live saved-search notification, public Post routing and authorization passed; read/archive/preferences remain covered locally |
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |
 | Action-specific Autonomy Center | PARTIAL | Twelve-action global/task UI, persistence, locked final commitment, history, and Post-publish enforcement exist; remaining Agent actions need common enforcement |
 | Admin authorization | LIVE_VERIFIED | Explicit admin claim enforced server-side |
@@ -42,6 +42,6 @@ are valid completion states.
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
 | Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
-| Responsive/accessibility acceptance | PARTIAL | New route semantics, focus, reduced-motion, offline announcement, tablet/mobile layouts and 9 frontend tests pass; authenticated four-viewport visual/keyboard/screen-reader acceptance remains |
+| Responsive/accessibility acceptance | PARTIAL | New route semantics, focus, reduced-motion, offline announcement, tablet/mobile layouts, route-split 282 kB main bundle and 15 frontend tests pass; authenticated four-viewport visual/keyboard/screen-reader acceptance remains |
 | Ten-user/three-Community V2 acceptance | LIVE_VERIFIED | Candidate runs exercised 10 auth users, 3 Communities, 25 Posts, 5 types, 8 Agent contacts, 7 Matches, 4 completions, 3 cancellations, 20 Memories and 80 concurrent authenticated requests |
-| Candidate deployment and production promotion | PARTIAL | Isolated revision `00053-suw`, immutable digest, prefix, topic, OIDC subscription and DLQ are live at zero traffic; migration apply, visual gate and production promotion remain |
+| Candidate deployment and production promotion | PARTIAL | Isolated revision `00062-zor`, immutable digest, prefix, topic, OIDC subscription and DLQ are live at zero traffic; migration apply, visual/failure-injection gates and production promotion remain |

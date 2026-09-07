@@ -74,39 +74,40 @@ runtime and server-authoritative routes.
 - Candidate isolation/config tests: passed.
 - Candidate seeder plan: passed.
 - Candidate deploy shell syntax: passed.
-- Full frontend suite from Phase 10: 9 passed and production build passed.
+- Full frontend suite: 15 passed and production build passed.
 
 ## Live candidate evidence
 
-- Candidate revision: `pairpilot-orchestrator-00053-suw` at zero production traffic.
+- Candidate revision: `pairpilot-orchestrator-00062-zor` at zero production traffic.
 - Immutable image digest:
-  `sha256:04500d3320139300b2e07200643fdca952dfd67bb58c77f3b27937c313cae6a3`.
+  `sha256:23a80abd82adfb3806effa40d162523b87fedb6d1295568b75ee1ca347eff5bf`.
 - Candidate health: `environment=candidate`, live
   `gemini-3.7-flash`, Google ADK and A2A runtime.
-- Cohort: 10 Firebase users, 3 Communities, 25 Requests, 25 OPEN Posts and all
+- Cohort inventory at the latest core run: 10 Firebase users, 3 Communities,
+  36 Requests, 31 Posts and all
   5 supported task types.
-- Security/load run `v2-acceptance-1788273643`: cross-user task 403, legacy
+- Security/load run `v2-acceptance-1788816767`: cross-user task 403, legacy
   surface 404, no Explore owner/email leak, 80 requests at concurrency 20 with
-  zero failures in 20.55 seconds.
+  zero failures in 18.411 seconds.
 - Agent lifecycle run `v2-acceptance-1788273819`: 8 candidate Agent Rooms,
   7 dual-approved committed Matches, 4 completed and 3 cancelled.
 - A2A evidence: 18 completed `gemini-3.7-flash` turns, 23,392 input tokens,
   2,978 output tokens, zero candidate Agent job failures and zero candidate DLQ
   records at the evidence snapshot.
-- Persistent Agent run `v2-acceptance-1788276697`: one
+- Persistent Agent run `v2-acceptance-1788816767`: one
   `GLOBAL_PERSONAL_AGENT` conversation completed draft, revise and explicit publish
   turns; all three invocation records are `COMPLETED`, the private draft was read
   back, and the authoritative Post is OPEN.
-- A post-tool Gemini 429 was reproduced on revision `00052`, persisted honestly,
-  fixed with bounded retries plus explicitly classified authoritative-tool recovery,
-  and reaccepted on revision `00053` without clearing the conversation history.
+- Action autonomy, Request closure/quota release, same-Request backup activation,
+  Connection-context reuse, Memory scope/override/rejection, Room isolation, Match
+  change/calendar/contact and Pub/Sub saved-search monitoring passed additional
+  live candidate matrices. Monitor notifications route to authorized Post Detail.
+- Transient Gemini 429s during the context matrix were recovered by bounded SDK
+  retries and all nine turns completed; provider-capacity alerting remains a gate.
 - Production remained `pairpilot-orchestrator-00050-qiq` at 100% throughout.
 
 ## Gates still required
 
 - Add duplicate delivery, worker crash/lease expiry, transaction conflict, expiry,
-  orphan Room, saved-search and SSE reconnect failure injection.
-- Complete the remaining named lifecycle scenarios, including Community leave/rules,
-  Room channel transitions, Match change/reapproval/calendar/contact/backup,
-  Connection reuse, scoped Memory, Decisions/Notifications, autonomy and moderation.
+  orphan Room and SSE reconnect failure injection.
 - Perform authenticated visual/accessibility acceptance with independent users.
