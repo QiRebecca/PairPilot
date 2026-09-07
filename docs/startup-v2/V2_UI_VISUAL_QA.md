@@ -62,7 +62,7 @@ horizontal, scrollable control on narrower screens.
 
 | Target | Implemented layout behavior | Visual evidence |
 |---|---|---|
-| 1440×900 | persistent sidebar, wide content, contextual side panels | Not captured in a V2 candidate |
+| 1440×900 | persistent sidebar, wide content, contextual side panels | Primary authenticated owner journey reviewed live |
 | 1280×800 | persistent sidebar, reduced grids | Not captured in a V2 candidate |
 | 768×1024 | horizontal App navigation, one-column Room/Admin, three-column Request facts | Not captured in a V2 candidate |
 | 390×844 | icon App navigation, single-column cards/forms/facts, horizontal tab scrollers | Not captured in a V2 candidate |
@@ -71,17 +71,17 @@ horizontal, scrollable control on narrower screens.
 
 | Surface | Route-level implementation | Automated component/build evidence | Authenticated screenshot reviewed |
 |---|---|---|---|
-| My Agent | yes | yes | no |
-| Request Overview | yes | yes | no |
-| Explore | yes | yes | no |
-| Post Detail | yes | yes | no |
-| Community | yes | yes | no |
-| Room | yes | yes | no |
-| Match | yes | yes | no |
-| Connections list | yes | yes | no |
+| My Agent | yes | yes | desktop |
+| Request Overview | yes | yes | desktop |
+| Explore | yes | yes | desktop |
+| Post Detail | yes | yes | desktop |
+| Community | yes | yes | desktop |
+| Room | yes | yes | desktop |
+| Match | yes | yes | desktop |
+| Connections list | yes | yes | desktop |
 | Connections graph | yes | build only | no |
-| Memory | yes | yes | no |
-| Decision Inbox | yes | build only | no |
+| Memory | yes | yes | desktop |
+| Decision Inbox | yes | build only | desktop |
 | Notifications | yes | build only | no |
 | Autonomy Center | yes | build only | no |
 | Admin | yes | build only | no |
@@ -90,7 +90,7 @@ horizontal, scrollable control on narrower screens.
 
 - ESLint: passed.
 - TypeScript: passed.
-- Frontend component tests: 15 passed, zero failed.
+- Frontend component tests: 18 passed, zero failed.
 - Production frontend build: passed.
 - Request test verifies Conversation is the default and all seven tabs exist.
 - Room test verifies Private with My Agent receives the same global conversation
@@ -101,10 +101,11 @@ horizontal, scrollable control on narrower screens.
 
 ## Remaining visual acceptance gate
 
-The V2 candidate is deployed at revision `pairpilot-orchestrator-00063-qec`, but
-the required independently authenticated four-viewport screenshot matrix has not
-yet been completed. Therefore responsive and accessibility status remains
-`PARTIAL`, not `LIVE_VERIFIED`.
+The V2 candidate is deployed at revision `pairpilot-orchestrator-00071-gaq`. An
+authenticated desktop journey has been reviewed across Agent, Request, Explore,
+Post, Community, Room, Match, Connection, Memory and Decision surfaces. The
+required four-viewport screenshot matrix is still incomplete, so responsive and
+accessibility status remains `PARTIAL`, not `LIVE_VERIFIED`.
 
 Candidate acceptance must capture and inspect every listed surface at all four
 target widths, run keyboard-only navigation, verify screen-reader naming and

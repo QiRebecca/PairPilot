@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-08T06:23:00+08:00",
+  "updated_at": "2026-09-08T07:55:00+08:00",
   "current_phase": 11,
   "current_phase_name": "Closed-beta acceptance",
   "current_phase_status": "PARTIAL",
@@ -21,8 +21,8 @@
   },
   "candidate": {
     "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
-    "orchestrator_revision": "pairpilot-orchestrator-00063-qec",
-    "image_digest": "sha256:0d8e4bffca872c29656de41ce155f84573c3755d9f494394f0f3aca7c193aadc",
+    "orchestrator_revision": "pairpilot-orchestrator-00071-gaq",
+    "image_digest": "sha256:c3cf489681873310fc1e91823a4a5554d50f726d7ff7ad936a378e94d9c638ff",
     "traffic_percent": 0,
     "environment": "candidate",
     "collection_prefix": "candidate_v2_",
@@ -43,8 +43,8 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 178,
-    "frontend_tests": 15
+    "python_tests": 186,
+    "frontend_tests": 18
   },
   "phases": {
     "0": "IMPLEMENTED_UNVERIFIED",
@@ -53,8 +53,8 @@
     "3": "PARTIAL",
     "4": "PARTIAL",
     "5": "PARTIAL",
-    "6": "PARTIAL",
-    "7": "PARTIAL",
+    "6": "LIVE_VERIFIED",
+    "7": "LIVE_VERIFIED",
     "8": "PARTIAL",
     "9": "PARTIAL",
     "10": "PARTIAL",
@@ -62,13 +62,13 @@
     "12": "PARTIAL"
   },
   "candidate_acceptance": {
-    "security_load_run_id": "v2-acceptance-1788816767",
+    "security_load_run_id": "v2-acceptance-1788825125",
     "agent_lifecycle_run_id": "v2-acceptance-1788273819",
-    "personal_agent_chat_run_id": "v2-acceptance-1788816767",
+    "personal_agent_chat_run_id": "v2-acceptance-1788825125",
     "authenticated_users": 10,
     "communities": 3,
-    "tasks": 36,
-    "posts": 31,
+    "tasks": 66,
+    "posts": 61,
     "task_types": 5,
     "agent_rooms": 8,
     "matches": 7,
@@ -80,7 +80,7 @@
     "concurrent_requests": 80,
     "request_concurrency": 20,
     "request_failures": 0,
-    "load_elapsed_seconds": 18.411,
+    "load_elapsed_seconds": 17.269,
     "global_personal_agent_turns": 3,
     "global_personal_agent_tools": [
       "draft_intent_post",
@@ -93,31 +93,40 @@
     "connection_context_matrix": true,
     "memory_scope_matrix": true,
     "saved_search_pubsub_monitor": true,
-    "saved_search_notification_route": "/app/posts/intent_c8cea097082e414ab3616e2cf068ff8e"
+    "saved_search_notification_route": "/app/posts/intent_c8cea097082e414ab3616e2cf068ff8e",
+    "real_owner_browser_journey": {
+      "post_published": true,
+      "agent_negotiation_visible": true,
+      "dual_approved_match": true,
+      "two_way_shared_room": true,
+      "connection_created": true,
+      "memory_confirmed": true
+    }
   },
-  "migration_dry_run": {
-    "migration_id": "V2_001_schema_registry_and_environment",
-    "environment": "production",
-    "scanned": 3093,
-    "would_mutate": 3093,
-    "written": 0,
+  "candidate_migration": {
+    "migration_id": "V2_002_runtime_metadata_convergence",
+    "environment": "candidate",
+    "applied": true,
+    "post_apply_scanned": 1735,
+    "post_apply_would_mutate": 0,
     "blocking_count": 0,
-    "review_required": 26,
-    "checksum": "26db6fdbb922519d07645558c70c1618f42b654fe92f2ec63883c5f052214f8d"
+    "review_required": 0,
+    "checksum": "7f66f8de6fdc17d7c2bdff562282a61724e831e2a7ce6387c9a38050ec7fa57d"
   },
   "next_actions": [
     "Run failure-injection acceptance",
-    "Run the candidate migration dry-run and apply gate",
-    "Capture authenticated visual and accessibility evidence"
+    "Capture the remaining authenticated viewport and accessibility evidence",
+    "Complete provider-capacity soak and alerting",
+    "Back up and migrate production before promotion"
   ],
   "known_blockers": [
     "Mixed legacy and V1 lifecycle states in production",
-    "Twenty-six historical records require explicit environment classification",
+    "Production backup and reviewed migration are not complete",
     "Non-empty DLQ inspection backlog",
     "No Firestore composite indexes for planned search",
     "No candidate vector index or public-Post embedding backfill",
     "Full V2 failure-injection acceptance not run",
-    "Authenticated multi-viewport visual and accessibility acceptance not run",
+    "Authenticated desktop acceptance passed; multi-viewport accessibility acceptance remains",
     "Transient Vertex AI 429s recovered during live Agent context acceptance; provider-capacity alerting and a longer soak window remain required"
   ]
 }

@@ -70,31 +70,31 @@ runtime and server-authoritative routes.
 
 ## Local verification
 
-- Python suite: 163 passed; zero failed; dependency deprecation warnings only.
+- Python suite: 186 passed; zero failed; dependency deprecation warnings only.
 - Candidate isolation/config tests: passed.
 - Candidate seeder plan: passed.
 - Candidate deploy shell syntax: passed.
-- Full frontend suite: 15 passed and production build passed.
+- Full frontend suite: 18 passed; lint, typecheck and production build passed.
 
 ## Live candidate evidence
 
-- Candidate revision: `pairpilot-orchestrator-00063-qec` at zero production traffic.
+- Candidate revision: `pairpilot-orchestrator-00071-gaq` at zero production traffic.
 - Immutable image digest:
-  `sha256:0d8e4bffca872c29656de41ce155f84573c3755d9f494394f0f3aca7c193aadc`.
+  `sha256:c3cf489681873310fc1e91823a4a5554d50f726d7ff7ad936a378e94d9c638ff`.
 - Candidate health: `environment=candidate`, live
   `gemini-3.7-flash`, Google ADK and A2A runtime.
 - Cohort inventory at the latest core run: 10 Firebase users, 3 Communities,
-  36 Requests, 31 Posts and all
+  66 Requests, 61 Posts and all
   5 supported task types.
-- Security/load run `v2-acceptance-1788816767`: cross-user task 403, legacy
+- Security/load run `v2-acceptance-1788825125`: cross-user task 403, legacy
   surface 404, no Explore owner/email leak, 80 requests at concurrency 20 with
-  zero failures in 18.411 seconds.
+  zero failures in 17.269 seconds.
 - Agent lifecycle run `v2-acceptance-1788273819`: 8 candidate Agent Rooms,
   7 dual-approved committed Matches, 4 completed and 3 cancelled.
 - A2A evidence: 18 completed `gemini-3.7-flash` turns, 23,392 input tokens,
   2,978 output tokens, zero candidate Agent job failures and zero candidate DLQ
   records at the evidence snapshot.
-- Persistent Agent run `v2-acceptance-1788816767`: one
+- Persistent Agent run `v2-acceptance-1788825125`: one
   `GLOBAL_PERSONAL_AGENT` conversation completed draft, revise and explicit publish
   turns; all three invocation records are `COMPLETED`, the private draft was read
   back, and the authoritative Post is OPEN.
@@ -105,6 +105,12 @@ runtime and server-authoritative routes.
 - Transient Gemini 429s during the context matrix were recovered by bounded SDK
   retries and all nine turns completed; provider-capacity alerting remains a gate.
 - Production remained `pairpilot-orchestrator-00050-qiq` at 100% throughout.
+- Candidate migration `V2_002_runtime_metadata_convergence` is applied; the latest
+  1,735-document dry-run reports zero pending mutations.
+- An authenticated real-owner browser journey produced a public Post, two-Agent
+  negotiation, dual-approved Match, two-way Shared Room conversation, Connection
+  and confirmed Memory. Agent transcript redaction retains ISO dates while still
+  redacting phone-shaped contact details.
 
 ## Gates still required
 
