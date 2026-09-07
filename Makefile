@@ -44,7 +44,7 @@ deploy:
 	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/deploy.sh
 
 deploy-candidate:
-	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/deploy_startup_v2_candidate.sh
+	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) bash infra/deploy_startup_v2_candidate.sh
 
 verify:
 	GOOGLE_CLOUD_PROJECT=$(PROJECT_ID) infra/verify_deployment.sh
