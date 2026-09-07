@@ -101,7 +101,7 @@ horizontal, scrollable control on narrower screens.
 
 ## Remaining visual acceptance gate
 
-The V2 candidate is deployed at revision `pairpilot-orchestrator-00062-zor`, but
+The V2 candidate is deployed at revision `pairpilot-orchestrator-00063-qec`, but
 the required independently authenticated four-viewport screenshot matrix has not
 yet been completed. Therefore responsive and accessibility status remains
 `PARTIAL`, not `LIVE_VERIFIED`.

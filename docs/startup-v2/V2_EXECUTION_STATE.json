@@ -21,8 +21,8 @@
   },
   "candidate": {
     "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
-    "orchestrator_revision": "pairpilot-orchestrator-00062-zor",
-    "image_digest": "sha256:23a80abd82adfb3806effa40d162523b87fedb6d1295568b75ee1ca347eff5bf",
+    "orchestrator_revision": "pairpilot-orchestrator-00063-qec",
+    "image_digest": "sha256:0d8e4bffca872c29656de41ce155f84573c3755d9f494394f0f3aca7c193aadc",
     "traffic_percent": 0,
     "environment": "candidate",
     "collection_prefix": "candidate_v2_",

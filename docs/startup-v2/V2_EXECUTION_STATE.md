@@ -6,8 +6,8 @@ Updated: 2026-09-08
 
 Phase 11 — Closed-beta acceptance: `PARTIAL`
 
-The isolated candidate is live at revision `pairpilot-orchestrator-00062-zor`
-(`sha256:23a80abd82adfb3806effa40d162523b87fedb6d1295568b75ee1ca347eff5bf`)
+The isolated candidate is live at revision `pairpilot-orchestrator-00063-qec`
+(`sha256:0d8e4bffca872c29656de41ce155f84573c3755d9f494394f0f3aca7c193aadc`)
 with zero production traffic. Ten independently authenticated controlled users,
 three Communities, 36 Requests, 31 Posts, all five task types, 20 mixed-state
 Memories, eight real Agent contacts, seven dual-approved Matches, four completions

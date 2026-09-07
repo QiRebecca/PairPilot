@@ -78,9 +78,9 @@ runtime and server-authoritative routes.
 
 ## Live candidate evidence
 
-- Candidate revision: `pairpilot-orchestrator-00062-zor` at zero production traffic.
+- Candidate revision: `pairpilot-orchestrator-00063-qec` at zero production traffic.
 - Immutable image digest:
-  `sha256:23a80abd82adfb3806effa40d162523b87fedb6d1295568b75ee1ca347eff5bf`.
+  `sha256:0d8e4bffca872c29656de41ce155f84573c3755d9f494394f0f3aca7c193aadc`.
 - Candidate health: `environment=candidate`, live
   `gemini-3.7-flash`, Google ADK and A2A runtime.
 - Cohort inventory at the latest core run: 10 Firebase users, 3 Communities,
