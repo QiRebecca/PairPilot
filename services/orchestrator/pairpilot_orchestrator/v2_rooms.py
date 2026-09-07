@@ -27,6 +27,7 @@ RoomChannel = Literal["PRIVATE_USER_AGENT", "AGENTS_ONLY", "SHARED_ROOM"]
 
 EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 PHONE = re.compile(r"(?<!\w)\+?\d(?:[\s().-]?\d){6,14}(?!\d)")
+ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 ROOM_NUMBER = re.compile(
     r"\b(?:hotel\s+)?(?:room|suite)\s*(?:number|no\.?|#)?\s*\d{2,6}\b",
     re.IGNORECASE,
@@ -83,7 +84,16 @@ def _room_section(room: Mapping[str, Any]) -> str:
 def _redact_agent_transcript(content: object) -> tuple[str, bool]:
     original = str(content or "")
     redacted = EMAIL.sub("[contact detail redacted]", original)
+    preserved_dates: list[str] = []
+
+    def preserve_date(match: re.Match[str]) -> str:
+        preserved_dates.append(match.group(0))
+        return f"PAIRPILOTISODATE{len(preserved_dates) - 1}TOKEN"
+
+    redacted = ISO_DATE.sub(preserve_date, redacted)
     redacted = PHONE.sub("[phone redacted]", redacted)
+    for index, date in enumerate(preserved_dates):
+        redacted = redacted.replace(f"PAIRPILOTISODATE{index}TOKEN", date)
     redacted = ROOM_NUMBER.sub("[precise room redacted]", redacted)
     redacted = LIVE_LOCATION.sub("[live location redacted]", redacted)
     return redacted, redacted != original

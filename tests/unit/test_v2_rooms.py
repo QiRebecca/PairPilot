@@ -135,6 +135,38 @@ async def test_room_workspace_separates_all_channels_and_redacts_agent_transcrip
 
 
 @pytest.mark.asyncio
+async def test_agent_transcript_preserves_dates_while_redacting_phone_numbers() -> None:
+    store = MemoryMultiUserStore()
+    await seed_room(store)
+    await store.create(
+        "room_messages",
+        "agents-with-date-and-phone",
+        {
+            "namespace": "production",
+            "message_id": "agents-with-date-and-phone",
+            "room_id": "room_pair",
+            "speaker_id": "agent_peer",
+            "speaker_type": "PERSONAL_AGENT",
+            "authorship": "AGENT_SENT_WITHIN_AUTHORITY",
+            "visibility": "AGENTS_ONLY",
+            "content": (
+                "The event runs from 2026-10-15 to 2026-10-17. "
+                "Call +1 415 555 0199."
+            ),
+        },
+    )
+
+    payload = await get_room_workspace(store, principal("viewer"), "room_pair")
+    message = payload["channels"]["AGENTS_ONLY"][0]
+
+    assert "2026-10-15" in message["content"]
+    assert "2026-10-17" in message["content"]
+    assert "+1 415 555 0199" not in message["content"]
+    assert "[phone redacted]" in message["content"]
+    assert message["policy_redacted"] is True
+
+
+@pytest.mark.asyncio
 async def test_private_instruction_never_enters_shared_or_agents_only_channel() -> None:
     store = MemoryMultiUserStore()
     await seed_room(store)
