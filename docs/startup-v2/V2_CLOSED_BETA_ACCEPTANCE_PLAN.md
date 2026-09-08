@@ -74,13 +74,13 @@ runtime and server-authoritative routes.
 - Candidate isolation/config tests: passed.
 - Candidate seeder plan: passed.
 - Candidate deploy shell syntax: passed.
-- Full frontend suite: 18 passed; lint, typecheck and production build passed.
+- Full frontend suite: 19 passed; lint, typecheck and production build passed.
 
 ## Live candidate evidence
 
-- Candidate revision: `pairpilot-orchestrator-00073-dit` at zero production traffic.
+- Candidate revision: `pairpilot-orchestrator-00074-riw` at zero production traffic.
 - Immutable image digest:
-  `sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5`.
+  `sha256:c40fb2c4c6010e4ace20048c4519b594a2803fe9411224c80cb63fde64e8d42a`.
 - Candidate health: `environment=candidate`, live
   `gemini-3.7-flash`, Google ADK and A2A runtime.
 - Cohort inventory at the latest core run: 10 Firebase users, 3 Communities,
@@ -114,6 +114,10 @@ runtime and server-authoritative routes.
   negotiation, dual-approved Match, two-way Shared Room conversation, Connection
   and confirmed Memory. Agent transcript redaction retains ISO dates while still
   redacting phone-shaped contact details.
+- The real-owner Notifications page loaded four unread records, then read-all
+  updated every row and cleared the sidebar badge without a reload. Settings and
+  all twelve action-specific autonomy controls also rendered with final commitment
+  infrastructure-locked to `ASK_FIRST`.
 
 ## Gates still required
 

@@ -6,8 +6,8 @@ Updated: 2026-09-08
 
 Phase 11 — Closed-beta acceptance: `PARTIAL`
 
-The isolated candidate is live at revision `pairpilot-orchestrator-00073-dit`
-(`sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5`)
+The isolated candidate is live at revision `pairpilot-orchestrator-00074-riw`
+(`sha256:c40fb2c4c6010e4ace20048c4519b594a2803fe9411224c80cb63fde64e8d42a`)
 with zero production traffic. Ten independently authenticated controlled users,
 three Communities, 72 Requests, 66 Posts and all five task types are present. The
 latest 80-request/20-concurrency authenticated smoke passed with zero failures and
@@ -20,6 +20,9 @@ Candidate reconciliation retains nine historical Agent-contact failure audits bu
 has classified every recovered or obsolete item as `RESOLVED`; actionable failures,
 candidate worker backlog, candidate DLQ records and latest-revision error logs are
 all zero.
+Decision and Notification attention counts refresh while the visible app is open,
+on focus and immediately after an attention mutation; the real owner browser gate
+verified four unread items becoming read with the sidebar badge clearing.
 
 A separate authenticated browser journey for a real owner account also completed
 Post publication, compatible-candidate contact, two-Agent negotiation, proposal,

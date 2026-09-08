@@ -34,7 +34,7 @@ are valid completion states.
 | Connection reuse | LIVE_VERIFIED | Nine-turn candidate context matrix proved applicable reuse, mismatched-context refusal and usage audit |
 | Memory lifecycle | LIVE_VERIFIED | Candidate context matrix proved proposed Memory inert, confirmed in-scope use, out-of-scope exclusion, why-used evidence, task override and rejection stop |
 | Decision Inbox | PARTIAL | Owner-scoped unified route, badges, exact entity routing, reject, and safe inline approval for supported types pass locally; remaining types need inline handlers |
-| In-app notifications | LIVE_VERIFIED | Live saved-search notification, public Post routing and authorization passed; read/archive/preferences remain covered locally |
+| In-app notifications | LIVE_VERIFIED | Live saved-search routing and authorization plus real-owner read-all/badge synchronization passed; visible polling, focus refresh, read/archive and preferences are implemented |
 | Browser push | NOT_IMPLEMENTED | FCM web push intentionally waits for in-app notification acceptance |
 | Action-specific Autonomy Center | PARTIAL | Twelve-action global/task UI, persistence, locked final commitment, history, and Post-publish enforcement exist; remaining Agent actions need common enforcement |
 | Admin authorization | LIVE_VERIFIED | Explicit admin claim enforced server-side |
@@ -42,6 +42,6 @@ are valid completion states.
 | Account export/deletion | LIVE_VERIFIED | Authenticated routes and tests/evidence exist |
 | Blocking/reporting | PARTIAL | Core routes exist; cross-surface and moderator acceptance incomplete |
 | Product lifecycle analytics | IMPLEMENTED_UNVERIFIED | Content-free lifecycle counts and derived plan/approval/completion/cancellation/Connection/Memory metrics are operational locally; canonical event coverage and candidate acceptance remain |
-| Responsive/accessibility acceptance | PARTIAL | Authenticated desktop journey passed and stale deploy chunks self-recover; 18 frontend tests, route semantics, focus, reduced-motion and route-split 283 kB main bundle pass; four-viewport keyboard/screen-reader acceptance remains |
+| Responsive/accessibility acceptance | PARTIAL | Authenticated desktop journey passed and stale deploy chunks self-recover; 19 frontend tests, route semantics, focus, reduced-motion and route-split 284 kB main bundle pass; four-viewport keyboard/screen-reader acceptance remains |
 | Ten-user/three-Community V2 acceptance | LIVE_VERIFIED | Candidate runs exercised 10 auth users, 3 Communities, 25 Posts, 5 types, 8 Agent contacts, 7 Matches, 4 completions, 3 cancellations, 20 Memories and 80 concurrent authenticated requests |
-| Candidate deployment and production promotion | PARTIAL | Isolated revision `00073-dit`, immutable digest, converged migration, zero actionable job failures/backlog/DLQ and zero latest-revision error logs are live at zero traffic; visual/failure-injection/provider-soak gates and production promotion remain |
+| Candidate deployment and production promotion | PARTIAL | Isolated revision `00074-riw`, immutable digest, converged migration, zero actionable job failures/backlog/DLQ and zero latest-revision error logs are live at zero traffic; visual/failure-injection/provider-soak gates and production promotion remain |

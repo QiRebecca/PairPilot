@@ -82,15 +82,15 @@ horizontal, scrollable control on narrower screens.
 | Connections graph | yes | build only | no |
 | Memory | yes | yes | desktop |
 | Decision Inbox | yes | build only | desktop |
-| Notifications | yes | build only | no |
-| Autonomy Center | yes | build only | no |
+| Notifications | yes | yes | desktop |
+| Autonomy Center | yes | build only | desktop |
 | Admin | yes | build only | no |
 
 ## Automated checks
 
 - ESLint: passed.
 - TypeScript: passed.
-- Frontend component tests: 18 passed, zero failed.
+- Frontend component tests: 19 passed, zero failed.
 - Production frontend build: passed.
 - Request test verifies Conversation is the default and all seven tabs exist.
 - Room test verifies Private with My Agent receives the same global conversation
@@ -101,7 +101,7 @@ horizontal, scrollable control on narrower screens.
 
 ## Remaining visual acceptance gate
 
-The V2 candidate is deployed at revision `pairpilot-orchestrator-00073-dit`. An
+The V2 candidate is deployed at revision `pairpilot-orchestrator-00074-riw`. An
 authenticated desktop journey has been reviewed across Agent, Request, Explore,
 Post, Community, Room, Match, Connection, Memory and Decision surfaces. The
 required four-viewport screenshot matrix is still incomplete, so responsive and

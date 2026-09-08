@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-08T08:27:00+08:00",
+  "updated_at": "2026-09-08T08:39:00+08:00",
   "current_phase": 11,
   "current_phase_name": "Closed-beta acceptance",
   "current_phase_status": "PARTIAL",
@@ -21,8 +21,8 @@
   },
   "candidate": {
     "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
-    "orchestrator_revision": "pairpilot-orchestrator-00073-dit",
-    "image_digest": "sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5",
+    "orchestrator_revision": "pairpilot-orchestrator-00074-riw",
+    "image_digest": "sha256:c40fb2c4c6010e4ace20048c4519b594a2803fe9411224c80cb63fde64e8d42a",
     "traffic_percent": 0,
     "environment": "candidate",
     "collection_prefix": "candidate_v2_",
@@ -44,7 +44,7 @@
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
     "python_tests": 188,
-    "frontend_tests": 18
+    "frontend_tests": 19
   },
   "phases": {
     "0": "IMPLEMENTED_UNVERIFIED",
@@ -108,6 +108,12 @@
       "candidate_worker_backlog": 0,
       "candidate_dead_letters": 0,
       "latest_revision_error_logs": 0
+    },
+    "attention_sync": {
+      "visible_poll_seconds": 15,
+      "focus_refresh": true,
+      "mutation_refresh": true,
+      "browser_badge_clear_verified": true
     }
   },
   "candidate_migration": {
