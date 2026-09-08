@@ -41,6 +41,8 @@ interface AutonomyPayload {
 }
 
 const asString = (value: unknown) => (typeof value === "string" ? value : "");
+const attentionChanged = () =>
+  window.dispatchEvent(new Event("pairpilot:attention-changed"));
 const notificationCategories = [
   "ALL",
   "DECISION_REQUIRED",
@@ -112,6 +114,7 @@ export function DecisionInboxPage({
           : "Decision rejected.",
       );
       await load();
+      attentionChanged();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -273,17 +276,20 @@ export function NotificationsPage({
     const id = asString(item.notification_id);
     if (item.status === "UNREAD")
       await request(`/api/app/notifications/${id}/read`, { method: "PUT" });
+    attentionChanged();
     navigate(asString(item.entity_route));
   }
   async function archive(id: string) {
     await request(`/api/app/notifications/${id}/archived`, { method: "PUT" });
     await load();
+    attentionChanged();
   }
   async function readAll() {
     setBusy(true);
     try {
       await request("/api/app/notifications/read-all", { method: "PUT" });
       await load();
+      attentionChanged();
     } finally {
       setBusy(false);
     }

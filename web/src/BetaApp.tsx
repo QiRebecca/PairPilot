@@ -1237,6 +1237,21 @@ export function BetaApp() {
     const next = await request<BetaBootstrap>("/api/app/bootstrap");
     setData(next);
   }, [request]);
+  const refreshAttention = useCallback(async () => {
+    const [decisions, notifications] = await Promise.all([
+      request<{ decisions: RecordValue[] }>("/api/app/decisions"),
+      request<{ notifications: RecordValue[] }>("/api/app/notifications"),
+    ]);
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            decisions: decisions.decisions,
+            notifications: notifications.notifications,
+          }
+        : current,
+    );
+  }, [request]);
   useEffect(() => {
     if (!loading && !user) navigate("/sign-in", true);
     else if (user && !user.emailVerified) navigate("/verify-email", true);
@@ -1248,6 +1263,27 @@ export function BetaApp() {
         .catch((reason: Error) => setError(reason.message));
     }
   }, [refresh, request, user]);
+  useEffect(() => {
+    if (!user?.emailVerified || data?.profile.onboarding_status !== "COMPLETED")
+      return;
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible")
+        void refreshAttention().catch(() => undefined);
+    };
+    const interval = window.setInterval(syncWhenVisible, 15_000);
+    window.addEventListener("focus", syncWhenVisible);
+    window.addEventListener("pairpilot:attention-changed", syncWhenVisible);
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncWhenVisible);
+      window.removeEventListener(
+        "pairpilot:attention-changed",
+        syncWhenVisible,
+      );
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+    };
+  }, [data?.profile.onboarding_status, refreshAttention, user?.emailVerified]);
   const signOutNow = useCallback(() => {
     void signOutUser().then(() => {
       setData(null);
