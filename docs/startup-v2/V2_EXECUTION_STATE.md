@@ -6,16 +6,20 @@ Updated: 2026-09-08
 
 Phase 11 — Closed-beta acceptance: `PARTIAL`
 
-The isolated candidate is live at revision `pairpilot-orchestrator-00071-gaq`
-(`sha256:c3cf489681873310fc1e91823a4a5554d50f726d7ff7ad936a378e94d9c638ff`)
+The isolated candidate is live at revision `pairpilot-orchestrator-00073-dit`
+(`sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5`)
 with zero production traffic. Ten independently authenticated controlled users,
-three Communities, 66 Requests, 61 Posts and all five task types are present. The
+three Communities, 72 Requests, 66 Posts and all five task types are present. The
 latest 80-request/20-concurrency authenticated smoke passed with zero failures and
 the same global Personal Agent conversation completed live draft, revise and
 explicit publish turns. The candidate migration is applied and a post-runtime
-scan of 1,735 documents reports zero drift. Additional live matrices pass Room
+scan of 1,983 documents reports zero drift. Additional live matrices pass Room
 isolation, Community scope, exact-version dual approval, Match change/calendar,
 Contact Cards, Memory controls, notifications and action-specific autonomy.
+Candidate reconciliation retains nine historical Agent-contact failure audits but
+has classified every recovered or obsolete item as `RESOLVED`; actionable failures,
+candidate worker backlog, candidate DLQ records and latest-revision error logs are
+all zero.
 
 A separate authenticated browser journey for a real owner account also completed
 Post publication, compatible-candidate contact, two-Agent negotiation, proposal,

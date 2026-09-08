@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "product": "PairPilot Startup V2",
-  "updated_at": "2026-09-08T07:55:00+08:00",
+  "updated_at": "2026-09-08T08:27:00+08:00",
   "current_phase": 11,
   "current_phase_name": "Closed-beta acceptance",
   "current_phase_status": "PARTIAL",
@@ -21,8 +21,8 @@
   },
   "candidate": {
     "url": "https://startup-v2-candidate---pairpilot-orchestrator-ew4hz5g3la-nw.a.run.app/",
-    "orchestrator_revision": "pairpilot-orchestrator-00071-gaq",
-    "image_digest": "sha256:c3cf489681873310fc1e91823a4a5554d50f726d7ff7ad936a378e94d9c638ff",
+    "orchestrator_revision": "pairpilot-orchestrator-00073-dit",
+    "image_digest": "sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5",
     "traffic_percent": 0,
     "environment": "candidate",
     "collection_prefix": "candidate_v2_",
@@ -43,7 +43,7 @@
     "job_failures": 42,
     "worker_undelivered_messages": 0,
     "dlq_undelivered_messages": 25,
-    "python_tests": 186,
+    "python_tests": 188,
     "frontend_tests": 18
   },
   "phases": {
@@ -64,11 +64,11 @@
   "candidate_acceptance": {
     "security_load_run_id": "v2-acceptance-1788825125",
     "agent_lifecycle_run_id": "v2-acceptance-1788273819",
-    "personal_agent_chat_run_id": "v2-acceptance-1788825125",
+    "personal_agent_chat_run_id": "v2-acceptance-1788827207",
     "authenticated_users": 10,
     "communities": 3,
-    "tasks": 66,
-    "posts": 61,
+    "tasks": 72,
+    "posts": 66,
     "task_types": 5,
     "agent_rooms": 8,
     "matches": 7,
@@ -101,13 +101,20 @@
       "two_way_shared_room": true,
       "connection_created": true,
       "memory_confirmed": true
+    },
+    "operations": {
+      "historical_failure_audits": 9,
+      "actionable_job_failures": 0,
+      "candidate_worker_backlog": 0,
+      "candidate_dead_letters": 0,
+      "latest_revision_error_logs": 0
     }
   },
   "candidate_migration": {
     "migration_id": "V2_002_runtime_metadata_convergence",
     "environment": "candidate",
     "applied": true,
-    "post_apply_scanned": 1735,
+    "post_apply_scanned": 1983,
     "post_apply_would_mutate": 0,
     "blocking_count": 0,
     "review_required": 0,

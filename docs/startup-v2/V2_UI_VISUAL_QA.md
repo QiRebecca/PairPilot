@@ -101,7 +101,7 @@ horizontal, scrollable control on narrower screens.
 
 ## Remaining visual acceptance gate
 
-The V2 candidate is deployed at revision `pairpilot-orchestrator-00071-gaq`. An
+The V2 candidate is deployed at revision `pairpilot-orchestrator-00073-dit`. An
 authenticated desktop journey has been reviewed across Agent, Request, Explore,
 Post, Community, Room, Match, Connection, Memory and Decision surfaces. The
 required four-viewport screenshot matrix is still incomplete, so responsive and

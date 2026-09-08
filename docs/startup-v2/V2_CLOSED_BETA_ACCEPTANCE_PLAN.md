@@ -70,7 +70,7 @@ runtime and server-authoritative routes.
 
 ## Local verification
 
-- Python suite: 186 passed; zero failed; dependency deprecation warnings only.
+- Python suite: 188 passed; zero failed; dependency deprecation warnings only.
 - Candidate isolation/config tests: passed.
 - Candidate seeder plan: passed.
 - Candidate deploy shell syntax: passed.
@@ -78,13 +78,13 @@ runtime and server-authoritative routes.
 
 ## Live candidate evidence
 
-- Candidate revision: `pairpilot-orchestrator-00071-gaq` at zero production traffic.
+- Candidate revision: `pairpilot-orchestrator-00073-dit` at zero production traffic.
 - Immutable image digest:
-  `sha256:c3cf489681873310fc1e91823a4a5554d50f726d7ff7ad936a378e94d9c638ff`.
+  `sha256:15efc8e574ecab6bf93482eae02f559dd142a3ccbff8d0432ce7e6bb7c70c4f5`.
 - Candidate health: `environment=candidate`, live
   `gemini-3.7-flash`, Google ADK and A2A runtime.
 - Cohort inventory at the latest core run: 10 Firebase users, 3 Communities,
-  66 Requests, 61 Posts and all
+  72 Requests, 66 Posts and all
   5 supported task types.
 - Security/load run `v2-acceptance-1788825125`: cross-user task 403, legacy
   surface 404, no Explore owner/email leak, 80 requests at concurrency 20 with
@@ -94,7 +94,7 @@ runtime and server-authoritative routes.
 - A2A evidence: 18 completed `gemini-3.7-flash` turns, 23,392 input tokens,
   2,978 output tokens, zero candidate Agent job failures and zero candidate DLQ
   records at the evidence snapshot.
-- Persistent Agent run `v2-acceptance-1788825125`: one
+- Persistent Agent run `v2-acceptance-1788827207`: one
   `GLOBAL_PERSONAL_AGENT` conversation completed draft, revise and explicit publish
   turns; all three invocation records are `COMPLETED`, the private draft was read
   back, and the authoritative Post is OPEN.
@@ -106,7 +106,10 @@ runtime and server-authoritative routes.
   retries and all nine turns completed; provider-capacity alerting remains a gate.
 - Production remained `pairpilot-orchestrator-00050-qiq` at 100% throughout.
 - Candidate migration `V2_002_runtime_metadata_convergence` is applied; the latest
-  1,735-document dry-run reports zero pending mutations.
+  1,983-document dry-run reports zero pending mutations.
+- Candidate worker backlog, DLQ and latest-revision error logs are zero. Nine
+  historical Agent-contact failure records remain as audit history, all classified
+  `RESOLVED` after later success or terminal Post/Request state.
 - An authenticated real-owner browser journey produced a public Post, two-Agent
   negotiation, dual-approved Match, two-way Shared Room conversation, Connection
   and confirmed Memory. Agent transcript redaction retains ISO dates while still
