@@ -24,7 +24,12 @@ from pairpilot_orchestrator.multi_user_platform import (
 
 MAX_ADMIN_ROWS = 100
 ACTIVE_REPORT_STATES = {"OPEN", "ACKNOWLEDGED", "IN_REVIEW"}
-RETRYABLE_JOB_STATES = {"FAILED", "DEAD_LETTER", "RETRY_FAILED"}
+RETRYABLE_JOB_STATES = {
+    "FAILED",
+    "DEAD_LETTER",
+    "RETRY_FAILED",
+    "RETRYABLE_BY_RECONCILIATION",
+}
 LIFECYCLE_EVENT_NAMES = {
     "account.created": "account_created",
     "onboarding.completed": "onboarding_completed",

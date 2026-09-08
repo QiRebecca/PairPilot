@@ -12,11 +12,7 @@ from typing import Any
 from uuid import uuid4
 
 from google import genai
-from google.adk.agents import Agent
-from google.adk.agents.run_config import (
-    RunConfig,
-    StreamingMode,  # type: ignore[attr-defined]
-)
+from google.adk.agents import Agent, run_config
 from google.adk.models import Gemini
 from google.adk.runners import Runner
 from pairpilot_schemas import CreateUserTaskInput
@@ -52,6 +48,8 @@ from pairpilot_orchestrator.v2_memory import retrieve_memory_context
 from pairpilot_orchestrator.v2_product_glue import ACTION_DEFAULTS, autonomy_level_for
 
 APP_NAME = "pairpilot_real_personal_agent"
+RunConfig = run_config.RunConfig
+StreamingMode = run_config.StreamingMode  # type: ignore[attr-defined]
 MAX_CONTEXT_ITEMS = 20
 PERSONAL_AGENT_TURN_TIMEOUT_SECONDS = 90
 logger = logging.getLogger(__name__)

@@ -754,6 +754,35 @@ async def test_reconciliation_resolves_historical_recovered_contact_failure() ->
 
 
 @pytest.mark.asyncio
+async def test_reconciliation_closes_contact_failure_for_terminal_task() -> None:
+    store = MemoryMultiUserStore()
+    now = datetime(2026, 9, 8, tzinfo=UTC)
+    await store.create(
+        "task_workspaces",
+        "task-terminal-contact",
+        {"task_id": "task-terminal-contact", "status": "CANCELLED"},
+    )
+    await store.create(
+        "job_failures",
+        "terminal-contact-failure",
+        {
+            "job_id": "terminal-contact-failure",
+            "task_id": "task-terminal-contact",
+            "source_intent_id": "intent-terminal-source",
+            "target_intent_id": "intent-terminal-target",
+            "status": "RETRYABLE_BY_RECONCILIATION",
+        },
+    )
+
+    resolved = await reconcile_recovered_contact_failures(store, now=now)
+
+    failure = store.collections["job_failures"]["terminal-contact-failure"]
+    assert resolved == 1
+    assert failure["status"] == "RESOLVED"
+    assert failure["resolution"] == "NO_LONGER_ACTIONABLE_TASK_TERMINAL"
+
+
+@pytest.mark.asyncio
 async def test_only_confirmed_memory_enters_agent_runtime() -> None:
     store = MemoryMultiUserStore()
     user = principal("uid-memory")

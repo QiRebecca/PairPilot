@@ -111,6 +111,7 @@ async def reconcile_recovered_contact_failures(
         limit=100,
     )
     recovered_pairs: set[tuple[str, str]] = set()
+    resolved = 0
     for failure in failures:
         source_intent_id = str(failure.get("source_intent_id") or "")
         target_intent_id = str(failure.get("target_intent_id") or "")
@@ -122,7 +123,33 @@ async def reconcile_recovered_contact_failures(
         )
         if assessment is not None:
             recovered_pairs.add((source_intent_id, target_intent_id))
-    resolved = 0
+            continue
+        task, source_post, target_post = await asyncio.gather(
+            store.get("task_workspaces", task_id),
+            store.get("intent_posts", source_intent_id),
+            store.get("intent_posts", target_intent_id),
+        )
+        obsolete_reason = ""
+        if str((task or {}).get("status") or "") in {"COMPLETED", "CANCELLED"}:
+            obsolete_reason = "TASK_TERMINAL"
+        elif str((source_post or {}).get("status") or "") != "OPEN":
+            obsolete_reason = "SOURCE_POST_NOT_OPEN"
+        elif str((target_post or {}).get("status") or "") != "OPEN":
+            obsolete_reason = "TARGET_POST_NOT_OPEN"
+        if not obsolete_reason:
+            continue
+        job_id = str(failure.get("job_id") or failure.get("_id") or "")
+        if not job_id:
+            continue
+        clean = _clean(failure)
+        clean.update(
+            status="RESOLVED",
+            resolution=f"NO_LONGER_ACTIONABLE_{obsolete_reason}",
+            resolved_at=now,
+            updated_at=now,
+        )
+        await store.upsert("job_failures", job_id, clean)
+        resolved += 1
     for source_intent_id, target_intent_id in recovered_pairs:
         resolved += await _mark_contact_failures_resolved(
             store,
