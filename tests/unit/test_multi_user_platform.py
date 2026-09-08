@@ -34,6 +34,7 @@ from pairpilot_orchestrator.multi_user_platform import (
     provision_user,
     publish_user_post,
     set_user_post_status,
+    stable_id,
 )
 from pairpilot_orchestrator.personal_agent_chat import (
     _build_tools,
@@ -41,6 +42,7 @@ from pairpilot_orchestrator.personal_agent_chat import (
     resolve_task_intent_type,
 )
 from pairpilot_orchestrator.v1_candidate_pool import (
+    reconcile_recovered_contact_failures,
     record_candidate_exchange,
     set_candidate_state,
 )
@@ -632,6 +634,30 @@ async def test_candidate_pool_reranks_multiple_candidates() -> None:
     assert source is not None
     for index, target in enumerate(posts[1:], start=1):
         assert target is not None
+        if index == 1:
+            for job_id, source_id, target_id in (
+                (
+                    "failure-forward",
+                    source["intent_id"],
+                    target["intent_id"],
+                ),
+                (
+                    "failure-reverse",
+                    target["intent_id"],
+                    source["intent_id"],
+                ),
+            ):
+                await store.create(
+                    "job_failures",
+                    job_id,
+                    {
+                        "job_id": job_id,
+                        "task_id": source["task_id"],
+                        "source_intent_id": source_id,
+                        "target_intent_id": target_id,
+                        "status": "RETRYABLE_BY_RECONCILIATION",
+                    },
+                )
         await record_candidate_exchange(
             store,
             source_post=source,
@@ -642,6 +668,12 @@ async def test_candidate_pool_reranks_multiple_candidates() -> None:
             },
             invocation_id=f"invocation-{index}",
         )
+    assert store.collections["job_failures"]["failure-forward"]["status"] == (
+        "RESOLVED"
+    )
+    assert store.collections["job_failures"]["failure-reverse"]["status"] == (
+        "RESOLVED"
+    )
     source_assessments = [
         item
         for item in store.collections["candidate_assessments"].values()
@@ -682,6 +714,43 @@ async def test_candidate_pool_reranks_multiple_candidates() -> None:
         and item.get("candidate_intent_id") == tasks[1]["intent_id"]
     )
     assert source_closed["state"] == "CLOSED"
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_resolves_historical_recovered_contact_failure() -> None:
+    store = MemoryMultiUserStore()
+    now = datetime(2026, 9, 8, tzinfo=UTC)
+    task_id = "task-recovered-contact"
+    target_intent_id = "intent-recovered-target"
+    assessment_id = stable_id("candidate", task_id, target_intent_id)
+    await store.create(
+        "candidate_assessments",
+        assessment_id,
+        {
+            "assessment_id": assessment_id,
+            "task_id": task_id,
+            "candidate_intent_id": target_intent_id,
+            "state": "PROMISING",
+        },
+    )
+    await store.create(
+        "job_failures",
+        "historical-contact-failure",
+        {
+            "job_id": "historical-contact-failure",
+            "task_id": task_id,
+            "source_intent_id": "intent-recovered-source",
+            "target_intent_id": target_intent_id,
+            "status": "RETRYABLE_BY_RECONCILIATION",
+        },
+    )
+
+    resolved = await reconcile_recovered_contact_failures(store, now=now)
+
+    failure = store.collections["job_failures"]["historical-contact-failure"]
+    assert resolved == 1
+    assert failure["status"] == "RESOLVED"
+    assert failure["resolution"] == "SUCCEEDED_ON_LATER_ATTEMPT"
 
 
 @pytest.mark.asyncio

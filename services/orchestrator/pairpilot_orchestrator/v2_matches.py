@@ -31,7 +31,7 @@ async def _owned_match(
     if match is None or match.get("namespace") != PRODUCTION_NAMESPACE:
         raise LookupError("match was not found")
     require_match_participant(principal, match)
-    return match
+    return dict(match)
 
 
 def _as_datetime(value: object) -> datetime | None:

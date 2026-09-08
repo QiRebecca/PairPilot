@@ -33,7 +33,7 @@ async def _owned_connection(
         or connection.get("owner_uid") != principal.uid
     ):
         raise LookupError("connection was not found")
-    return connection
+    return dict(connection)
 
 
 async def _peer_identity(store: Any, connection: Mapping[str, Any]) -> dict[str, Any]:

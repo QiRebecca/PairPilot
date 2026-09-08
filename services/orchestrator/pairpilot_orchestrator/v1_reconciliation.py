@@ -13,6 +13,7 @@ from pairpilot_orchestrator.multi_user_platform import (
 from pairpilot_orchestrator.v1_candidate_pool import (
     ACTIVE_CANDIDATE_STATES,
     process_candidate_pool_event,
+    reconcile_recovered_contact_failures,
     rerank_task_candidates,
 )
 from pairpilot_orchestrator.v1_foundation import create_notification
@@ -178,11 +179,15 @@ async def run_v1_reconciliation(
     store: MultiUserStore, *, now: datetime | None = None
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(UTC)).astimezone(UTC)
+    recovered_job_failures = await reconcile_recovered_contact_failures(
+        store, now=timestamp
+    )
     availability_changed = await reconcile_candidate_availability(store, now=timestamp)
     holds_expired = await reconcile_stale_holds(store, now=timestamp)
     open_post_result = await reconcile_open_posts(store)
     return {
         "status": "RECONCILED",
+        "recovered_job_failures": recovered_job_failures,
         "availability_changed": availability_changed,
         "holds_expired": holds_expired,
         **open_post_result,

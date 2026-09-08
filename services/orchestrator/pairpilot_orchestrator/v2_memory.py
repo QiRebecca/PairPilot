@@ -144,7 +144,7 @@ async def _owned_memory(
         or memory.get("owner_uid") != principal.uid
     ):
         raise LookupError("memory was not found")
-    return memory
+    return dict(memory)
 
 
 def _projection(

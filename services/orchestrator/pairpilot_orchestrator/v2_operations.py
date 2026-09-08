@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -336,7 +336,7 @@ def _quota_summary(item: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _model_usage(agent_runs: list[Mapping[str, Any]]) -> dict[str, Any]:
+def _model_usage(agent_runs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     def tokens(item: Mapping[str, Any], direction: str) -> int:
         direct = item.get(f"{direction}_tokens")
         if isinstance(direct, int):
@@ -369,7 +369,7 @@ def _model_usage(agent_runs: list[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _analytics(
-    data: Mapping[str, list[Mapping[str, Any]]], lifecycle: dict[str, int]
+    data: Mapping[str, Sequence[Mapping[str, Any]]], lifecycle: dict[str, int]
 ) -> dict[str, Any]:
     matches = data["matches"]
     completed = sum(

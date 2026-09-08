@@ -16,6 +16,7 @@ from pairpilot_schemas import (
     Claim,
     ClaimSource,
     PeerDecision,
+    SpeechAct,
 )
 from pydantic import ValidationError
 
@@ -138,7 +139,7 @@ class PeerAgentExecutor(AgentExecutor):
             return (
                 PeerDecision(
                     action="DECLINE_INTRODUCTION",
-                    speech_act="INTRODUCTION_RESPONSE",
+                    speech_act=SpeechAct.INTRODUCTION_RESPONSE,
                     natural_language=(
                         "This Agent could not produce a valid response after "
                         "bounded retries. No introduction or compatibility is implied."
@@ -152,7 +153,7 @@ class PeerAgentExecutor(AgentExecutor):
         return (
             PeerDecision(
                 action="PROVIDE_INFORMATION",
-                speech_act="INFORMATION_RESPONSE",
+                speech_act=SpeechAct.INFORMATION_RESPONSE,
                 natural_language=(
                     "This Agent could not produce a valid response after bounded "
                     "retries. No compatibility, fact, or acceptance is implied."

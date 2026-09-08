@@ -11,8 +11,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from pairpilot_schemas.domain import IntentStatus as IntentPostState
-from pairpilot_schemas.v1 import MemoryStatus as MemoryState
+from pairpilot_schemas.domain import IntentStatus
+from pairpilot_schemas.v1 import MemoryStatus
+
+IntentPostState = IntentStatus
+MemoryState = MemoryStatus
 
 
 class CoordinationRoomState(StrEnum):

@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -659,19 +659,24 @@ async def _execute_personal_agent_request(
     terminal = False
     runner = getattr(app.state, "personal_agent_turn_runner", None)
     runner = runner or stream_personal_agent_turn
-    stream = runner(
-        store,
-        principal,
-        conversation=conversation,
-        content=body.content,
-        client_message_id=body.client_message_id,
-        invocation_id=invocation_id,
+    stream = cast(
+        AsyncIterator[dict[str, Any]],
+        runner(
+            store,
+            principal,
+            conversation=conversation,
+            content=body.content,
+            client_message_id=body.client_message_id,
+            invocation_id=invocation_id,
+        ),
     )
     try:
         async for event in stream:
             current = await store.get("chat_message_requests", request_id)
             if current and current.get("cancellation_requested") is True:
-                await stream.aclose()
+                close_stream = getattr(stream, "aclose", None)
+                if close_stream is not None:
+                    await close_stream()
                 event = {
                     "type": "agent.error",
                     "invocation_id": invocation_id,

@@ -54,6 +54,85 @@ def _candidate_room_id(source_intent_id: str, target_intent_id: str) -> str:
     return stable_id("candidate_room", *sorted((source_intent_id, target_intent_id)))
 
 
+async def _mark_contact_failures_resolved(
+    store: MultiUserStore,
+    *,
+    source_intent_id: str,
+    target_intent_id: str,
+    now: datetime,
+) -> int:
+    """Close transient failure records once the same Agent pair succeeds."""
+
+    failures: list[dict[str, Any]] = []
+    for source_id, target_id in (
+        (source_intent_id, target_intent_id),
+        (target_intent_id, source_intent_id),
+    ):
+        failures.extend(
+            await store.query_documents(
+                "job_failures",
+                filters=[
+                    ("source_intent_id", "EQUAL", source_id),
+                    ("target_intent_id", "EQUAL", target_id),
+                ],
+                limit=100,
+            )
+        )
+    resolved = 0
+    for failure in failures:
+        if str(failure.get("status") or "").upper() in {
+            "DISMISSED",
+            "RESOLVED",
+        }:
+            continue
+        job_id = str(failure.get("job_id") or failure.get("_id") or "")
+        if not job_id:
+            continue
+        clean = _clean(failure)
+        clean.update(
+            status="RESOLVED",
+            resolution="SUCCEEDED_ON_LATER_ATTEMPT",
+            resolved_at=now,
+            updated_at=now,
+        )
+        await store.upsert("job_failures", job_id, clean)
+        resolved += 1
+    return resolved
+
+
+async def reconcile_recovered_contact_failures(
+    store: MultiUserStore, *, now: datetime
+) -> int:
+    """Repair historical alerts whose candidate assessment proves recovery."""
+
+    failures = await store.query_documents(
+        "job_failures",
+        filters=[("status", "EQUAL", "RETRYABLE_BY_RECONCILIATION")],
+        limit=100,
+    )
+    recovered_pairs: set[tuple[str, str]] = set()
+    for failure in failures:
+        source_intent_id = str(failure.get("source_intent_id") or "")
+        target_intent_id = str(failure.get("target_intent_id") or "")
+        task_id = str(failure.get("task_id") or "")
+        if not source_intent_id or not target_intent_id or not task_id:
+            continue
+        assessment = await store.get(
+            "candidate_assessments", _assessment_id(task_id, target_intent_id)
+        )
+        if assessment is not None:
+            recovered_pairs.add((source_intent_id, target_intent_id))
+    resolved = 0
+    for source_intent_id, target_intent_id in recovered_pairs:
+        resolved += await _mark_contact_failures_resolved(
+            store,
+            source_intent_id=source_intent_id,
+            target_intent_id=target_intent_id,
+            now=now,
+        )
+    return resolved
+
+
 def _overlap_days(source: dict[str, Any], target: dict[str, Any]) -> int:
     source_constraints = dict(source.get("public_constraints", {}))
     target_constraints = dict(target.get("public_constraints", {}))
@@ -341,6 +420,12 @@ async def record_candidate_exchange(
                 updated_at=timestamp,
             )
             await store.upsert("task_workspaces", str(post["task_id"]), clean_task)
+    await _mark_contact_failures_resolved(
+        store,
+        source_intent_id=source_intent_id,
+        target_intent_id=target_intent_id,
+        now=timestamp,
+    )
     await store.write_event(
         event_type="candidate.updated.v1",
         run_id=str(source_post["task_id"]),

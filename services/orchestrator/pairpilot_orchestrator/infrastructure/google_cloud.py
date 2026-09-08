@@ -111,9 +111,12 @@ class GoogleCloudStore:
         self.project_id = project_id
         self.topic_id = topic_id
         self.collection_prefix = collection_prefix
-        self.environment = (
-            environment or os.getenv("PAIRPILOT_ENVIRONMENT", "production")
-        ).strip().lower()
+        raw_environment = (
+            environment
+            if environment is not None
+            else os.getenv("PAIRPILOT_ENVIRONMENT") or "production"
+        )
+        self.environment = raw_environment.strip().lower()
         if self.environment not in {
             "local",
             "test",
@@ -192,12 +195,14 @@ class GoogleCloudStore:
             items: list[dict[str, Any]] = []
             page_token = ""
             while len(items) < max_documents:
+                params: dict[str, str | int] = {
+                    "pageSize": min(1_000, max_documents - len(items))
+                }
+                if page_token:
+                    params["pageToken"] = page_token
                 response = self._session.get(
                     f"{self._documents}/{quote(self._physical_collection(collection))}",
-                    params={
-                        "pageSize": min(1_000, max_documents - len(items)),
-                        **({"pageToken": page_token} if page_token else {}),
-                    },
+                    params=params,
                     timeout=20,
                 )
                 response.raise_for_status()

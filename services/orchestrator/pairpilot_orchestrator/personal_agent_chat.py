@@ -13,7 +13,10 @@ from uuid import uuid4
 
 from google import genai
 from google.adk.agents import Agent
-from google.adk.agents.run_config import RunConfig, StreamingMode
+from google.adk.agents.run_config import (
+    RunConfig,
+    StreamingMode,  # type: ignore[attr-defined]
+)
 from google.adk.models import Gemini
 from google.adk.runners import Runner
 from pairpilot_schemas import CreateUserTaskInput
@@ -1274,7 +1277,7 @@ def _agent(
         model=model,
         description="A generic persistent user-owned PairPilot Personal Agent.",
         instruction=instruction,
-        tools=tools,
+        tools=tools,  # type: ignore[arg-type]
         generate_content_config=genai.types.GenerateContentConfig(
             max_output_tokens=1200,
             thinking_config=genai.types.ThinkingConfig(
@@ -1316,7 +1319,7 @@ async def stream_personal_agent_turn(
     started = datetime.now(UTC)
     started_clock = time.monotonic()
     assistant_message_id = f"message_{uuid4().hex}"
-    invocation = {
+    invocation: dict[str, Any] = {
         "namespace": PRODUCTION_NAMESPACE,
         "invocation_id": invocation_id,
         "owner_uid": principal.uid,

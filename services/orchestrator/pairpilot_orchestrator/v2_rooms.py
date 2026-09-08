@@ -239,7 +239,7 @@ async def get_room_workspace(
         if (source_post or {}).get("owner_uid") == principal.uid
         else source_post
     )
-    assessment = next(
+    assessment: dict[str, Any] = next(
         (
             item
             for item in assessments
